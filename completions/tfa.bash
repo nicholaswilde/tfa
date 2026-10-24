@@ -59,12 +59,16 @@ _tfa() {
 
     case "${cmd}" in
         tfa)
-            opts="-h -V --help --version generate add list delete completions help"
+            opts="-h -V --storage --help --version generate add list delete completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -73,7 +77,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__add)
-            opts="-d -p -a -h --digits --period --algorithm --help"
+            opts="-d -p -a -h --digits --period --algorithm --storage --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -103,6 +107,10 @@ _tfa() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -111,12 +119,16 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__completions)
-            opts="-h --help bash elvish fish powershell zsh"
+            opts="-h --storage --help bash elvish fish powershell zsh"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -125,12 +137,16 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__delete)
-            opts="-h --help"
+            opts="-h --storage --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -139,12 +155,16 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__generate)
-            opts="-c -h --copy --help"
+            opts="-c -h --copy --storage --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -251,12 +271,16 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__list)
-            opts="-h --help"
+            opts="-h --storage --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;

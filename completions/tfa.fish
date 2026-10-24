@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_tfa_global_optspecs
-    string join \n h/help V/version
+    string join \n storage= h/help V/version
 end
 
 function __fish_tfa_needs_command
@@ -24,7 +24,10 @@ function __fish_tfa_using_subcommand
     contains -- $cmd[1] $argv
 end
 
-complete -c tfa -n "__fish_tfa_needs_command" -s h -l help -d 'Print help'
+complete -c tfa -n "__fish_tfa_needs_command" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+complete -c tfa -n "__fish_tfa_needs_command" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_needs_command" -s V -l version -d 'Print version'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "generate" -d 'Generate a TOTP token for an account'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "add" -d 'Add a new account secret or OTPAuth URL'
@@ -32,15 +35,30 @@ complete -c tfa -n "__fish_tfa_needs_command" -f -a "list" -d 'List all stored a
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "delete" -d 'Delete an account secret'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "completions" -d 'Generate shell autocompletions script'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c tfa -n "__fish_tfa_using_subcommand generate" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s c -l copy -d 'Copy generated token to clipboard'
-complete -c tfa -n "__fish_tfa_using_subcommand generate" -s h -l help -d 'Print help'
+complete -c tfa -n "__fish_tfa_using_subcommand generate" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_using_subcommand add" -s d -l digits -d 'Number of digits in generated code (e.g. 6 or 8)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand add" -s p -l period -d 'Time step period in seconds (e.g. 30 or 60)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand add" -s a -l algorithm -d 'Hash algorithm (sha1, sha256, sha512)' -r
-complete -c tfa -n "__fish_tfa_using_subcommand add" -s h -l help -d 'Print help'
-complete -c tfa -n "__fish_tfa_using_subcommand list" -s h -l help -d 'Print help'
-complete -c tfa -n "__fish_tfa_using_subcommand delete" -s h -l help -d 'Print help'
-complete -c tfa -n "__fish_tfa_using_subcommand completions" -s h -l help -d 'Print help'
+complete -c tfa -n "__fish_tfa_using_subcommand add" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+complete -c tfa -n "__fish_tfa_using_subcommand add" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c tfa -n "__fish_tfa_using_subcommand list" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+complete -c tfa -n "__fish_tfa_using_subcommand list" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c tfa -n "__fish_tfa_using_subcommand delete" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+complete -c tfa -n "__fish_tfa_using_subcommand delete" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c tfa -n "__fish_tfa_using_subcommand completions" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+complete -c tfa -n "__fish_tfa_using_subcommand completions" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate add list delete completions help" -f -a "generate" -d 'Generate a TOTP token for an account'
 complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate add list delete completions help" -f -a "add" -d 'Add a new account secret or OTPAuth URL'
 complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate add list delete completions help" -f -a "list" -d 'List all stored accounts'

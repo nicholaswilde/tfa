@@ -10,7 +10,8 @@ A high-performance, single-binary CLI Two-Factor Authentication (2FA / TOTP) app
 
 ## :sparkles: Features
 
-- **Security First:** Credentials and secret seeds reside securely in your OS keychain/keyring (`secret-service`/D-Bus on Linux, Keychain on macOS, Windows Credential Manager). Plaintext secrets are never written to disk or config files.
+- **Security First:** Credentials and secret seeds reside securely in your OS keychain/keyring (`secret-service`/D-Bus on Linux, Keychain on macOS, Windows Credential Manager).
+- **Headless Fallback:** Automatically falls back to secure user-only file storage (`0600` permissions at `~/.local/share/tfa/credentials.json`) when headless or without active Secret Service daemon. Configurable via `--storage <auto|keyring|file>` or `TFA_STORAGE`.
 - **RFC 6238 Compliant:** Standard time-based one-time passwords (TOTP) powered by [`totp-rs`](https://github.com/constantoine/totp-rs).
 - **Flexible Secret Input:** Supports raw Base32 secret keys and standard `otpauth://totp/...` URIs.
 - **Clipboard Integration:** Instantly copy tokens to your system clipboard with `-c` / `--copy`.

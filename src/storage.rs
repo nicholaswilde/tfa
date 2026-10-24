@@ -1,11 +1,15 @@
-use anyhow::{bail, Result};
-
-#[cfg(test)]
-use anyhow::Context;
-#[cfg(test)]
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::Mutex;
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 pub trait AccountStore {
     fn set_secret(&self, account: &str, secret: &str) -> Result<()>;
@@ -56,6 +60,95 @@ impl AccountStore for MemoryStore {
             bail!("Account '{account}' not found");
         }
         Ok(())
+    }
+}
+
+/// Local file-backed storage (e.g. for headless sessions or missing Secret Service)
+pub struct FileStore {
+    path: PathBuf,
+}
+
+impl FileStore {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+
+    pub fn default_path() -> Result<PathBuf> {
+        if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+            if !xdg.is_empty() {
+                return Ok(PathBuf::from(xdg).join("tfa").join("credentials.json"));
+            }
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            return Ok(PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join("tfa")
+                .join("credentials.json"));
+        }
+        bail!("Unable to determine user data directory (HOME / XDG_DATA_HOME not set)");
+    }
+
+    fn load(&self) -> Result<HashMap<String, String>> {
+        if !self.path.exists() {
+            return Ok(HashMap::new());
+        }
+        let content = std::fs::read_to_string(&self.path)?;
+        let map: HashMap<String, String> = serde_json::from_str(&content).unwrap_or_default();
+        Ok(map)
+    }
+
+    fn save(&self, data: &HashMap<String, String>) -> Result<()> {
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+            #[cfg(unix)]
+            {
+                let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+            }
+        }
+        let json = serde_json::to_string_pretty(data)?;
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+
+        let mut file = options.open(&self.path)?;
+        file.write_all(json.as_bytes())?;
+        #[cfg(unix)]
+        {
+            let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600));
+        }
+        Ok(())
+    }
+}
+
+impl AccountStore for FileStore {
+    fn set_secret(&self, account: &str, secret: &str) -> Result<()> {
+        let mut data = self.load()?;
+        data.insert(account.to_string(), secret.to_string());
+        self.save(&data)
+    }
+
+    fn get_secret(&self, account: &str) -> Result<String> {
+        let data = self.load()?;
+        data.get(account)
+            .cloned()
+            .with_context(|| format!("Account '{account}' not found in file store"))
+    }
+
+    fn list_accounts(&self) -> Result<Vec<String>> {
+        let data = self.load()?;
+        let mut list: Vec<String> = data.keys().cloned().collect();
+        list.sort();
+        Ok(list)
+    }
+
+    fn delete_account(&self, account: &str) -> Result<()> {
+        let mut data = self.load()?;
+        if data.remove(account).is_none() {
+            bail!("Account '{account}' not found in file store");
+        }
+        self.save(&data)
     }
 }
 
@@ -145,9 +238,71 @@ impl AccountStore for KeyringStore {
     }
 }
 
+/// Hybrid storage that attempts KeyringStore first and falls back to FileStore on platform errors
+pub struct AutoStore {
+    keyring: KeyringStore,
+    file: FileStore,
+}
+
+impl AutoStore {
+    pub fn new(keyring: KeyringStore, file: FileStore) -> Self {
+        Self { keyring, file }
+    }
+
+    pub fn default_auto() -> Result<Self> {
+        let file_path = FileStore::default_path()?;
+        Ok(Self::new(
+            KeyringStore::default(),
+            FileStore::new(file_path),
+        ))
+    }
+}
+
+impl AccountStore for AutoStore {
+    fn set_secret(&self, account: &str, secret: &str) -> Result<()> {
+        match self.keyring.set_secret(account, secret) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                eprintln!("[notice] Keyring unavailable ({e}); saving to local file store");
+                self.file.set_secret(account, secret)
+            }
+        }
+    }
+
+    fn get_secret(&self, account: &str) -> Result<String> {
+        if let Ok(secret) = self.keyring.get_secret(account) {
+            return Ok(secret);
+        }
+        self.file.get_secret(account)
+    }
+
+    fn list_accounts(&self) -> Result<Vec<String>> {
+        let mut accounts = self.keyring.list_accounts().unwrap_or_default();
+        let file_accounts = self.file.list_accounts().unwrap_or_default();
+        for acc in file_accounts {
+            if !accounts.contains(&acc) {
+                accounts.push(acc);
+            }
+        }
+        accounts.sort();
+        Ok(accounts)
+    }
+
+    fn delete_account(&self, account: &str) -> Result<()> {
+        let k_res = self.keyring.delete_account(account);
+        let f_res = self.file.delete_account(account);
+        if k_res.is_ok() || f_res.is_ok() {
+            Ok(())
+        } else {
+            bail!("Account '{account}' not found in keyring or file storage")
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_memory_store_lifecycle() {
@@ -172,6 +327,31 @@ mod tests {
 
         // 6. Delete non-existent account fails
         assert!(store.delete_account("nonexistent").is_err());
+    }
+
+    #[test]
+    fn test_file_store_lifecycle() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("sub").join("creds.json");
+        let store = FileStore::new(file_path.clone());
+
+        assert_eq!(store.list_accounts().unwrap(), Vec::<String>::new());
+        store.set_secret("alice", "SECRET_A").unwrap();
+        store.set_secret("bob", "SECRET_B").unwrap();
+
+        assert_eq!(store.list_accounts().unwrap(), vec!["alice", "bob"]);
+        assert_eq!(store.get_secret("alice").unwrap(), "SECRET_A");
+
+        #[cfg(unix)]
+        {
+            let metadata = std::fs::metadata(&file_path).unwrap();
+            let mode = metadata.permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+
+        store.delete_account("alice").unwrap();
+        assert_eq!(store.list_accounts().unwrap(), vec!["bob"]);
+        assert!(store.delete_account("alice").is_err());
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use std::io::{self, BufRead, Write};
 
@@ -7,13 +7,28 @@ mod storage;
 mod totp;
 
 use clipboard::{Clipboard, SystemClipboard};
-use storage::{AccountStore, KeyringStore};
+use storage::{AccountStore, AutoStore, FileStore, KeyringStore};
 use totp::TfaTotp;
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum StorageBackend {
+    /// Attempt OS keyring first; fallback to local file store if unavailable
+    #[default]
+    Auto,
+    /// Strictly use system keyring (Secret Service, Keychain, Credential Manager)
+    Keyring,
+    /// Use local file storage (~/.local/share/tfa/credentials.json)
+    File,
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "tfa")]
 #[command(author, version = env!("PROJECT_VERSION"), about = "CLI Two-Factor Authentication (2FA) tool", long_about = None)]
 pub struct Cli {
+    /// Credential storage backend
+    #[arg(long, env = "TFA_STORAGE", default_value = "auto", global = true)]
+    pub storage: StorageBackend,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -134,9 +149,15 @@ pub fn run_app(
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let store = KeyringStore::default();
     let clipboard = SystemClipboard;
-    run_app(cli, &store, &clipboard, &mut io::stdout())
+
+    let store: Box<dyn AccountStore> = match cli.storage {
+        StorageBackend::Auto => Box::new(AutoStore::default_auto()?),
+        StorageBackend::Keyring => Box::new(KeyringStore::default()),
+        StorageBackend::File => Box::new(FileStore::new(FileStore::default_path()?)),
+    };
+
+    run_app(cli, store.as_ref(), &clipboard, &mut io::stdout())
 }
 
 #[cfg(test)]
@@ -149,7 +170,18 @@ mod tests {
     fn test_cli_parse_default() {
         let cli = Cli::try_parse_from(["tfa"]);
         assert!(cli.is_ok());
-        assert!(cli.unwrap().command.is_none());
+        let unwrapped = cli.unwrap();
+        assert!(unwrapped.command.is_none());
+        assert_eq!(unwrapped.storage, StorageBackend::Auto);
+    }
+
+    #[test]
+    fn test_cli_parse_storage_flag() {
+        let cli = Cli::try_parse_from(["tfa", "--storage", "file", "list"]).unwrap();
+        assert_eq!(cli.storage, StorageBackend::File);
+
+        let cli_keyring = Cli::try_parse_from(["tfa", "--storage", "keyring", "list"]).unwrap();
+        assert_eq!(cli_keyring.storage, StorageBackend::Keyring);
     }
 
     #[test]
