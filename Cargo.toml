@@ -7,6 +7,7 @@ description = "A CLI two-factor authentication (2FA / TOTP) application"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
 totp-rs = { version = "6.0", features = ["gen_secret", "otpauth", "serde"] }
 keyring = "4.2"
 arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }

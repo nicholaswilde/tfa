@@ -64,6 +64,15 @@ tasks:
     cmds:
       - cargo build --profile release
 
+  completions:
+    desc: Generate shell completions for bash, zsh, fish, and powershell
+    cmds:
+      - mkdir -p completions
+      - cargo run -- completions bash > completions/tfa.bash
+      - cargo run -- completions zsh > completions/_tfa
+      - cargo run -- completions fish > completions/tfa.fish
+      - cargo run -- completions powershell > completions/_tfa.ps1
+
   run:
     desc: Run the project (requires arguments or env vars, runs help by default)
     cmds:
