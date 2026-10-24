@@ -31,6 +31,8 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List all stored accounts')
             [CompletionResult]::new('delete', 'delete', [CompletionResultType]::ParameterValue, 'Delete an account secret')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show account details and stored secret')
+            [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Export accounts to an encrypted backup file or stdout')
+            [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import accounts from a backup file, migration URI, or JSON payload')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell autocompletions script')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -75,6 +77,24 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
+        'tfa;export' {
+            [CompletionResult]::new('--password', '--password', [CompletionResultType]::ParameterName, 'Master passphrase for encryption (prompted securely if omitted)')
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('--unencrypted', '--unencrypted', [CompletionResultType]::ParameterName, 'Export without encryption (plain JSON)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'tfa;import' {
+            [CompletionResult]::new('--password', '--password', [CompletionResultType]::ParameterName, 'Master passphrase for encrypted backup (prompted securely if omitted)')
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Preview accounts to import without saving them')
+            [CompletionResult]::new('--overwrite', '--overwrite', [CompletionResultType]::ParameterName, 'Overwrite existing accounts if conflicts occur')
+            [CompletionResult]::new('--skip', '--skip', [CompletionResultType]::ParameterName, 'Skip existing accounts if conflicts occur (default)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
         'tfa;completions' {
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -87,6 +107,8 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List all stored accounts')
             [CompletionResult]::new('delete', 'delete', [CompletionResultType]::ParameterValue, 'Delete an account secret')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show account details and stored secret')
+            [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Export accounts to an encrypted backup file or stdout')
+            [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import accounts from a backup file, migration URI, or JSON payload')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell autocompletions script')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -104,6 +126,12 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             break
         }
         'tfa;help;show' {
+            break
+        }
+        'tfa;help;export' {
+            break
+        }
+        'tfa;help;import' {
             break
         }
         'tfa;help;completions' {

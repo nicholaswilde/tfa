@@ -25,11 +25,17 @@ _tfa() {
             tfa,delete)
                 cmd="tfa__subcmd__delete"
                 ;;
+            tfa,export)
+                cmd="tfa__subcmd__export"
+                ;;
             tfa,generate)
                 cmd="tfa__subcmd__generate"
                 ;;
             tfa,help)
                 cmd="tfa__subcmd__help"
+                ;;
+            tfa,import)
+                cmd="tfa__subcmd__import"
                 ;;
             tfa,list)
                 cmd="tfa__subcmd__list"
@@ -46,11 +52,17 @@ _tfa() {
             tfa__subcmd__help,delete)
                 cmd="tfa__subcmd__help__subcmd__delete"
                 ;;
+            tfa__subcmd__help,export)
+                cmd="tfa__subcmd__help__subcmd__export"
+                ;;
             tfa__subcmd__help,generate)
                 cmd="tfa__subcmd__help__subcmd__generate"
                 ;;
             tfa__subcmd__help,help)
                 cmd="tfa__subcmd__help__subcmd__help"
+                ;;
+            tfa__subcmd__help,import)
+                cmd="tfa__subcmd__help__subcmd__import"
                 ;;
             tfa__subcmd__help,list)
                 cmd="tfa__subcmd__help__subcmd__list"
@@ -65,7 +77,7 @@ _tfa() {
 
     case "${cmd}" in
         tfa)
-            opts="-h -V --storage --help --version generate add list delete show completions help"
+            opts="-h -V --storage --help --version generate add list delete show export import completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -160,6 +172,28 @@ _tfa() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        tfa__subcmd__export)
+            opts="-h --unencrypted --password --storage --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --password)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         tfa__subcmd__generate)
             opts="-c -h --copy --storage --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
@@ -179,7 +213,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__help)
-            opts="generate add list delete show completions help"
+            opts="generate add list delete show export import completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -234,6 +268,20 @@ _tfa() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        tfa__subcmd__help__subcmd__export)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         tfa__subcmd__help__subcmd__generate)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -249,6 +297,20 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__help__subcmd__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__help__subcmd__import)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -283,6 +345,28 @@ _tfa() {
                 return 0
             fi
             case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__import)
+            opts="-h --dry-run --overwrite --skip --password --storage --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --password)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;

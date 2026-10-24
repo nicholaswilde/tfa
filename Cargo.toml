@@ -9,6 +9,7 @@ description = "A CLI two-factor authentication (2FA / TOTP) application"
 clap = { version = "4.5", features = ["derive", "env"] }
 clap_complete = "4.5"
 totp-rs = { version = "6.0", features = ["gen_secret", "otpauth", "serde"] }
+google_authenticator_converter = "0.2"
 keyring = "4.2"
 arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -17,6 +18,12 @@ anyhow = "1.0"
 thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+aes-gcm = "0.11.1"
+argon2 = "0.6.0"
+rand = "0.10.3"
+rpassword = "7.5.4"
+url = "2.5.8"
+base64ct = { version = "1.8.3", features = ["alloc"] }
 
 [dev-dependencies]
 tempfile = "3.16"

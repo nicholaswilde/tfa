@@ -53,6 +53,8 @@ tfa [COMMAND]
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
 | `list` | List all configured accounts | `tfa list` |
 | `show` | Display account parameters and stored secret | `tfa show github [-r]` |
+| `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
+| `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `delete` | Remove an account secret from keyring | `tfa delete github` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
 
@@ -81,6 +83,38 @@ $ tfa generate github
 # With automatic clipboard copy:
 $ tfa generate github -c
 482910 (24s remaining) [copied]
+```
+
+### Backup, Export & Import
+
+`tfa` provides secure backup and restore with Argon2id + AES-256-GCM encryption, as well as seamless migration from other 2FA applications.
+
+#### Exporting Accounts
+```bash
+# Export encrypted backup (prompts for master passphrase):
+tfa export backup.enc
+
+# Export unencrypted JSON to stdout or file:
+tfa export backup.json --unencrypted
+```
+
+#### Importing Accounts
+```bash
+# Restore from an encrypted backup file:
+tfa import backup.enc
+
+# Import directly from Google Authenticator QR migration link:
+tfa import "otpauth-migration://offline?data=..."
+
+# Import from Bitwarden or Aegis JSON export:
+tfa import bitwarden_export.json
+
+# Preview changes with dry-run:
+tfa import backup.enc --dry-run
+
+# Handle conflicts (overwrite existing or skip):
+tfa import backup.enc --overwrite
+tfa import backup.enc --skip
 ```
 
 ---
