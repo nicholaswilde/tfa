@@ -79,6 +79,18 @@ file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 ':account -- Name of the account:_default' \
 && ret=0
 ;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'-r[Print only the raw secret or URI]' \
+'--raw[Print only the raw secret or URI]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':account -- Name of the account:_default' \
+&& ret=0
+;;
 (completions)
 _arguments "${_arguments_options[@]}" : \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
@@ -117,6 +129,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (completions)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -141,6 +157,7 @@ _tfa_commands() {
 'add:Add a new account secret or OTPAuth URL' \
 'list:List all stored accounts' \
 'delete:Delete an account secret' \
+'show:Show account details and stored secret' \
 'completions:Generate shell autocompletions script' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -173,6 +190,7 @@ _tfa__subcmd__help_commands() {
 'add:Add a new account secret or OTPAuth URL' \
 'list:List all stored accounts' \
 'delete:Delete an account secret' \
+'show:Show account details and stored secret' \
 'completions:Generate shell autocompletions script' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -208,10 +226,20 @@ _tfa__subcmd__help__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'tfa help list commands' commands "$@"
 }
+(( $+functions[_tfa__subcmd__help__subcmd__show_commands] )) ||
+_tfa__subcmd__help__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help show commands' commands "$@"
+}
 (( $+functions[_tfa__subcmd__list_commands] )) ||
 _tfa__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'tfa list commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__show_commands] )) ||
+_tfa__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa show commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_tfa" ]; then

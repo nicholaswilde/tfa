@@ -30,6 +30,7 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('add', 'add', [CompletionResultType]::ParameterValue, 'Add a new account secret or OTPAuth URL')
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List all stored accounts')
             [CompletionResult]::new('delete', 'delete', [CompletionResultType]::ParameterValue, 'Delete an account secret')
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show account details and stored secret')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell autocompletions script')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -66,6 +67,14 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
+        'tfa;show' {
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Print only the raw secret or URI')
+            [CompletionResult]::new('--raw', '--raw', [CompletionResultType]::ParameterName, 'Print only the raw secret or URI')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
         'tfa;completions' {
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -77,6 +86,7 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('add', 'add', [CompletionResultType]::ParameterValue, 'Add a new account secret or OTPAuth URL')
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List all stored accounts')
             [CompletionResult]::new('delete', 'delete', [CompletionResultType]::ParameterValue, 'Delete an account secret')
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show account details and stored secret')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell autocompletions script')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -91,6 +101,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             break
         }
         'tfa;help;delete' {
+            break
+        }
+        'tfa;help;show' {
             break
         }
         'tfa;help;completions' {

@@ -66,6 +66,14 @@ pub enum Commands {
         /// Name of the account
         account: String,
     },
+    /// Show account details and stored secret
+    Show {
+        /// Name of the account
+        account: String,
+        /// Print only the raw secret or URI
+        #[arg(short, long)]
+        raw: bool,
+    },
     /// Generate shell autocompletions script
     Completions {
         /// Shell to generate completions for
@@ -136,6 +144,25 @@ pub fn run_app(
         Some(Commands::Delete { account }) => {
             store.delete_account(&account)?;
             writeln!(out_writer, "Account '{account}' deleted.")?;
+        }
+        Some(Commands::Show { account, raw }) => {
+            let secret = store.get_secret(&account)?;
+            if raw {
+                writeln!(out_writer, "{secret}")?;
+            } else {
+                let engine = TfaTotp::from_input(&account, &secret)?;
+                writeln!(out_writer, "Account:   {account}")?;
+                writeln!(out_writer, "Digits:    {}", engine.digits())?;
+                writeln!(out_writer, "Period:    {}s", engine.step())?;
+                writeln!(out_writer, "Algorithm: {}", engine.algorithm())?;
+                writeln!(out_writer, "Secret:    {secret}")?;
+                writeln!(
+                    out_writer,
+                    "Live Code: {} ({}s remaining)",
+                    engine.generate_current(),
+                    engine.ttl()
+                )?;
+            }
         }
         Some(Commands::Completions { shell }) => {
             generate_completions(shell, out_writer);
@@ -404,5 +431,59 @@ mod tests {
         assert!(run_app(cli, &store, &cb, &mut out).is_ok());
         let out_str = String::from_utf8(out).unwrap();
         assert!(out_str.contains("complete -F _tfa"));
+    }
+
+    #[test]
+    fn test_cli_parse_show() {
+        let cli = Cli::try_parse_from(["tfa", "show", "github"]).unwrap();
+        match cli.command {
+            Some(Commands::Show { account, raw }) => {
+                assert_eq!(account, "github");
+                assert!(!raw);
+            }
+            _ => panic!("Expected show subcommand"),
+        }
+
+        let cli_raw = Cli::try_parse_from(["tfa", "show", "github", "-r"]).unwrap();
+        match cli_raw.command {
+            Some(Commands::Show { account, raw }) => {
+                assert_eq!(account, "github");
+                assert!(raw);
+            }
+            _ => panic!("Expected show subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_run_app_show() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        store
+            .set_secret("my_acc", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+            .unwrap();
+
+        // Normal show
+        let show_cli = Cli::try_parse_from(["tfa", "show", "my_acc"]).unwrap();
+        assert!(run_app(show_cli, &store, &cb, &mut out).is_ok());
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains("Account:   my_acc"));
+        assert!(out_str.contains("Digits:    6"));
+        assert!(out_str.contains("Period:    30s"));
+        assert!(out_str.contains("Algorithm: SHA1"));
+        assert!(out_str.contains("Live Code:"));
+
+        // Raw show
+        let mut raw_out = Vec::new();
+        let show_raw = Cli::try_parse_from(["tfa", "show", "my_acc", "--raw"]).unwrap();
+        assert!(run_app(show_raw, &store, &cb, &mut raw_out).is_ok());
+        let raw_str = String::from_utf8(raw_out).unwrap();
+        assert_eq!(raw_str.trim(), "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+
+        // Missing account fails
+        let mut err_out = Vec::new();
+        let show_missing = Cli::try_parse_from(["tfa", "show", "missing"]).unwrap();
+        assert!(run_app(show_missing, &store, &cb, &mut err_out).is_err());
     }
 }

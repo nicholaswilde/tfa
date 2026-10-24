@@ -34,6 +34,9 @@ _tfa() {
             tfa,list)
                 cmd="tfa__subcmd__list"
                 ;;
+            tfa,show)
+                cmd="tfa__subcmd__show"
+                ;;
             tfa__subcmd__help,add)
                 cmd="tfa__subcmd__help__subcmd__add"
                 ;;
@@ -52,6 +55,9 @@ _tfa() {
             tfa__subcmd__help,list)
                 cmd="tfa__subcmd__help__subcmd__list"
                 ;;
+            tfa__subcmd__help,show)
+                cmd="tfa__subcmd__help__subcmd__show"
+                ;;
             *)
                 ;;
         esac
@@ -59,7 +65,7 @@ _tfa() {
 
     case "${cmd}" in
         tfa)
-            opts="-h -V --storage --help --version generate add list delete completions help"
+            opts="-h -V --storage --help --version generate add list delete show completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -173,7 +179,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__help)
-            opts="generate add list delete completions help"
+            opts="generate add list delete show completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -270,8 +276,40 @@ _tfa() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        tfa__subcmd__help__subcmd__show)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         tfa__subcmd__list)
             opts="-h --storage --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__show)
+            opts="-r -h --raw --storage --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

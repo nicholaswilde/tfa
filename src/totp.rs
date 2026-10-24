@@ -76,19 +76,16 @@ impl TfaTotp {
     }
 
     /// Number of digits in generated code
-    #[cfg(test)]
     pub fn digits(&self) -> u8 {
         self.inner.digits()
     }
 
     /// Time step period in seconds
-    #[cfg(test)]
     pub fn step(&self) -> u64 {
         self.inner.step()
     }
 
     /// Hash algorithm
-    #[cfg(test)]
     pub fn algorithm(&self) -> Algorithm {
         self.inner.algorithm()
     }

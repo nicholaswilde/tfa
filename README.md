@@ -52,6 +52,7 @@ tfa [COMMAND]
 | `generate -c` | Generate token and copy to clipboard | `tfa generate github -c` |
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
 | `list` | List all configured accounts | `tfa list` |
+| `show` | Display account parameters and stored secret | `tfa show github [-r]` |
 | `delete` | Remove an account secret from keyring | `tfa delete github` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
 
