@@ -41,6 +41,12 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             break
         }
         'tfa;add' {
+            [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Number of digits in generated code (e.g. 6 or 8)')
+            [CompletionResult]::new('--digits', '--digits', [CompletionResultType]::ParameterName, 'Number of digits in generated code (e.g. 6 or 8)')
+            [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Time step period in seconds (e.g. 30 or 60)')
+            [CompletionResult]::new('--period', '--period', [CompletionResultType]::ParameterName, 'Time step period in seconds (e.g. 30 or 60)')
+            [CompletionResult]::new('-a', '-a', [CompletionResultType]::ParameterName, 'Hash algorithm (sha1, sha256, sha512)')
+            [CompletionResult]::new('--algorithm', '--algorithm', [CompletionResultType]::ParameterName, 'Hash algorithm (sha1, sha256, sha512)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break

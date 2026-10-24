@@ -34,6 +34,9 @@ complete -c tfa -n "__fish_tfa_needs_command" -f -a "completions" -d 'Generate s
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s c -l copy -d 'Copy generated token to clipboard'
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s h -l help -d 'Print help'
+complete -c tfa -n "__fish_tfa_using_subcommand add" -s d -l digits -d 'Number of digits in generated code (e.g. 6 or 8)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand add" -s p -l period -d 'Time step period in seconds (e.g. 30 or 60)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand add" -s a -l algorithm -d 'Hash algorithm (sha1, sha256, sha512)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand add" -s h -l help -d 'Print help'
 complete -c tfa -n "__fish_tfa_using_subcommand list" -s h -l help -d 'Print help'
 complete -c tfa -n "__fish_tfa_using_subcommand delete" -s h -l help -d 'Print help'

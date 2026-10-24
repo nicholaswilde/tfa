@@ -39,6 +39,12 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (add)
 _arguments "${_arguments_options[@]}" : \
+'-d+[Number of digits in generated code (e.g. 6 or 8)]:DIGITS:_default' \
+'--digits=[Number of digits in generated code (e.g. 6 or 8)]:DIGITS:_default' \
+'-p+[Time step period in seconds (e.g. 30 or 60)]:PERIOD:_default' \
+'--period=[Time step period in seconds (e.g. 30 or 60)]:PERIOD:_default' \
+'-a+[Hash algorithm (sha1, sha256, sha512)]:ALGORITHM:_default' \
+'--algorithm=[Hash algorithm (sha1, sha256, sha512)]:ALGORITHM:_default' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':account -- Name of the account:_default' \

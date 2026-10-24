@@ -34,6 +34,15 @@ pub enum Commands {
         account: String,
         /// TOTP secret key or otpauth:// URI (prompted if omitted)
         secret: Option<String>,
+        /// Number of digits in generated code (e.g. 6 or 8)
+        #[arg(short, long)]
+        digits: Option<u8>,
+        /// Time step period in seconds (e.g. 30 or 60)
+        #[arg(short, long)]
+        period: Option<u64>,
+        /// Hash algorithm (sha1, sha256, sha512)
+        #[arg(short, long)]
+        algorithm: Option<totp_rs::Algorithm>,
     },
     /// List all stored accounts
     List,
@@ -75,7 +84,13 @@ pub fn run_app(
                 writeln!(out_writer, "{code} ({ttl}s remaining)")?;
             }
         }
-        Some(Commands::Add { account, secret }) => {
+        Some(Commands::Add {
+            account,
+            secret,
+            digits,
+            period,
+            algorithm,
+        }) => {
             let raw_secret = match secret {
                 Some(s) => s,
                 None => {
@@ -87,9 +102,10 @@ pub fn run_app(
                 }
             };
 
-            // Validate before saving
-            TfaTotp::from_input(&account, &raw_secret)?;
-            store.set_secret(&account, &raw_secret)?;
+            // Validate and generate canonical OTPAuth URL with custom parameters
+            let engine = TfaTotp::build(&account, &raw_secret, digits, period, algorithm)?;
+            let url = engine.to_url()?;
+            store.set_secret(&account, &url)?;
             writeln!(out_writer, "Account '{account}' added successfully.")?;
         }
         Some(Commands::List) => {
@@ -172,6 +188,39 @@ mod tests {
     }
 
     #[test]
+    fn test_cli_parse_add_custom_flags() {
+        let cli = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "custom",
+            "JBSWY3DPEHPK3PXP",
+            "--digits",
+            "8",
+            "--period",
+            "60",
+            "--algorithm",
+            "sha256",
+        ])
+        .unwrap();
+
+        match cli.command {
+            Some(Commands::Add {
+                account,
+                digits,
+                period,
+                algorithm,
+                ..
+            }) => {
+                assert_eq!(account, "custom");
+                assert_eq!(digits, Some(8));
+                assert_eq!(period, Some(60));
+                assert_eq!(algorithm, Some(totp_rs::Algorithm::SHA256));
+            }
+            _ => panic!("Expected add subcommand"),
+        }
+    }
+
+    #[test]
     fn test_cli_parse_completions() {
         let shells = [
             ("bash", Shell::Bash),
@@ -250,6 +299,37 @@ mod tests {
         // Generate deleted account should fail
         let gen_deleted = Cli::try_parse_from(["tfa", "generate", "test_acc"]).unwrap();
         assert!(run_app(gen_deleted, &store, &cb, &mut out).is_err());
+    }
+
+    #[test]
+    fn test_run_app_add_custom_parameters_flow() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "custom8",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--digits",
+            "8",
+            "--period",
+            "60",
+            "--algorithm",
+            "sha256",
+        ])
+        .unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // Generate token and verify 8 digits
+        let gen_cli = Cli::try_parse_from(["tfa", "generate", "custom8"]).unwrap();
+        let mut gen_out = Vec::new();
+        assert!(run_app(gen_cli, &store, &cb, &mut gen_out).is_ok());
+        let gen_str = String::from_utf8(gen_out).unwrap();
+        let token = gen_str.split_whitespace().next().unwrap();
+        assert_eq!(token.len(), 8);
+        assert!(token.chars().all(|c| c.is_ascii_digit()));
     }
 
     #[test]
