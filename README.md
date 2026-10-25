@@ -346,4 +346,4 @@ task build        # Build all multi-arch Linux targets via cross
 
 ## :writing_hand: Author
 
-Nicholas Wilde.
+​This project was started in 2026 by ​[Nicholas Wilde​](https://github.com/nicholaswilde)
