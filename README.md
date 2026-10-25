@@ -49,17 +49,18 @@ tfa [COMMAND]
 
 | Command | Description | Example |
 | :--- | :--- | :--- |
-| `generate` | Generate current 6-digit TOTP token | `tfa generate github` |
-| `generate -c` | Generate token and copy to clipboard | `tfa generate github -c` |
-| `generate -w` | Watch token countdown with progress bar | `tfa generate github -w` |
-| `watch` | Watch live TOTP countdown with progress bar | `tfa watch github [-c]` |
+| `generate` | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account]` |
+| `generate -c` | Generate token and copy to clipboard | `tfa generate [account] -c` |
+| `generate -w` | Watch token countdown with progress bar | `tfa generate [account] -w` |
+| `watch` | Watch live TOTP countdown with progress bar | `tfa watch [account] [-c]` |
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
 | `qr` | Render account as terminal QR code | `tfa qr github [--light]` |
-| `list` | List all configured accounts | `tfa list` |
+| `list` | List all configured accounts | `tfa list [--codes] [--json]` |
+| `status` | Live overview of all accounts and tokens | `tfa status [--json]` |
 | `show` | Display account parameters and stored secret | `tfa show github [-r]` |
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
-| `delete` | Remove an account secret from keyring | `tfa delete github` |
+| `delete` | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
 
 ### Adding Accounts
@@ -100,6 +101,13 @@ tfa qr github --light
 $ tfa generate github
 482910 (24s remaining)
 
+# Interactive fuzzy search (prompted when account is omitted in interactive terminal):
+$ tfa generate
+Select account to generate token |
+> github
+  aws
+482910 (24s remaining)
+
 # With automatic clipboard copy:
 $ tfa generate github -c
 482910 (24s remaining) [copied]
@@ -110,6 +118,36 @@ github  482910  [████████░░░░] 18s
 
 # Or via generate flag:
 $ tfa generate github -w -c
+```
+
+### Dashboard & Status Overview
+
+View all stored accounts, live TOTP tokens, and remaining seconds in a single table or JSON output (ideal for tmux, polybar, or waybar status modules):
+
+```bash
+# Formatted table overview
+$ tfa status
+# or
+$ tfa list --codes
+
+ACCOUNT  TOKEN    TTL
+github   482910   18s
+aws      891234   25s
+
+# JSON output for scripts and status bars
+$ tfa status --json
+[
+  {
+    "account": "github",
+    "token": "482910",
+    "ttl": 18
+  },
+  {
+    "account": "aws",
+    "token": "891234",
+    "ttl": 25
+  }
+]
 ```
 
 ### Backup, Export & Import

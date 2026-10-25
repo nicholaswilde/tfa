@@ -2,7 +2,7 @@ use anyhow::Context;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use std::collections::BTreeMap;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 mod backup;
@@ -44,8 +44,8 @@ pub struct Cli {
 pub enum Commands {
     /// Generate a TOTP token for an account
     Generate {
-        /// Name of the account
-        account: String,
+        /// Name of the account (interactively prompted via fuzzy search if omitted)
+        account: Option<String>,
         /// Copy generated token to clipboard
         #[arg(short, long)]
         copy: bool,
@@ -55,8 +55,8 @@ pub enum Commands {
     },
     /// Live watch mode displaying continuous TOTP countdown with progress bar
     Watch {
-        /// Name of the account
-        account: String,
+        /// Name of the account (interactively prompted via fuzzy search if omitted)
+        account: Option<String>,
         /// Copy token to clipboard on every cycle
         #[arg(short, long)]
         copy: bool,
@@ -88,12 +88,25 @@ pub enum Commands {
         #[arg(long)]
         light: bool,
     },
-    /// List all stored accounts
-    List,
+    /// List all stored accounts or live token status
+    List {
+        /// Include live TOTP codes and remaining time-to-live
+        #[arg(short, long)]
+        codes: bool,
+        /// Output overview in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Live overview status dashboard of all accounts and tokens (alias for list --codes)
+    Status {
+        /// Output overview in JSON format
+        #[arg(long)]
+        json: bool,
+    },
     /// Delete an account secret
     Delete {
-        /// Name of the account
-        account: String,
+        /// Name of the account (interactively prompted via fuzzy search if omitted)
+        account: Option<String>,
     },
     /// Show account details and stored secret
     Show {
@@ -138,6 +151,104 @@ pub enum Commands {
     },
 }
 
+#[derive(serde::Serialize, Debug)]
+pub struct AccountStatus {
+    pub account: String,
+    pub token: String,
+    pub ttl: u64,
+}
+
+pub fn display_accounts_overview(
+    accounts: &[String],
+    store: &dyn AccountStore,
+    json: bool,
+    out: &mut dyn Write,
+) -> anyhow::Result<()> {
+    let mut statuses = Vec::new();
+    for acc in accounts {
+        let secret = store.get_secret(acc)?;
+        let engine = TfaTotp::from_input(acc, &secret)?;
+        statuses.push(AccountStatus {
+            account: acc.clone(),
+            token: engine.generate_current(),
+            ttl: engine.ttl(),
+        });
+    }
+
+    if json {
+        let json_str = serde_json::to_string_pretty(&statuses)?;
+        writeln!(out, "{json_str}")?;
+    } else {
+        let max_acc_len = statuses
+            .iter()
+            .map(|s| s.account.len())
+            .max()
+            .unwrap_or(7)
+            .max(7);
+        writeln!(
+            out,
+            "{:<width$}  {:^8}  {:>5}",
+            "ACCOUNT",
+            "TOKEN",
+            "TTL",
+            width = max_acc_len
+        )?;
+        for s in statuses {
+            writeln!(
+                out,
+                "{:<width$}  {:^8}  {:>4}s",
+                s.account,
+                s.token,
+                s.ttl,
+                width = max_acc_len
+            )?;
+        }
+    }
+    Ok(())
+}
+
+pub fn select_account_interactive(
+    store: &dyn AccountStore,
+    prompt: &str,
+) -> anyhow::Result<String> {
+    select_account_interactive_on(store, prompt, &console::Term::stderr())
+}
+
+pub fn select_account_interactive_on(
+    store: &dyn AccountStore,
+    prompt: &str,
+    term: &console::Term,
+) -> anyhow::Result<String> {
+    let accounts = store.list_accounts()?;
+    if accounts.is_empty() {
+        anyhow::bail!("No accounts configured");
+    }
+
+    #[cfg(test)]
+    {
+        // When running under test harness, avoid blocking on interactive prompt unless explicitly testing PTY
+        if std::env::var("TFA_TEST_INTERACTIVE").is_err() {
+            anyhow::bail!("Account name is required in non-interactive environment");
+        }
+    }
+
+    if !io::stdin().is_terminal() || !term.features().is_attended() {
+        anyhow::bail!("Account name is required in non-interactive environment");
+    }
+
+    let selection = dialoguer::FuzzySelect::new()
+        .with_prompt(prompt)
+        .items(&accounts)
+        .default(0)
+        .interact_on_opt(term)
+        .map_err(|e| anyhow::anyhow!("Interactive selection failed: {e}"))?;
+
+    match selection {
+        Some(index) => Ok(accounts[index].clone()),
+        None => anyhow::bail!("Selection cancelled"),
+    }
+}
+
 pub fn generate_completions(shell: Shell, writer: &mut dyn Write) {
     let mut cmd = Cli::command();
     let bin_name = cmd.get_name().to_string();
@@ -156,11 +267,15 @@ pub fn run_app(
             copy,
             watch,
         }) => {
+            let acct = match account {
+                Some(a) => a,
+                None => select_account_interactive(store, "Select account to generate token")?,
+            };
             if watch {
-                watch::watch_account(&account, store, clipboard, copy, out_writer, None)?;
+                watch::watch_account(&acct, store, clipboard, copy, out_writer, None)?;
             } else {
-                let secret = store.get_secret(&account)?;
-                let engine = TfaTotp::from_input(&account, &secret)?;
+                let secret = store.get_secret(&acct)?;
+                let engine = TfaTotp::from_input(&acct, &secret)?;
                 let code = engine.generate_current();
                 let ttl = engine.ttl();
 
@@ -173,7 +288,11 @@ pub fn run_app(
             }
         }
         Some(Commands::Watch { account, copy }) => {
-            watch::watch_account(&account, store, clipboard, copy, out_writer, None)?;
+            let acct = match account {
+                Some(a) => a,
+                None => select_account_interactive(store, "Select account to watch")?,
+            };
+            watch::watch_account(&acct, store, clipboard, copy, out_writer, None)?;
         }
         Some(Commands::Add {
             account,
@@ -227,19 +346,41 @@ pub fn run_app(
             let qr_blocks = qr::render_terminal_qr(&url, !light)?;
             write!(out_writer, "{qr_blocks}")?;
         }
-        Some(Commands::List) => {
+        Some(Commands::List { codes, json }) => {
             let accounts = store.list_accounts()?;
             if accounts.is_empty() {
-                writeln!(out_writer, "No accounts configured.")?;
+                if json {
+                    writeln!(out_writer, "[]")?;
+                } else {
+                    writeln!(out_writer, "No accounts configured.")?;
+                }
+            } else if codes || json {
+                display_accounts_overview(&accounts, store, json, out_writer)?;
             } else {
                 for account in accounts {
                     writeln!(out_writer, "{account}")?;
                 }
             }
         }
+        Some(Commands::Status { json }) => {
+            let accounts = store.list_accounts()?;
+            if accounts.is_empty() {
+                if json {
+                    writeln!(out_writer, "[]")?;
+                } else {
+                    writeln!(out_writer, "No accounts configured.")?;
+                }
+            } else {
+                display_accounts_overview(&accounts, store, json, out_writer)?;
+            }
+        }
         Some(Commands::Delete { account }) => {
-            store.delete_account(&account)?;
-            writeln!(out_writer, "Account '{account}' deleted.")?;
+            let acct = match account {
+                Some(a) => a,
+                None => select_account_interactive(store, "Select account to delete")?,
+            };
+            store.delete_account(&acct)?;
+            writeln!(out_writer, "Account '{acct}' deleted.")?;
         }
         Some(Commands::Show { account, raw }) => {
             let secret = store.get_secret(&account)?;
@@ -496,9 +637,18 @@ mod tests {
                 copy,
                 watch,
             }) => {
-                assert_eq!(account, "github");
+                assert_eq!(account, Some("github".to_string()));
                 assert!(!copy);
                 assert!(!watch);
+            }
+            _ => panic!("Expected generate subcommand"),
+        }
+
+        // Without account argument
+        let cli_no_acc = Cli::try_parse_from(["tfa", "generate"]).unwrap();
+        match cli_no_acc.command {
+            Some(Commands::Generate { account, .. }) => {
+                assert_eq!(account, None);
             }
             _ => panic!("Expected generate subcommand"),
         }
@@ -514,7 +664,7 @@ mod tests {
                 copy,
                 watch,
             }) => {
-                assert_eq!(account, "github");
+                assert_eq!(account, Some("github".to_string()));
                 assert!(copy);
                 assert!(!watch);
             }
@@ -529,7 +679,7 @@ mod tests {
                 copy,
                 watch,
             }) => {
-                assert_eq!(account, "aws");
+                assert_eq!(account, Some("aws".to_string()));
                 assert!(copy);
                 assert!(!watch);
             }
@@ -542,7 +692,7 @@ mod tests {
         let cli = Cli::try_parse_from(["tfa", "watch", "github", "-c"]).unwrap();
         match cli.command {
             Some(Commands::Watch { account, copy }) => {
-                assert_eq!(account, "github");
+                assert_eq!(account, Some("github".to_string()));
                 assert!(copy);
             }
             _ => panic!("Expected watch subcommand"),
@@ -735,6 +885,54 @@ mod tests {
         assert!(run_app(list_cli, &store, &cb, &mut out).is_ok());
         let out_str = String::from_utf8(out).unwrap();
         assert!(out_str.contains("No accounts configured."));
+
+        let mut out_json = Vec::new();
+        let status_json = Cli::try_parse_from(["tfa", "status", "--json"]).unwrap();
+        assert!(run_app(status_json, &store, &cb, &mut out_json).is_ok());
+        let json_str = String::from_utf8(out_json).unwrap();
+        assert_eq!(json_str.trim(), "[]");
+    }
+
+    #[test]
+    fn test_run_app_list_codes_and_status() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        store
+            .set_secret("aws", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+            .unwrap();
+
+        // 1. Plain table via list --codes
+        let mut out1 = Vec::new();
+        let cli1 = Cli::try_parse_from(["tfa", "list", "--codes"]).unwrap();
+        assert!(run_app(cli1, &store, &cb, &mut out1).is_ok());
+        let str1 = String::from_utf8(out1).unwrap();
+        assert!(str1.contains("ACCOUNT"));
+        assert!(str1.contains("TOKEN"));
+        assert!(str1.contains("TTL"));
+        assert!(str1.contains("github"));
+        assert!(str1.contains("aws"));
+
+        // 2. Status command
+        let mut out2 = Vec::new();
+        let cli2 = Cli::try_parse_from(["tfa", "status"]).unwrap();
+        assert!(run_app(cli2, &store, &cb, &mut out2).is_ok());
+        let str2 = String::from_utf8(out2).unwrap();
+        assert!(str2.contains("github"));
+        assert!(str2.contains("aws"));
+
+        // 3. JSON format
+        let mut out3 = Vec::new();
+        let cli3 = Cli::try_parse_from(["tfa", "status", "--json"]).unwrap();
+        assert!(run_app(cli3, &store, &cb, &mut out3).is_ok());
+        let str3 = String::from_utf8(out3).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&str3).unwrap();
+        assert!(json.is_array());
+        assert_eq!(json.as_array().unwrap().len(), 2);
+        let first = &json[0];
+        assert!(first.get("account").is_some());
+        assert!(first.get("token").is_some());
+        assert!(first.get("ttl").is_some());
     }
 
     #[test]
@@ -743,6 +941,36 @@ mod tests {
         let cb = MockClipboard::default();
         let mut out = Vec::new();
         let del_cli = Cli::try_parse_from(["tfa", "delete", "missing"]).unwrap();
+        assert!(run_app(del_cli, &store, &cb, &mut out).is_err());
+    }
+
+    #[test]
+    fn test_select_account_interactive_non_interactive_env_fails() {
+        let store = MemoryStore::new();
+        // 1. With empty store
+        let err1 = select_account_interactive(&store, "Pick account");
+        assert!(err1.is_err());
+        assert!(err1
+            .unwrap_err()
+            .to_string()
+            .contains("No accounts configured"));
+
+        // 2. With store accounts, but non-terminal standard input during cargo test
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        let err2 = select_account_interactive(&store, "Pick account");
+        assert!(err2.is_err());
+        assert!(err2
+            .unwrap_err()
+            .to_string()
+            .contains("non-interactive environment"));
+
+        // 3. Omitting account in generate or delete under non-interactive env fails gracefully
+        let mut out = Vec::new();
+        let cb = MockClipboard::default();
+        let gen_cli = Cli::try_parse_from(["tfa", "generate"]).unwrap();
+        assert!(run_app(gen_cli, &store, &cb, &mut out).is_err());
+
+        let del_cli = Cli::try_parse_from(["tfa", "delete"]).unwrap();
         assert!(run_app(del_cli, &store, &cb, &mut out).is_err());
     }
 
