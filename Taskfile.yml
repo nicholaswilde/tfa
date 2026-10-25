@@ -145,3 +145,13 @@ tasks:
     desc: Clean build artifacts
     cmds:
       - cargo clean
+
+  release:
+    desc: Automated release tagging, validation, and version bump (./scripts/release.sh)
+    cmds:
+      - ./scripts/release.sh {{.CLI_ARGS}}
+
+  release:summary:
+    desc: Generate categorized release notes and update draft release (./scripts/release_summary.py)
+    cmds:
+      - ./scripts/release_summary.py {{.CLI_ARGS}}
