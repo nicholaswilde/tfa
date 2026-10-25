@@ -40,8 +40,20 @@ _tfa() {
             tfa,list)
                 cmd="tfa__subcmd__list"
                 ;;
+            tfa,man)
+                cmd="tfa__subcmd__man"
+                ;;
+            tfa,qr)
+                cmd="tfa__subcmd__qr"
+                ;;
             tfa,show)
                 cmd="tfa__subcmd__show"
+                ;;
+            tfa,status)
+                cmd="tfa__subcmd__status"
+                ;;
+            tfa,watch)
+                cmd="tfa__subcmd__watch"
                 ;;
             tfa__subcmd__help,add)
                 cmd="tfa__subcmd__help__subcmd__add"
@@ -67,8 +79,20 @@ _tfa() {
             tfa__subcmd__help,list)
                 cmd="tfa__subcmd__help__subcmd__list"
                 ;;
+            tfa__subcmd__help,man)
+                cmd="tfa__subcmd__help__subcmd__man"
+                ;;
+            tfa__subcmd__help,qr)
+                cmd="tfa__subcmd__help__subcmd__qr"
+                ;;
             tfa__subcmd__help,show)
                 cmd="tfa__subcmd__help__subcmd__show"
+                ;;
+            tfa__subcmd__help,status)
+                cmd="tfa__subcmd__help__subcmd__status"
+                ;;
+            tfa__subcmd__help,watch)
+                cmd="tfa__subcmd__help__subcmd__watch"
                 ;;
             *)
                 ;;
@@ -77,14 +101,26 @@ _tfa() {
 
     case "${cmd}" in
         tfa)
-            opts="-h -V --storage --help --version generate add list delete show export import completions help"
+            opts="-C -h -V --config --storage --clipboard --help --version generate watch add qr list status delete show export import completions man help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -95,12 +131,16 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__add)
-            opts="-d -p -a -h --digits --period --algorithm --storage --help"
+            opts="-d -p -a -c -C -h --qr --digits --period --algorithm --counter --config --storage --clipboard --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --qr)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --digits)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -125,8 +165,28 @@ _tfa() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --counter)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -c)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -137,14 +197,26 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__completions)
-            opts="-h --storage --help bash elvish fish powershell zsh"
+            opts="-C -h --config --storage --clipboard --help bash elvish fish powershell zsh"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -155,14 +227,26 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__delete)
-            opts="-h --storage --help"
+            opts="-C -h --config --storage --clipboard --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -173,7 +257,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__export)
-            opts="-h --unencrypted --password --storage --help"
+            opts="-C -h --unencrypted --password --config --storage --clipboard --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -183,8 +267,20 @@ _tfa() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -195,14 +291,38 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__generate)
-            opts="-c -h --copy --storage --help"
+            opts="-c -w -C -h --copy --watch --counter --config --storage --clipboard --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --copy)
+                    COMPREPLY=($(compgen -W "true false" -- "${cur}"))
+                    return 0
+                    ;;
+                -c)
+                    COMPREPLY=($(compgen -W "true false" -- "${cur}"))
+                    return 0
+                    ;;
+                --counter)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -213,7 +333,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__help)
-            opts="generate add list delete show export import completions help"
+            opts="generate watch add qr list status delete show export import completions man help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -338,6 +458,34 @@ _tfa() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        tfa__subcmd__help__subcmd__man)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__help__subcmd__qr)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         tfa__subcmd__help__subcmd__show)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -352,8 +500,36 @@ _tfa() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        tfa__subcmd__help__subcmd__status)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__help__subcmd__watch)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         tfa__subcmd__import)
-            opts="-h --dry-run --overwrite --skip --password --storage --help"
+            opts="-C -h --dry-run --overwrite --skip --password --config --storage --clipboard --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -363,8 +539,20 @@ _tfa() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -375,14 +563,90 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__list)
-            opts="-h --storage --help"
+            opts="-c -C -h --codes --json --config --storage --clipboard --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__man)
+            opts="-C -h --config --storage --clipboard --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__qr)
+            opts="-C -h --light --config --storage --clipboard --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --light)
+                    COMPREPLY=($(compgen -W "true false" -- "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -393,14 +657,94 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__show)
-            opts="-r -h --raw --storage --help"
+            opts="-r -C -h --raw --config --storage --clipboard --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --storage)
                     COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__status)
+            opts="-C -h --json --config --storage --clipboard --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__watch)
+            opts="-c -C -h --copy --config --storage --clipboard --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --copy)
+                    COMPREPLY=($(compgen -W "true false" -- "${cur}"))
+                    return 0
+                    ;;
+                -c)
+                    COMPREPLY=($(compgen -W "true false" -- "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
                     return 0
                     ;;
                 *)

@@ -15,9 +15,13 @@ _tfa() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
@@ -33,57 +37,131 @@ file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
         case $line[1] in
             (generate)
 _arguments "${_arguments_options[@]}" : \
+'-c+[Copy generated token to clipboard]::COPY:(true false)' \
+'--copy=[Copy generated token to clipboard]::COPY:(true false)' \
+'--counter=[Counter value for counter-based (HOTP) token generation]::COUNTER:_default' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
-'-c[Copy generated token to clipboard]' \
-'--copy[Copy generated token to clipboard]' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'-w[Watch and continuously refresh code with progress bar]' \
+'--watch[Watch and continuously refresh code with progress bar]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-':account -- Name of the account:_default' \
+'::account -- Name of the account (interactively prompted via fuzzy search if omitted):_default' \
+&& ret=0
+;;
+(watch)
+_arguments "${_arguments_options[@]}" : \
+'-c+[Copy token to clipboard on every cycle]::COPY:(true false)' \
+'--copy=[Copy token to clipboard on every cycle]::COPY:(true false)' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::account -- Name of the account (interactively prompted via fuzzy search if omitted):_default' \
 && ret=0
 ;;
 (add)
 _arguments "${_arguments_options[@]}" : \
-'-d+[Number of digits in generated code (e.g. 6 or 8)]:DIGITS:_default' \
-'--digits=[Number of digits in generated code (e.g. 6 or 8)]:DIGITS:_default' \
+'--qr=[Decode account secret and parameters from a QR code image]:QR:_files' \
+'-d+[Number of digits in generated code (e.g. 5, 6, 8)]:DIGITS:_default' \
+'--digits=[Number of digits in generated code (e.g. 5, 6, 8)]:DIGITS:_default' \
 '-p+[Time step period in seconds (e.g. 30 or 60)]:PERIOD:_default' \
 '--period=[Time step period in seconds (e.g. 30 or 60)]:PERIOD:_default' \
-'-a+[Hash algorithm (sha1, sha256, sha512)]:ALGORITHM:_default' \
-'--algorithm=[Hash algorithm (sha1, sha256, sha512)]:ALGORITHM:_default' \
+'-a+[Hash algorithm (sha1, sha256, sha512, steam)]:ALGORITHM:_default' \
+'--algorithm=[Hash algorithm (sha1, sha256, sha512, steam)]:ALGORITHM:_default' \
+'-c+[Initial counter for counter-based (HOTP) accounts]:COUNTER:_default' \
+'--counter=[Initial counter for counter-based (HOTP) accounts]:COUNTER:_default' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::account -- Name of the account:_default' \
+'::secret -- TOTP/HOTP secret key or otpauth\:// URI (prompted if omitted and --qr not supplied):_default' \
+&& ret=0
+;;
+(qr)
+_arguments "${_arguments_options[@]}" : \
+'--light=[Invert terminal QR blocks (for light terminal backgrounds)]::LIGHT:(true false)' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 ':account -- Name of the account:_default' \
-'::secret -- TOTP secret key or otpauth\:// URI (prompted if omitted):_default' \
 && ret=0
 ;;
 (list)
 _arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'-c[Include live TOTP codes and remaining time-to-live]' \
+'--codes[Include live TOTP codes and remaining time-to-live]' \
+'--json[Output overview in JSON format]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--json[Output overview in JSON format]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
 (delete)
 _arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-':account -- Name of the account:_default' \
+'::account -- Name of the account (interactively prompted via fuzzy search if omitted):_default' \
 && ret=0
 ;;
 (show)
 _arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '-r[Print only the raw secret or URI]' \
 '--raw[Print only the raw secret or URI]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -94,9 +172,13 @@ file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 (export)
 _arguments "${_arguments_options[@]}" : \
 '--password=[Master passphrase for encryption (prompted securely if omitted)]:PASSWORD:_default' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--unencrypted[Export without encryption (plain JSON)]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
@@ -106,9 +188,13 @@ file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 (import)
 _arguments "${_arguments_options[@]}" : \
 '--password=[Master passphrase for encrypted backup (prompted securely if omitted)]:PASSWORD:_default' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--dry-run[Preview accounts to import without saving them]' \
 '(--skip)--overwrite[Overwrite existing accounts if conflicts occur]' \
 '(--overwrite)--skip[Skip existing accounts if conflicts occur (default)]' \
@@ -119,12 +205,29 @@ file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 ;;
 (completions)
 _arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 ':shell -- Shell to generate completions for:(bash elvish fish powershell zsh)' \
+&& ret=0
+;;
+(man)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
 (help)
@@ -143,11 +246,23 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(watch)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (add)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(qr)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -168,6 +283,10 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (completions)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(man)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -187,14 +306,18 @@ esac
 (( $+functions[_tfa_commands] )) ||
 _tfa_commands() {
     local commands; commands=(
-'generate:Generate a TOTP token for an account' \
+'generate:Generate a 2FA token (TOTP, Steam, or HOTP) for an account' \
+'watch:Live watch mode displaying continuous TOTP countdown with progress bar' \
 'add:Add a new account secret or OTPAuth URL' \
-'list:List all stored accounts' \
+'qr:Render account as a terminal QR code for mobile authenticator scanning' \
+'list:List all stored accounts or live token status' \
+'status:Live overview status dashboard of all accounts and tokens (alias for list --codes)' \
 'delete:Delete an account secret' \
 'show:Show account details and stored secret' \
 'export:Export accounts to an encrypted backup file or stdout' \
 'import:Import accounts from a backup file, migration URI, or JSON payload' \
 'completions:Generate shell autocompletions script' \
+'man:Generate UNIX roff man page' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'tfa commands' commands "$@"
@@ -227,14 +350,18 @@ _tfa__subcmd__generate_commands() {
 (( $+functions[_tfa__subcmd__help_commands] )) ||
 _tfa__subcmd__help_commands() {
     local commands; commands=(
-'generate:Generate a TOTP token for an account' \
+'generate:Generate a 2FA token (TOTP, Steam, or HOTP) for an account' \
+'watch:Live watch mode displaying continuous TOTP countdown with progress bar' \
 'add:Add a new account secret or OTPAuth URL' \
-'list:List all stored accounts' \
+'qr:Render account as a terminal QR code for mobile authenticator scanning' \
+'list:List all stored accounts or live token status' \
+'status:Live overview status dashboard of all accounts and tokens (alias for list --codes)' \
 'delete:Delete an account secret' \
 'show:Show account details and stored secret' \
 'export:Export accounts to an encrypted backup file or stdout' \
 'import:Import accounts from a backup file, migration URI, or JSON payload' \
 'completions:Generate shell autocompletions script' \
+'man:Generate UNIX roff man page' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'tfa help commands' commands "$@"
@@ -279,10 +406,30 @@ _tfa__subcmd__help__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'tfa help list commands' commands "$@"
 }
+(( $+functions[_tfa__subcmd__help__subcmd__man_commands] )) ||
+_tfa__subcmd__help__subcmd__man_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help man commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__qr_commands] )) ||
+_tfa__subcmd__help__subcmd__qr_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help qr commands' commands "$@"
+}
 (( $+functions[_tfa__subcmd__help__subcmd__show_commands] )) ||
 _tfa__subcmd__help__subcmd__show_commands() {
     local commands; commands=()
     _describe -t commands 'tfa help show commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__status_commands] )) ||
+_tfa__subcmd__help__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help status commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__watch_commands] )) ||
+_tfa__subcmd__help__subcmd__watch_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help watch commands' commands "$@"
 }
 (( $+functions[_tfa__subcmd__import_commands] )) ||
 _tfa__subcmd__import_commands() {
@@ -294,10 +441,30 @@ _tfa__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'tfa list commands' commands "$@"
 }
+(( $+functions[_tfa__subcmd__man_commands] )) ||
+_tfa__subcmd__man_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa man commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__qr_commands] )) ||
+_tfa__subcmd__qr_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa qr commands' commands "$@"
+}
 (( $+functions[_tfa__subcmd__show_commands] )) ||
 _tfa__subcmd__show_commands() {
     local commands; commands=()
     _describe -t commands 'tfa show commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__status_commands] )) ||
+_tfa__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa status commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__watch_commands] )) ||
+_tfa__subcmd__watch_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa watch commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_tfa" ]; then

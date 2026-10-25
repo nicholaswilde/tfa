@@ -225,6 +225,56 @@ Pre-generated completion scripts are also available in the [`completions/`](comp
 
 ---
 
+## :gear: Configuration
+
+`tfa` supports optional configuration files in **TOML**, **YAML**, or **JSON** format.
+
+### Hierarchical Precedence
+Settings resolve in strict hierarchical precedence order (highest to lowest):
+1. **Command Line Arguments** (e.g. `--storage`, `--clipboard`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
+2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_CLIPBOARD`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
+3. **Configuration File** (`-C <path>` / `--config <path>`, or default locations: `~/.config/tfa/config.{toml,yaml,yml,json}`)
+4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
+
+### Example Configuration Files
+
+#### TOML (`~/.config/tfa/config.toml`)
+```toml
+storage = "keyring"   # auto, keyring, or file
+clipboard = "osc52"   # system or osc52 (works over remote SSH / tmux / screen)
+digits = 6            # 6 or 8
+period = 30           # 30 or 60
+algorithm = "sha1"    # sha1, sha256, sha512, or steam
+auto_copy = true      # automatically copy generated tokens
+light = false         # terminal QR light theme
+```
+
+#### YAML (`~/.config/tfa/config.yaml`)
+```yaml
+storage: auto
+clipboard: osc52
+digits: 6
+period: 30
+algorithm: sha1
+auto_copy: true
+light: false
+```
+
+#### JSON (`~/.config/tfa/config.json`)
+```json
+{
+  "storage": "auto",
+  "clipboard": "osc52",
+  "digits": 6,
+  "period": 30,
+  "algorithm": "sha1",
+  "auto_copy": true,
+  "light": false
+}
+```
+
+---
+
 ## :page_facing_up: Man Page
 
 Generate or view the UNIX man page:

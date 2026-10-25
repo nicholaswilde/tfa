@@ -4,12 +4,15 @@
 .SH NAME
 tfa \- CLI Two\-Factor Authentication (2FA) tool
 .SH SYNOPSIS
-\fBtfa\fR [\fB\-\-storage\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+\fBtfa\fR [\fB\-C\fR|\fB\-\-config\fR] [\fB\-\-storage\fR] [\fB\-\-clipboard\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 CLI Two\-Factor Authentication (2FA) tool
 .SH OPTIONS
 .TP
-\fB\-\-storage\fR \fI<STORAGE>\fR [default: auto]
+\fB\-C\fR, \fB\-\-config\fR \fI<CONFIG>\fR
+Path to configuration file (TOML, YAML, or JSON)
+.TP
+\fB\-\-storage\fR \fI<STORAGE>\fR
 Credential storage backend
 .br
 
@@ -22,6 +25,19 @@ auto: Attempt OS keyring first; fallback to local file store if unavailable
 keyring: Strictly use system keyring (Secret Service, Keychain, Credential Manager)
 .IP \(bu 2
 file: Use local file storage (~/.local/share/tfa/credentials.json)
+.RE
+.TP
+\fB\-\-clipboard\fR \fI<CLIPBOARD>\fR
+Clipboard copy provider (system or osc52)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+system: Native system clipboard (arboard with Wayland/X11/macOS/Windows)
+.IP \(bu 2
+osc52: Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)
 .RE
 .TP
 \fB\-h\fR, \fB\-\-help\fR

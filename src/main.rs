@@ -7,17 +7,21 @@ use std::path::{Path, PathBuf};
 
 mod backup;
 mod clipboard;
+mod config;
 mod import;
 mod qr;
 mod storage;
 mod totp;
 mod watch;
 
-use clipboard::{Clipboard, SystemClipboard};
+use clipboard::{Clipboard, ClipboardProvider, DispatchingClipboard};
 use storage::{AccountStore, AutoStore, FileStore, KeyringStore};
 use totp::TfaTotp;
 
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(
+    ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum StorageBackend {
     /// Attempt OS keyring first; fallback to local file store if unavailable
     #[default]
@@ -32,9 +36,17 @@ pub enum StorageBackend {
 #[command(name = "tfa")]
 #[command(author, version = env!("PROJECT_VERSION"), about = "CLI Two-Factor Authentication (2FA) tool", long_about = None)]
 pub struct Cli {
+    /// Path to configuration file (TOML, YAML, or JSON)
+    #[arg(short = 'C', long, global = true, env = "TFA_CONFIG")]
+    pub config: Option<PathBuf>,
+
     /// Credential storage backend
-    #[arg(long, env = "TFA_STORAGE", default_value = "auto", global = true)]
-    pub storage: StorageBackend,
+    #[arg(long, env = "TFA_STORAGE", global = true)]
+    pub storage: Option<StorageBackend>,
+
+    /// Clipboard copy provider (system or osc52)
+    #[arg(long, env = "TFA_CLIPBOARD", global = true)]
+    pub clipboard: Option<ClipboardProvider>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -47,8 +59,8 @@ pub enum Commands {
         /// Name of the account (interactively prompted via fuzzy search if omitted)
         account: Option<String>,
         /// Copy generated token to clipboard
-        #[arg(short, long)]
-        copy: bool,
+        #[arg(short, long, num_args = 0..=1, default_missing_value = "true")]
+        copy: Option<bool>,
         /// Watch and continuously refresh code with progress bar
         #[arg(short, long)]
         watch: bool,
@@ -61,8 +73,8 @@ pub enum Commands {
         /// Name of the account (interactively prompted via fuzzy search if omitted)
         account: Option<String>,
         /// Copy token to clipboard on every cycle
-        #[arg(short, long)]
-        copy: bool,
+        #[arg(short, long, num_args = 0..=1, default_missing_value = "true")]
+        copy: Option<bool>,
     },
     /// Add a new account secret or OTPAuth URL
     Add {
@@ -91,8 +103,8 @@ pub enum Commands {
         /// Name of the account
         account: String,
         /// Invert terminal QR blocks (for light terminal backgrounds)
-        #[arg(long)]
-        light: bool,
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        light: Option<bool>,
     },
     /// List all stored accounts or live token status
     List {
@@ -281,6 +293,9 @@ pub fn run_app(
     clipboard: &dyn Clipboard,
     out_writer: &mut dyn Write,
 ) -> anyhow::Result<()> {
+    let (resolved_cfg, _) =
+        config::resolve_configuration(cli.config.as_deref(), cli.storage, cli.clipboard)?;
+
     match cli.command {
         Some(Commands::Generate {
             account,
@@ -292,13 +307,14 @@ pub fn run_app(
                 Some(a) => a,
                 None => select_account_interactive(store, "Select account to generate token")?,
             };
+            let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
             if watch {
                 let secret = store.get_secret(&acct)?;
                 let engine = TfaTotp::from_input(&acct, &secret)?;
                 if engine.is_hotp() {
                     anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
                 }
-                watch::watch_account(&acct, store, clipboard, copy, out_writer, None)?;
+                watch::watch_account(&acct, store, clipboard, should_copy, out_writer, None)?;
             } else {
                 let secret = store.get_secret(&acct)?;
                 let mut engine = TfaTotp::from_input(&acct, &secret)?;
@@ -311,7 +327,7 @@ pub fn run_app(
                     engine.set_counter(current_c + 1);
                     store.set_secret(&acct, &engine.to_url()?)?;
 
-                    if copy {
+                    if should_copy {
                         clipboard.set_text(&code)?;
                         writeln!(out_writer, "{code} (counter: {current_c}) [copied]")?;
                     } else {
@@ -324,7 +340,7 @@ pub fn run_app(
                     let code = engine.generate_current();
                     let ttl = engine.ttl();
 
-                    if copy {
+                    if should_copy {
                         clipboard.set_text(&code)?;
                         writeln!(out_writer, "{code} ({ttl}s remaining) [copied]")?;
                     } else {
@@ -343,7 +359,8 @@ pub fn run_app(
             if engine.is_hotp() {
                 anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
             }
-            watch::watch_account(&acct, store, clipboard, copy, out_writer, None)?;
+            let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
+            watch::watch_account(&acct, store, clipboard, should_copy, out_writer, None)?;
         }
         Some(Commands::Add {
             account,
@@ -385,13 +402,18 @@ pub fn run_app(
                 (acct, raw)
             };
 
+            // Apply precedence: CLI argument -> Resolved config (Env / Config file) -> default
+            let resolved_digits = digits.or(resolved_cfg.digits);
+            let resolved_period = period.or(resolved_cfg.period);
+            let resolved_algorithm = algorithm.or(resolved_cfg.algorithm);
+
             // Validate and generate canonical OTPAuth URL with custom parameters
             let engine = TfaTotp::build(
                 &target_account,
                 &raw_secret,
-                digits,
-                period,
-                algorithm,
+                resolved_digits,
+                resolved_period,
+                resolved_algorithm,
                 counter,
             )?;
             let url = engine.to_url()?;
@@ -402,7 +424,8 @@ pub fn run_app(
             let secret = store.get_secret(&account)?;
             let engine = TfaTotp::from_input(&account, &secret)?;
             let url = engine.to_url()?;
-            let qr_blocks = qr::render_terminal_qr(&url, !light)?;
+            let is_light = light.unwrap_or(resolved_cfg.light);
+            let qr_blocks = qr::render_terminal_qr(&url, !is_light)?;
             write!(out_writer, "{qr_blocks}")?;
         }
         Some(Commands::List { codes, json }) => {
@@ -669,9 +692,13 @@ fn get_passphrase(password: Option<String>, confirm: bool) -> anyhow::Result<Str
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let clipboard = SystemClipboard;
 
-    let store: Box<dyn AccountStore> = match cli.storage {
+    let (resolved_cfg, _) =
+        config::resolve_configuration(cli.config.as_deref(), cli.storage, cli.clipboard)?;
+
+    let clipboard = DispatchingClipboard::new(resolved_cfg.clipboard);
+
+    let store: Box<dyn AccountStore> = match resolved_cfg.storage {
         StorageBackend::Auto => Box::new(AutoStore::default_auto()?),
         StorageBackend::Keyring => Box::new(KeyringStore::default()),
         StorageBackend::File => Box::new(FileStore::new(FileStore::default_path()?)),
@@ -692,16 +719,27 @@ mod tests {
         assert!(cli.is_ok());
         let unwrapped = cli.unwrap();
         assert!(unwrapped.command.is_none());
-        assert_eq!(unwrapped.storage, StorageBackend::Auto);
+        assert_eq!(unwrapped.storage, None);
+        assert_eq!(unwrapped.config, None);
+    }
+
+    #[test]
+    fn test_cli_parse_config_flag() {
+        let cli = Cli::try_parse_from(["tfa", "-C", "/custom/config.toml", "list"]).unwrap();
+        assert_eq!(cli.config, Some(PathBuf::from("/custom/config.toml")));
+
+        let cli_long =
+            Cli::try_parse_from(["tfa", "--config", "/other/config.yaml", "list"]).unwrap();
+        assert_eq!(cli_long.config, Some(PathBuf::from("/other/config.yaml")));
     }
 
     #[test]
     fn test_cli_parse_storage_flag() {
         let cli = Cli::try_parse_from(["tfa", "--storage", "file", "list"]).unwrap();
-        assert_eq!(cli.storage, StorageBackend::File);
+        assert_eq!(cli.storage, Some(StorageBackend::File));
 
         let cli_keyring = Cli::try_parse_from(["tfa", "--storage", "keyring", "list"]).unwrap();
-        assert_eq!(cli_keyring.storage, StorageBackend::Keyring);
+        assert_eq!(cli_keyring.storage, Some(StorageBackend::Keyring));
     }
 
     #[test]
@@ -715,7 +753,7 @@ mod tests {
                 counter,
             }) => {
                 assert_eq!(account, Some("github".to_string()));
-                assert!(!copy);
+                assert_eq!(copy, None);
                 assert!(!watch);
                 assert_eq!(counter, None);
             }
@@ -744,7 +782,7 @@ mod tests {
                 counter: _,
             }) => {
                 assert_eq!(account, Some("github".to_string()));
-                assert!(copy);
+                assert_eq!(copy, Some(true));
                 assert!(!watch);
             }
             _ => panic!("Expected generate subcommand"),
@@ -760,7 +798,7 @@ mod tests {
                 counter: _,
             }) => {
                 assert_eq!(account, Some("aws".to_string()));
-                assert!(copy);
+                assert_eq!(copy, Some(true));
                 assert!(!watch);
             }
             _ => panic!("Expected generate subcommand"),
@@ -773,7 +811,7 @@ mod tests {
         match cli.command {
             Some(Commands::Watch { account, copy }) => {
                 assert_eq!(account, Some("github".to_string()));
-                assert!(copy);
+                assert_eq!(copy, Some(true));
             }
             _ => panic!("Expected watch subcommand"),
         }
@@ -838,7 +876,7 @@ mod tests {
         match cli.command {
             Some(Commands::Qr { account, light }) => {
                 assert_eq!(account, "github");
-                assert!(light);
+                assert_eq!(light, Some(true));
             }
             _ => panic!("Expected qr subcommand"),
         }
@@ -1648,5 +1686,67 @@ mod tests {
         let hotp_entry = arr.iter().find(|x| x["account"] == "hotp_acc").unwrap();
         assert_eq!(hotp_entry["ttl"], 0);
         assert_eq!(hotp_entry["token"], "359152");
+    }
+
+    #[test]
+    fn test_run_app_with_custom_config_file_and_overrides() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("custom.yaml");
+        std::fs::write(
+            &config_path,
+            r#"
+digits: 8
+period: 60
+algorithm: sha256
+auto_copy: true
+light: true
+"#,
+        )
+        .unwrap();
+
+        // 1. Add account without explicit parameters - inherits config file defaults (digits=8, period=60, algorithm=sha256)
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "--config",
+            config_path.to_str().unwrap(),
+            "add",
+            "test_acc",
+            "JBSWY3DPEHPK3PXP",
+        ])
+        .unwrap();
+        let mut add_out = Vec::new();
+        assert!(run_app(add_cli, &store, &cb, &mut add_out).is_ok());
+
+        // Verify stored account has digits=8, period=60, algorithm=SHA256
+        let stored_uri = store.get_secret("test_acc").unwrap();
+        assert!(stored_uri.contains("digits=8"));
+        assert!(stored_uri.contains("period=60"));
+        assert!(stored_uri.contains("algorithm=SHA256"));
+
+        // 2. Generate token without --copy flag - inherits auto_copy=true from config file
+        let gen_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "generate",
+            "test_acc",
+        ])
+        .unwrap();
+        let mut gen_out = Vec::new();
+        assert!(run_app(gen_cli, &store, &cb, &mut gen_out).is_ok());
+        let gen_str = String::from_utf8(gen_out).unwrap();
+        assert!(gen_str.contains("[copied]"));
+        assert_eq!(cb.text.lock().unwrap().as_ref().unwrap().len(), 8); // 8 digits
+
+        // 3. QR code with config light=true
+        let qr_cli =
+            Cli::try_parse_from(["tfa", "-C", config_path.to_str().unwrap(), "qr", "test_acc"])
+                .unwrap();
+        let mut qr_out = Vec::new();
+        assert!(run_app(qr_cli, &store, &cb, &mut qr_out).is_ok());
+        assert!(!qr_out.is_empty());
     }
 }
