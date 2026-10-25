@@ -42,6 +42,8 @@ complete -c tfa -n "__fish_tfa_needs_command" -f -a "qr" -d 'Render account as a
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "list" -d 'List all stored accounts or live token status'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "status" -d 'Live overview status dashboard of all accounts and tokens (alias for list --codes)'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "delete" -d 'Delete an account secret'
+complete -c tfa -n "__fish_tfa_needs_command" -f -a "rename" -d 'Rename an account within the active namespace'
+complete -c tfa -n "__fish_tfa_needs_command" -f -a "move" -d 'Move an account to a different namespace'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "show" -d 'Show account details and stored secret'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "export" -d 'Export accounts to an encrypted backup file or stdout'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "import" -d 'Import accounts from a backup file, migration URI, or JSON payload'
@@ -49,6 +51,7 @@ complete -c tfa -n "__fish_tfa_needs_command" -f -a "completions" -d 'Generate s
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "man" -d 'Generate UNIX roff man page'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "namespace" -d 'Manage and isolate accounts across multi-tenant namespaces'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "password" -d 'Manage master password protection and unlock sessions'
+complete -c tfa -n "__fish_tfa_needs_command" -f -a "audit" -d 'Scan stored accounts and credentials file for security vulnerabilities'
 complete -c tfa -n "__fish_tfa_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -l secret -d 'Generate token instantly from secret, URI, or "-" (stdin) without saving to storage' -r
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s c -l copy -d 'Copy generated token to clipboard' -r -f -a "true\t''
@@ -66,6 +69,7 @@ osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s n -l namespace -d 'Target namespace for account scoping (e.g. personal, work, home)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s w -l watch -d 'Watch and continuously refresh code with progress bar'
+complete -c tfa -n "__fish_tfa_using_subcommand generate" -l next -d 'Preview upcoming token for next time step'
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -l secret -d 'Explicit secret key or otpauth:// URI flag' -r
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -l qr -d 'Decode secret and parameters from a QR code image' -r -F
@@ -165,6 +169,25 @@ osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 complete -c tfa -n "__fish_tfa_using_subcommand delete" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand delete" -s n -l namespace -d 'Target namespace for account scoping (e.g. personal, work, home)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand delete" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c tfa -n "__fish_tfa_using_subcommand rename" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
+complete -c tfa -n "__fish_tfa_using_subcommand rename" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+complete -c tfa -n "__fish_tfa_using_subcommand rename" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
+osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
+complete -c tfa -n "__fish_tfa_using_subcommand rename" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand rename" -s n -l namespace -d 'Target namespace for account scoping (e.g. personal, work, home)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand rename" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c tfa -n "__fish_tfa_using_subcommand move" -s t -l to -d 'Destination namespace' -r
+complete -c tfa -n "__fish_tfa_using_subcommand move" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
+complete -c tfa -n "__fish_tfa_using_subcommand move" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+complete -c tfa -n "__fish_tfa_using_subcommand move" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
+osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
+complete -c tfa -n "__fish_tfa_using_subcommand move" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand move" -s n -l namespace -d 'Target namespace for account scoping (e.g. personal, work, home)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand move" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_using_subcommand show" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand show" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
@@ -355,22 +378,35 @@ complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcom
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from help" -f -a "unlock" -d 'Unlock session for the configured timeout'
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from help" -f -a "status" -d 'Show current password protection and session unlock status'
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "generate" -d 'Generate a 2FA token (TOTP, Steam, or HOTP) for an account'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "instant" -d 'Generate a 2FA token instantly from raw secret, URI, or stdin without storage'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "watch" -d 'Live watch mode displaying continuous TOTP countdown with progress bar'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "add" -d 'Add a new account secret or OTPAuth URL'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "qr" -d 'Render account as a terminal QR code for mobile authenticator scanning'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "list" -d 'List all stored accounts or live token status'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "status" -d 'Live overview status dashboard of all accounts and tokens (alias for list --codes)'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "delete" -d 'Delete an account secret'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "show" -d 'Show account details and stored secret'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "export" -d 'Export accounts to an encrypted backup file or stdout'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "import" -d 'Import accounts from a backup file, migration URI, or JSON payload'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "completions" -d 'Generate shell autocompletions script'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "man" -d 'Generate UNIX roff man page'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "namespace" -d 'Manage and isolate accounts across multi-tenant namespaces'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "password" -d 'Manage master password protection and unlock sessions'
-complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete show export import completions man namespace password help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c tfa -n "__fish_tfa_using_subcommand audit" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
+complete -c tfa -n "__fish_tfa_using_subcommand audit" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
+keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+complete -c tfa -n "__fish_tfa_using_subcommand audit" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
+osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
+complete -c tfa -n "__fish_tfa_using_subcommand audit" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand audit" -s n -l namespace -d 'Target namespace for account scoping (e.g. personal, work, home)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand audit" -l json -d 'Output audit report in JSON format'
+complete -c tfa -n "__fish_tfa_using_subcommand audit" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "generate" -d 'Generate a 2FA token (TOTP, Steam, or HOTP) for an account'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "instant" -d 'Generate a 2FA token instantly from raw secret, URI, or stdin without storage'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "watch" -d 'Live watch mode displaying continuous TOTP countdown with progress bar'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "add" -d 'Add a new account secret or OTPAuth URL'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "qr" -d 'Render account as a terminal QR code for mobile authenticator scanning'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "list" -d 'List all stored accounts or live token status'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "status" -d 'Live overview status dashboard of all accounts and tokens (alias for list --codes)'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "delete" -d 'Delete an account secret'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "rename" -d 'Rename an account within the active namespace'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "move" -d 'Move an account to a different namespace'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "show" -d 'Show account details and stored secret'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "export" -d 'Export accounts to an encrypted backup file or stdout'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "import" -d 'Import accounts from a backup file, migration URI, or JSON payload'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "completions" -d 'Generate shell autocompletions script'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "man" -d 'Generate UNIX roff man page'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "namespace" -d 'Manage and isolate accounts across multi-tenant namespaces'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "password" -d 'Manage master password protection and unlock sessions'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "audit" -d 'Scan stored accounts and credentials file for security vulnerabilities'
+complete -c tfa -n "__fish_tfa_using_subcommand help; and not __fish_seen_subcommand_from generate instant watch add qr list status delete rename move show export import completions man namespace password audit help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c tfa -n "__fish_tfa_using_subcommand help; and __fish_seen_subcommand_from watch" -f -a "all" -d 'Watch all accounts in the active namespace'
 complete -c tfa -n "__fish_tfa_using_subcommand help; and __fish_seen_subcommand_from namespace" -f -a "list" -d 'List all namespaces and indicate the active/default one'
 complete -c tfa -n "__fish_tfa_using_subcommand help; and __fish_seen_subcommand_from namespace" -f -a "create" -d 'Create a new namespace'

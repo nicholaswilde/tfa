@@ -367,10 +367,62 @@ impl TfaTotp {
         }
     }
 
+    /// Generate TOTP code for the next time step
+    pub fn generate_next(&self) -> Result<String> {
+        match &self.inner {
+            TfaEngine::Totp(totp) => Ok(totp.generate(totp.next_step_current()).to_string()),
+            TfaEngine::Hotp(_) => {
+                anyhow::bail!(
+                    "Next-token preview is not supported for counter-based (HOTP) accounts"
+                )
+            }
+        }
+    }
+
+    /// Generate TOTP code for a specific timestamp (TOTP only)
+    #[cfg(test)]
+    pub fn generate_at_time(&self, time: u64) -> Result<String> {
+        match &self.inner {
+            TfaEngine::Totp(totp) => Ok(totp.generate(time).to_string()),
+            TfaEngine::Hotp(_) => {
+                anyhow::bail!("Time-based generation only supported for TOTP accounts")
+            }
+        }
+    }
+
+    /// Generate TOTP code for the next time step from a specific timestamp (TOTP only)
+    #[cfg(test)]
+    pub fn generate_next_at_time(&self, time: u64) -> Result<String> {
+        match &self.inner {
+            TfaEngine::Totp(totp) => Ok(totp.generate(totp.next_step(time)).to_string()),
+            TfaEngine::Hotp(_) => {
+                anyhow::bail!(
+                    "Next-token preview is not supported for counter-based (HOTP) accounts"
+                )
+            }
+        }
+    }
+
     /// Seconds remaining until current code expires (0 for HOTP)
     pub fn ttl(&self) -> u64 {
         match &self.inner {
             TfaEngine::Totp(totp) => totp.ttl(),
+            TfaEngine::Hotp(_) => 0,
+        }
+    }
+
+    /// Seconds remaining until code expires from a specific timestamp (TOTP only)
+    #[cfg(test)]
+    pub fn ttl_at_time(&self, time: u64) -> u64 {
+        match &self.inner {
+            TfaEngine::Totp(totp) => {
+                let step = totp.step();
+                if step == 0 {
+                    0
+                } else {
+                    step - (time % step)
+                }
+            }
             TfaEngine::Hotp(_) => 0,
         }
     }
@@ -396,6 +448,14 @@ impl TfaTotp {
         match &self.inner {
             TfaEngine::Totp(totp) => totp.algorithm(),
             TfaEngine::Hotp(h) => h.algorithm,
+        }
+    }
+
+    /// Base32 representation of the secret
+    pub fn secret_base32(&self) -> String {
+        match &self.inner {
+            TfaEngine::Totp(totp) => totp.secret().to_base32(),
+            TfaEngine::Hotp(h) => h.secret.to_base32(),
         }
     }
 
@@ -429,6 +489,7 @@ mod tests {
         let ttl = totp.ttl();
         assert!(ttl <= 30);
         assert_eq!(totp.account_type(), "TOTP");
+        assert_eq!(totp.secret_base32(), secret);
     }
 
     #[test]
@@ -639,5 +700,46 @@ mod tests {
         .unwrap();
         assert_eq!(totp.counter(), None);
         assert!(totp.generate_at_counter(1).is_err());
+    }
+
+    #[test]
+    fn test_totp_generate_next_token() {
+        let totp = TfaTotp::build(
+            "test_totp",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            Some(6),
+            Some(30),
+            Some(Algorithm::SHA1),
+            None,
+        )
+        .unwrap();
+
+        // Check at fixed timestamps
+        let t1 = 1_000_000;
+        let ttl = totp.ttl_at_time(t1);
+        assert_eq!(ttl, 30 - (t1 % 30));
+        let code_now = totp.generate_at_time(t1).unwrap();
+        let code_next = totp.generate_next_at_time(t1).unwrap();
+        let code_expected_next = totp.generate_at_time(t1 + ttl).unwrap();
+        assert_eq!(code_next, code_expected_next);
+        assert_ne!(code_now, code_next);
+
+        // Check generate_next() live returns a 6-digit code
+        let live_next = totp.generate_next().unwrap();
+        assert_eq!(live_next.len(), 6);
+        assert!(live_next.chars().all(|c| c.is_ascii_digit()));
+
+        // HOTP accounts fail generate_next and generate_next_at_time
+        let hotp = TfaHotp::from_url(
+            "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0&algorithm=SHA1",
+        )
+        .unwrap();
+        let hotp_tfa = TfaTotp {
+            inner: TfaEngine::Hotp(hotp),
+        };
+        assert!(hotp_tfa.generate_next().is_err());
+        assert!(hotp_tfa.generate_next_at_time(t1).is_err());
+        assert!(hotp_tfa.generate_at_time(t1).is_err());
+        assert_eq!(hotp_tfa.ttl_at_time(t1), 0);
     }
 }

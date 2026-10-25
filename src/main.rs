@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
+mod audit;
 mod auth;
 mod backup;
 mod clipboard;
@@ -92,6 +93,9 @@ pub enum Commands {
         /// Hash algorithm (sha1, sha256, sha512, steam)
         #[arg(short, long)]
         algorithm: Option<totp_rs::Algorithm>,
+        /// Preview upcoming token for next time step
+        #[arg(long, conflicts_with = "watch", conflicts_with = "counter")]
+        next: bool,
     },
     /// Generate a 2FA token instantly from raw secret, URI, or stdin without storage
     #[command(alias = "ins")]
@@ -186,6 +190,22 @@ pub enum Commands {
         /// Name of the account (interactively prompted via fuzzy search if omitted)
         account: Option<String>,
     },
+    /// Rename an account within the active namespace
+    Rename {
+        /// Current account name
+        old_name: String,
+        /// New account name
+        new_name: String,
+    },
+    /// Move an account to a different namespace
+    #[command(alias = "mv")]
+    Move {
+        /// Name of the account to move
+        account: String,
+        /// Destination namespace
+        #[arg(short = 't', long = "to")]
+        to: String,
+    },
     /// Show account details and stored secret
     Show {
         /// Name of the account
@@ -240,6 +260,12 @@ pub enum Commands {
     Password {
         #[command(subcommand)]
         command: PasswordCommands,
+    },
+    /// Scan stored accounts and credentials file for security vulnerabilities
+    Audit {
+        /// Output audit report in JSON format
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -510,14 +536,33 @@ pub fn resolve_instant_secret(
     resolve_instant_secret_with_reader(secret_arg, qr_arg, stdin.lock(), is_term)
 }
 
+/// Format TOTP token line with validity countdown and optional next token preview
+pub fn format_totp_output(code: &str, ttl: u64, next_code: Option<&str>, copied: bool) -> String {
+    let mut line = format!("{code} ({ttl}s remaining)");
+    if let Some(next) = next_code {
+        if ttl <= 5 {
+            line.push_str(" [expiring soon]");
+        }
+        line.push_str(&format!(" (next: {next})"));
+    }
+    if copied {
+        line.push_str(" [copied]");
+    }
+    line
+}
+
 fn emit_instant_token(
     engine: &TfaTotp,
     counter: Option<u64>,
+    next: bool,
     should_copy: bool,
     clipboard: &dyn Clipboard,
     out_writer: &mut dyn Write,
 ) -> anyhow::Result<()> {
     if engine.is_hotp() {
+        if next {
+            anyhow::bail!("--next is only supported for time-based (TOTP) accounts");
+        }
         let c = counter.or_else(|| engine.counter()).unwrap_or(0);
         let code = engine.generate_at_counter(c)?;
         if should_copy {
@@ -532,13 +577,16 @@ fn emit_instant_token(
         }
         let code = engine.generate_current();
         let ttl = engine.ttl();
-
+        let next_code = if next {
+            Some(engine.generate_next()?)
+        } else {
+            None
+        };
+        let line = format_totp_output(&code, ttl, next_code.as_deref(), should_copy);
         if should_copy {
             clipboard.set_text(&code)?;
-            writeln!(out_writer, "{code} ({ttl}s remaining) [copied]")?;
-        } else {
-            writeln!(out_writer, "{code} ({ttl}s remaining)")?;
         }
+        writeln!(out_writer, "{line}")?;
     }
     Ok(())
 }
@@ -797,7 +845,8 @@ pub fn run_app(
     }
 
     // For all other commands, scope store access to the active namespace
-    let scoped_store = NamespaceStore::new(store, &resolved_cfg.namespace);
+    let root_store = store;
+    let scoped_store = NamespaceStore::new(root_store, &resolved_cfg.namespace);
     let store = &scoped_store;
 
     match cli.command {
@@ -810,6 +859,7 @@ pub fn run_app(
             digits,
             period,
             algorithm,
+            next,
         }) => {
             if let Some(sec) = secret {
                 let resolved_digits = digits.or(resolved_cfg.digits);
@@ -843,7 +893,7 @@ pub fn run_app(
                         None,
                     )?;
                 } else {
-                    emit_instant_token(&engine, c_val, should_copy, clipboard, out_writer)?;
+                    emit_instant_token(&engine, c_val, next, should_copy, clipboard, out_writer)?;
                 }
                 return Ok(());
             }
@@ -864,6 +914,9 @@ pub fn run_app(
                 let secret = store.get_secret(&acct)?;
                 let mut engine = TfaTotp::from_input(&acct, &secret)?;
                 if engine.is_hotp() {
+                    if next {
+                        anyhow::bail!("--next is only supported for time-based (TOTP) accounts");
+                    }
                     let current_c = match counter {
                         Some(Some(c)) => c,
                         _ => engine.counter().unwrap_or(0),
@@ -884,13 +937,16 @@ pub fn run_app(
                     }
                     let code = engine.generate_current();
                     let ttl = engine.ttl();
-
+                    let next_code = if next {
+                        Some(engine.generate_next()?)
+                    } else {
+                        None
+                    };
+                    let line = format_totp_output(&code, ttl, next_code.as_deref(), should_copy);
                     if should_copy {
                         clipboard.set_text(&code)?;
-                        writeln!(out_writer, "{code} ({ttl}s remaining) [copied]")?;
-                    } else {
-                        writeln!(out_writer, "{code} ({ttl}s remaining)")?;
                     }
+                    writeln!(out_writer, "{line}")?;
                 }
             }
         }
@@ -926,7 +982,7 @@ pub fn run_app(
                 }
                 watch::watch_engine("instant", &engine, clipboard, should_copy, out_writer, None)?;
             } else {
-                emit_instant_token(&engine, counter, should_copy, clipboard, out_writer)?;
+                emit_instant_token(&engine, counter, false, should_copy, clipboard, out_writer)?;
             }
         }
         Some(Commands::Watch {
@@ -1056,6 +1112,28 @@ pub fn run_app(
             };
             store.delete_account(&acct)?;
             writeln!(out_writer, "Account '{acct}' deleted.")?;
+        }
+        Some(Commands::Rename { old_name, new_name }) => {
+            NamespaceStore::rename_account(
+                root_store,
+                &resolved_cfg.namespace,
+                &old_name,
+                &new_name,
+            )?;
+            writeln!(out_writer, "Account '{old_name}' renamed to '{new_name}'.")?;
+        }
+        Some(Commands::Move { account, to }) => {
+            let target_ns = namespace::normalize_namespace(&to);
+            NamespaceStore::move_account(
+                root_store,
+                &resolved_cfg.namespace,
+                &account,
+                &target_ns,
+            )?;
+            writeln!(
+                out_writer,
+                "Account '{account}' moved to namespace '{target_ns}'."
+            )?;
         }
         Some(Commands::Show { account, raw }) => {
             let secret = store.get_secret(&account)?;
@@ -1255,6 +1333,17 @@ pub fn run_app(
         }
         Some(Commands::Namespace { .. }) => unreachable!("Handled above"),
         Some(Commands::Password { .. }) => unreachable!("Handled above"),
+        Some(Commands::Audit { json }) => {
+            let default_path = FileStore::default_path().ok();
+            let report = audit::run_security_audit(root_store, default_path.as_deref())?;
+            if json {
+                let json_str = serde_json::to_string_pretty(&report)?;
+                writeln!(out_writer, "{json_str}")?;
+            } else {
+                let text = audit::format_audit_report(&report);
+                write!(out_writer, "{text}")?;
+            }
+        }
         None => {
             writeln!(out_writer, "Use --help for usage instructions.")?;
         }
@@ -1483,6 +1572,146 @@ mod tests {
             }
             _ => panic!("Expected generate subcommand with watch"),
         }
+    }
+
+    #[test]
+    fn test_format_totp_output() {
+        // Without next
+        assert_eq!(
+            format_totp_output("123456", 20, None, false),
+            "123456 (20s remaining)"
+        );
+        assert_eq!(
+            format_totp_output("123456", 20, None, true),
+            "123456 (20s remaining) [copied]"
+        );
+
+        // With next, ttl > 5
+        assert_eq!(
+            format_totp_output("123456", 20, Some("654321"), false),
+            "123456 (20s remaining) (next: 654321)"
+        );
+        assert_eq!(
+            format_totp_output("123456", 20, Some("654321"), true),
+            "123456 (20s remaining) (next: 654321) [copied]"
+        );
+
+        // With next, ttl <= 5 (countdown warning indicator)
+        assert_eq!(
+            format_totp_output("123456", 5, Some("654321"), false),
+            "123456 (5s remaining) [expiring soon] (next: 654321)"
+        );
+        assert_eq!(
+            format_totp_output("123456", 2, Some("654321"), true),
+            "123456 (2s remaining) [expiring soon] (next: 654321) [copied]"
+        );
+        assert_eq!(
+            format_totp_output("123456", 0, Some("654321"), false),
+            "123456 (0s remaining) [expiring soon] (next: 654321)"
+        );
+    }
+
+    #[test]
+    fn test_cli_parse_generate_next() {
+        let cli = Cli::try_parse_from(["tfa", "generate", "github", "--next"]).unwrap();
+        match cli.command {
+            Some(Commands::Generate { account, next, .. }) => {
+                assert_eq!(account, Some("github".to_string()));
+                assert!(next);
+            }
+            _ => panic!("Expected generate subcommand with next"),
+        }
+
+        // Conflicts with --watch
+        assert!(Cli::try_parse_from(["tfa", "generate", "github", "--next", "-w"]).is_err());
+
+        // Conflicts with --counter
+        assert!(
+            Cli::try_parse_from(["tfa", "generate", "github", "--next", "--counter", "1"]).is_err()
+        );
+    }
+
+    #[test]
+    fn test_run_app_generate_next_flow() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let add_cli =
+            Cli::try_parse_from(["tfa", "add", "test_acc", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"])
+                .unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // Generate with --next
+        let mut gen_out = Vec::new();
+        let gen_cli = Cli::try_parse_from(["tfa", "generate", "test_acc", "--next"]).unwrap();
+        assert!(run_app(gen_cli, &store, &cb, &mut gen_out).is_ok());
+        let gen_str = String::from_utf8(gen_out).unwrap();
+        assert!(gen_str.contains("remaining)"));
+        assert!(gen_str.contains("(next: "));
+
+        // Generate with --next and --copy
+        let mut copy_out = Vec::new();
+        let copy_cli =
+            Cli::try_parse_from(["tfa", "generate", "test_acc", "--next", "-c"]).unwrap();
+        assert!(run_app(copy_cli, &store, &cb, &mut copy_out).is_ok());
+        let copy_str = String::from_utf8(copy_out).unwrap();
+        assert!(copy_str.contains("remaining)"));
+        assert!(copy_str.contains("(next: "));
+        assert!(copy_str.contains("[copied]"));
+
+        let copied = cb.text.lock().unwrap().clone();
+        assert!(copied.is_some());
+        let code = copied.unwrap();
+        assert_eq!(code.len(), 6);
+        assert!(code.chars().all(|c| c.is_ascii_digit()));
+        assert_eq!(copy_str.split_whitespace().next().unwrap(), code);
+    }
+
+    #[test]
+    fn test_run_app_generate_next_instant() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let cli = Cli::try_parse_from([
+            "tfa",
+            "generate",
+            "--secret",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--next",
+        ])
+        .unwrap();
+        assert!(run_app(cli, &store, &cb, &mut out).is_ok());
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains("remaining)"));
+        assert!(out_str.contains("(next: "));
+    }
+
+    #[test]
+    fn test_run_app_generate_next_hotp_fails() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "my_hotp",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--counter",
+            "0",
+        ])
+        .unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        let gen_cli = Cli::try_parse_from(["tfa", "generate", "my_hotp", "--next"]).unwrap();
+        let res = run_app(gen_cli, &store, &cb, &mut out);
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("only supported for time-based"));
     }
 
     #[test]
@@ -3578,5 +3807,281 @@ light: true
 
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");
+    }
+
+    #[test]
+    fn test_cli_parse_rename_and_move() {
+        let cli_rename = Cli::try_parse_from(["tfa", "rename", "github", "gh"]).unwrap();
+        match cli_rename.command {
+            Some(Commands::Rename { old_name, new_name }) => {
+                assert_eq!(old_name, "github");
+                assert_eq!(new_name, "gh");
+            }
+            _ => panic!("Expected Rename command"),
+        }
+
+        let cli_move = Cli::try_parse_from(["tfa", "move", "router", "--to", "home"]).unwrap();
+        match cli_move.command {
+            Some(Commands::Move { account, to }) => {
+                assert_eq!(account, "router");
+                assert_eq!(to, "home");
+            }
+            _ => panic!("Expected Move command"),
+        }
+
+        let cli_mv = Cli::try_parse_from(["tfa", "mv", "aws", "-t", "work"]).unwrap();
+        match cli_mv.command {
+            Some(Commands::Move { account, to }) => {
+                assert_eq!(account, "aws");
+                assert_eq!(to, "work");
+            }
+            _ => panic!("Expected Move command via alias"),
+        }
+    }
+
+    #[test]
+    fn test_run_app_rename_flow() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // 1. Add account with custom parameters (digits=8, period=60, sha256)
+        let cli_add_gh = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "github",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--digits",
+            "8",
+            "--period",
+            "60",
+            "--algorithm",
+            "sha256",
+        ])
+        .unwrap();
+        assert!(run_app(cli_add_gh, &store, &cb, &mut Vec::new()).is_ok());
+
+        // Add a second account
+        let cli_add_gl = Cli::try_parse_from(["tfa", "add", "gitlab", "JBSWY3DPEHPK3PXP"]).unwrap();
+        assert!(run_app(cli_add_gl, &store, &cb, &mut Vec::new()).is_ok());
+
+        // 2. Rename github -> gh
+        let mut out_rename = Vec::new();
+        let cli_rename = Cli::try_parse_from(["tfa", "rename", "github", "gh"]).unwrap();
+        assert!(run_app(cli_rename, &store, &cb, &mut out_rename).is_ok());
+        let rename_str = String::from_utf8(out_rename).unwrap();
+        assert!(rename_str.contains("Account 'github' renamed to 'gh'."));
+
+        // 3. Verify gh preserved all parameters
+        let mut out_show_gh = Vec::new();
+        let cli_show_gh = Cli::try_parse_from(["tfa", "show", "gh"]).unwrap();
+        assert!(run_app(cli_show_gh, &store, &cb, &mut out_show_gh).is_ok());
+        let show_str = String::from_utf8(out_show_gh).unwrap();
+        assert!(show_str.contains("Account:   gh"));
+        assert!(show_str.contains("Digits:    8"));
+        assert!(show_str.contains("Period:    60s"));
+        assert!(show_str.contains("Algorithm: SHA256"));
+
+        // Old name should not exist
+        let cli_show_old = Cli::try_parse_from(["tfa", "show", "github"]).unwrap();
+        assert!(run_app(cli_show_old, &store, &cb, &mut Vec::new()).is_err());
+
+        // 4. Duplicate target error: rename gitlab -> gh
+        let cli_rename_dup = Cli::try_parse_from(["tfa", "rename", "gitlab", "gh"]).unwrap();
+        let err_dup = run_app(cli_rename_dup, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_dup.to_string().contains("already exists"));
+
+        // 5. Missing account error
+        let cli_rename_missing =
+            Cli::try_parse_from(["tfa", "rename", "nonexistent", "newname"]).unwrap();
+        let err_missing = run_app(cli_rename_missing, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_missing.to_string().contains("not found"));
+
+        // 6. Scoped namespace rename
+        let cli_add_work =
+            Cli::try_parse_from(["tfa", "-n", "work", "add", "aws", "JBSWY3DPEHPK3PXP"]).unwrap();
+        assert!(run_app(cli_add_work, &store, &cb, &mut Vec::new()).is_ok());
+
+        let cli_rename_work =
+            Cli::try_parse_from(["tfa", "-n", "work", "rename", "aws", "amazon"]).unwrap();
+        assert!(run_app(cli_rename_work, &store, &cb, &mut Vec::new()).is_ok());
+
+        let cli_show_work = Cli::try_parse_from(["tfa", "-n", "work", "show", "amazon"]).unwrap();
+        assert!(run_app(cli_show_work, &store, &cb, &mut Vec::new()).is_ok());
+
+        let cli_show_work_old = Cli::try_parse_from(["tfa", "-n", "work", "show", "aws"]).unwrap();
+        assert!(run_app(cli_show_work_old, &store, &cb, &mut Vec::new()).is_err());
+    }
+
+    #[test]
+    fn test_run_app_move_flow() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // 1. Add account with custom parameters in default namespace
+        let cli_add_vpn = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "vpn",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--digits",
+            "8",
+            "--period",
+            "60",
+            "--algorithm",
+            "sha256",
+        ])
+        .unwrap();
+        assert!(run_app(cli_add_vpn, &store, &cb, &mut Vec::new()).is_ok());
+
+        // 2. Move vpn to infra namespace
+        let mut out_move = Vec::new();
+        let cli_move = Cli::try_parse_from(["tfa", "move", "vpn", "--to", "infra"]).unwrap();
+        assert!(run_app(cli_move, &store, &cb, &mut out_move).is_ok());
+        let move_str = String::from_utf8(out_move).unwrap();
+        assert!(move_str.contains("Account 'vpn' moved to namespace 'infra'."));
+
+        // Default namespace no longer lists vpn
+        let mut out_list_def = Vec::new();
+        let cli_list_def = Cli::try_parse_from(["tfa", "list"]).unwrap();
+        assert!(run_app(cli_list_def, &store, &cb, &mut out_list_def).is_ok());
+        assert!(!String::from_utf8(out_list_def).unwrap().contains("vpn"));
+
+        // Infra namespace now lists vpn
+        let mut out_list_infra = Vec::new();
+        let cli_list_infra = Cli::try_parse_from(["tfa", "-n", "infra", "list"]).unwrap();
+        assert!(run_app(cli_list_infra, &store, &cb, &mut out_list_infra).is_ok());
+        assert!(String::from_utf8(out_list_infra).unwrap().contains("vpn"));
+
+        // Parameters preserved in infra namespace
+        let mut out_show_infra = Vec::new();
+        let cli_show_infra = Cli::try_parse_from(["tfa", "-n", "infra", "show", "vpn"]).unwrap();
+        assert!(run_app(cli_show_infra, &store, &cb, &mut out_show_infra).is_ok());
+        let show_str = String::from_utf8(out_show_infra).unwrap();
+        assert!(show_str.contains("Digits:    8"));
+        assert!(show_str.contains("Period:    60s"));
+        assert!(show_str.contains("Algorithm: SHA256"));
+
+        // 3. Move back from infra to default using short flag -t
+        let cli_move_back =
+            Cli::try_parse_from(["tfa", "-n", "infra", "mv", "vpn", "-t", "default"]).unwrap();
+        assert!(run_app(cli_move_back, &store, &cb, &mut Vec::new()).is_ok());
+
+        let mut out_list_def2 = Vec::new();
+        assert!(run_app(
+            Cli::try_parse_from(["tfa", "list"]).unwrap(),
+            &store,
+            &cb,
+            &mut out_list_def2
+        )
+        .is_ok());
+        assert!(String::from_utf8(out_list_def2).unwrap().contains("vpn"));
+
+        // 4. Duplicate target error
+        let cli_add_infra_dup =
+            Cli::try_parse_from(["tfa", "-n", "infra", "add", "vpn", "JBSWY3DPEHPK3PXP"]).unwrap();
+        assert!(run_app(cli_add_infra_dup, &store, &cb, &mut Vec::new()).is_ok());
+
+        let cli_move_dup = Cli::try_parse_from(["tfa", "move", "vpn", "--to", "infra"]).unwrap();
+        let err_dup = run_app(cli_move_dup, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_dup
+            .to_string()
+            .contains("already exists in namespace 'infra'"));
+
+        // 5. Identical namespace error
+        let cli_move_same = Cli::try_parse_from(["tfa", "move", "vpn", "--to", "default"]).unwrap();
+        let err_same = run_app(cli_move_same, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_same.to_string().contains("identical"));
+
+        // 6. Missing account error
+        let cli_move_missing =
+            Cli::try_parse_from(["tfa", "move", "nonexistent", "--to", "infra"]).unwrap();
+        let err_missing = run_app(cli_move_missing, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_missing.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_cli_parse_audit() {
+        let cli = Cli::try_parse_from(["tfa", "audit"]).unwrap();
+        match cli.command {
+            Some(Commands::Audit { json }) => assert!(!json),
+            _ => panic!("Expected Audit command"),
+        }
+
+        let cli_json = Cli::try_parse_from(["tfa", "audit", "--json"]).unwrap();
+        match cli_json.command {
+            Some(Commands::Audit { json }) => assert!(json),
+            _ => panic!("Expected Audit command with --json"),
+        }
+    }
+
+    #[test]
+    fn test_run_app_audit_execution() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // Empty store check
+        let cli_empty = Cli::try_parse_from(["tfa", "audit"]).unwrap();
+        let mut out_empty = Vec::new();
+        assert!(run_app(cli_empty, &store, &cb, &mut out_empty).is_ok());
+        let empty_str = String::from_utf8(out_empty).unwrap();
+        assert!(empty_str.contains("Accounts Scanned: 0"));
+        assert!(empty_str.contains("Issues Found: 0"));
+        assert!(empty_str.contains("No security vulnerabilities detected."));
+
+        // Empty store JSON check
+        let cli_empty_json = Cli::try_parse_from(["tfa", "audit", "--json"]).unwrap();
+        let mut out_empty_json = Vec::new();
+        assert!(run_app(cli_empty_json, &store, &cb, &mut out_empty_json).is_ok());
+        let empty_json_str = String::from_utf8(out_empty_json).unwrap();
+        let report_empty: audit::AuditReport = serde_json::from_str(&empty_json_str).unwrap();
+        assert_eq!(report_empty.accounts_scanned, 0);
+        assert_eq!(report_empty.summary.total_issues, 0);
+
+        // Add accounts:
+        // 1. Weak secret (8 Base32 chars, SHA-1) in default namespace
+        let cli_add_weak = Cli::try_parse_from(["tfa", "add", "weak_one", "GEZDGNBV"]).unwrap();
+        assert!(run_app(cli_add_weak, &store, &cb, &mut Vec::new()).is_ok());
+
+        // 2. Strong secret with SHA-1 in default namespace (shares seed with work account)
+        let cli_add_shared1 =
+            Cli::try_parse_from(["tfa", "add", "shared1", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"])
+                .unwrap();
+        assert!(run_app(cli_add_shared1, &store, &cb, &mut Vec::new()).is_ok());
+
+        // 3. Same strong seed in 'work' namespace (SHA-256)
+        let cli_add_shared2 = Cli::try_parse_from([
+            "tfa",
+            "-n",
+            "work",
+            "add",
+            "shared2",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--algorithm",
+            "sha256",
+        ])
+        .unwrap();
+        assert!(run_app(cli_add_shared2, &store, &cb, &mut Vec::new()).is_ok());
+
+        // Run audit human-readable
+        let cli_audit = Cli::try_parse_from(["tfa", "audit"]).unwrap();
+        let mut out_audit = Vec::new();
+        assert!(run_app(cli_audit, &store, &cb, &mut out_audit).is_ok());
+        let audit_str = String::from_utf8(out_audit).unwrap();
+        assert!(audit_str.contains("Accounts Scanned: 3"));
+        assert!(audit_str.contains("Weak secret with 8 Base32 characters"));
+        assert!(audit_str.contains("Legacy SHA-1 algorithm"));
+        assert!(audit_str.contains("Duplicate secret seed shared with 'work:shared2'"));
+        assert!(audit_str.contains("Duplicate secret seed shared with 'default:shared1'"));
+
+        // Run audit JSON
+        let cli_json = Cli::try_parse_from(["tfa", "audit", "--json"]).unwrap();
+        let mut out_json = Vec::new();
+        assert!(run_app(cli_json, &store, &cb, &mut out_json).is_ok());
+        let json_str = String::from_utf8(out_json).unwrap();
+        let report: audit::AuditReport = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(report.accounts_scanned, 3);
+        assert_eq!(report.summary.weak_secrets, 1);
+        assert_eq!(report.summary.duplicate_secrets, 2);
+        assert_eq!(report.summary.legacy_algorithms, 2); // weak_one and shared1 both use SHA-1
     }
 }

@@ -115,6 +115,77 @@ impl<'a> NamespaceStore<'a> {
 
         Ok(deleted)
     }
+
+    /// Rename an account within a specific namespace.
+    pub fn rename_account(
+        store: &dyn AccountStore,
+        namespace: &str,
+        old_name: &str,
+        new_name: &str,
+    ) -> Result<()> {
+        let old_name = old_name.trim();
+        let new_name = new_name.trim();
+        if old_name.is_empty() || new_name.is_empty() {
+            bail!("Account name cannot be empty");
+        }
+        if old_name == new_name {
+            bail!("Source and destination account names are identical ('{old_name}')");
+        }
+
+        let ns = normalize_namespace(namespace);
+        let ns_store = NamespaceStore::new(store, &ns);
+
+        let secret = ns_store.get_secret(old_name)?;
+
+        if ns_store.get_secret(new_name).is_ok() {
+            bail!("Account '{new_name}' already exists in namespace '{ns}'");
+        }
+
+        ns_store.set_secret(new_name, &secret)?;
+        if let Err(e) = ns_store.delete_account(old_name) {
+            let _ = ns_store.delete_account(new_name);
+            return Err(e);
+        }
+
+        Ok(())
+    }
+
+    /// Move an account from one namespace to another.
+    pub fn move_account(
+        store: &dyn AccountStore,
+        from_namespace: &str,
+        account: &str,
+        to_namespace: &str,
+    ) -> Result<()> {
+        let account = account.trim();
+        if account.is_empty() {
+            bail!("Account name cannot be empty");
+        }
+
+        let from_ns = normalize_namespace(from_namespace);
+        let to_ns = normalize_namespace(to_namespace);
+
+        if from_ns == to_ns {
+            bail!("Source and destination namespace are identical ('{from_ns}')");
+        }
+
+        let from_store = NamespaceStore::new(store, &from_ns);
+        let to_store = NamespaceStore::new(store, &to_ns);
+
+        let secret = from_store.get_secret(account)?;
+
+        if to_store.get_secret(account).is_ok() {
+            bail!("Account '{account}' already exists in namespace '{to_ns}'");
+        }
+
+        to_store.set_secret(account, &secret)?;
+        if let Err(e) = from_store.delete_account(account) {
+            let _ = to_store.delete_account(account);
+            return Err(e);
+        }
+
+        Ok(())
+    }
 }
 
 impl<'a> AccountStore for NamespaceStore<'a> {
@@ -239,5 +310,102 @@ mod tests {
         let deleted = NamespaceStore::delete_namespace(&root_store, "office").unwrap();
         assert_eq!(deleted, 2);
         assert!(office_store.list_accounts().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_namespace_account_rename() {
+        let root_store = MemoryStore::new();
+
+        // 1. Rename in default namespace
+        let default_store = NamespaceStore::new(&root_store, "default");
+        default_store
+            .set_secret("github", "SEC_GITHUB_URL")
+            .unwrap();
+        default_store.set_secret("gitlab", "SEC_GITLAB").unwrap();
+
+        // Error: identical names
+        let err_ident =
+            NamespaceStore::rename_account(&root_store, "default", "github", "github").unwrap_err();
+        assert!(err_ident.to_string().contains("identical"));
+
+        // Error: empty name
+        let err_empty =
+            NamespaceStore::rename_account(&root_store, "default", "", "gh").unwrap_err();
+        assert!(err_empty.to_string().contains("empty"));
+
+        // Error: target already exists
+        let err_dup =
+            NamespaceStore::rename_account(&root_store, "default", "github", "gitlab").unwrap_err();
+        assert!(err_dup.to_string().contains("already exists"));
+
+        // Error: old not found
+        let err_missing =
+            NamespaceStore::rename_account(&root_store, "default", "missing", "target")
+                .unwrap_err();
+        assert!(err_missing.to_string().contains("not found"));
+
+        // Success: rename github -> gh
+        NamespaceStore::rename_account(&root_store, "default", "github", "gh").unwrap();
+        assert_eq!(default_store.get_secret("gh").unwrap(), "SEC_GITHUB_URL");
+        assert!(default_store.get_secret("github").is_err());
+
+        // 2. Rename in custom namespace (work)
+        let work_store = NamespaceStore::new(&root_store, "work");
+        work_store.set_secret("aws", "SEC_AWS_CUSTOM").unwrap();
+
+        NamespaceStore::rename_account(&root_store, "work", "aws", "amazon").unwrap();
+        assert_eq!(work_store.get_secret("amazon").unwrap(), "SEC_AWS_CUSTOM");
+        assert!(work_store.get_secret("aws").is_err());
+    }
+
+    #[test]
+    fn test_namespace_account_move() {
+        let root_store = MemoryStore::new();
+
+        let default_store = NamespaceStore::new(&root_store, "default");
+        default_store.set_secret("router", "SEC_ROUTER").unwrap();
+
+        let work_store = NamespaceStore::new(&root_store, "work");
+        work_store.set_secret("jira", "SEC_JIRA").unwrap();
+
+        // Error: source not found
+        let err_missing =
+            NamespaceStore::move_account(&root_store, "default", "missing", "work").unwrap_err();
+        assert!(err_missing.to_string().contains("not found"));
+
+        // Error: empty account name
+        let err_empty =
+            NamespaceStore::move_account(&root_store, "default", "  ", "work").unwrap_err();
+        assert!(err_empty.to_string().contains("empty"));
+
+        // Error: identical namespace
+        let err_same_ns =
+            NamespaceStore::move_account(&root_store, "default", "router", "default").unwrap_err();
+        assert!(err_same_ns.to_string().contains("identical"));
+
+        // Error: target already exists in target namespace
+        default_store
+            .set_secret("jira", "SEC_DEFAULT_JIRA")
+            .unwrap();
+        let err_dup =
+            NamespaceStore::move_account(&root_store, "default", "jira", "work").unwrap_err();
+        assert!(err_dup.to_string().contains("already exists"));
+        default_store.delete_account("jira").unwrap();
+
+        // Success: move router from default to work
+        NamespaceStore::move_account(&root_store, "default", "router", "work").unwrap();
+        assert!(default_store.get_secret("router").is_err());
+        assert_eq!(work_store.get_secret("router").unwrap(), "SEC_ROUTER");
+
+        // Success: move router from work to home
+        NamespaceStore::move_account(&root_store, "work", "router", "home").unwrap();
+        let home_store = NamespaceStore::new(&root_store, "home");
+        assert!(work_store.get_secret("router").is_err());
+        assert_eq!(home_store.get_secret("router").unwrap(), "SEC_ROUTER");
+
+        // Success: move back from home to default
+        NamespaceStore::move_account(&root_store, "home", "router", "default").unwrap();
+        assert!(home_store.get_secret("router").is_err());
+        assert_eq!(default_store.get_secret("router").unwrap(), "SEC_ROUTER");
     }
 }

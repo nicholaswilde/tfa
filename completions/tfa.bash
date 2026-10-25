@@ -19,6 +19,9 @@ _tfa() {
             tfa,add)
                 cmd="tfa__subcmd__add"
                 ;;
+            tfa,audit)
+                cmd="tfa__subcmd__audit"
+                ;;
             tfa,completions)
                 cmd="tfa__subcmd__completions"
                 ;;
@@ -46,6 +49,9 @@ _tfa() {
             tfa,man)
                 cmd="tfa__subcmd__man"
                 ;;
+            tfa,move)
+                cmd="tfa__subcmd__move"
+                ;;
             tfa,namespace)
                 cmd="tfa__subcmd__namespace"
                 ;;
@@ -54,6 +60,9 @@ _tfa() {
                 ;;
             tfa,qr)
                 cmd="tfa__subcmd__qr"
+                ;;
+            tfa,rename)
+                cmd="tfa__subcmd__rename"
                 ;;
             tfa,show)
                 cmd="tfa__subcmd__show"
@@ -66,6 +75,9 @@ _tfa() {
                 ;;
             tfa__subcmd__help,add)
                 cmd="tfa__subcmd__help__subcmd__add"
+                ;;
+            tfa__subcmd__help,audit)
+                cmd="tfa__subcmd__help__subcmd__audit"
                 ;;
             tfa__subcmd__help,completions)
                 cmd="tfa__subcmd__help__subcmd__completions"
@@ -94,6 +106,9 @@ _tfa() {
             tfa__subcmd__help,man)
                 cmd="tfa__subcmd__help__subcmd__man"
                 ;;
+            tfa__subcmd__help,move)
+                cmd="tfa__subcmd__help__subcmd__move"
+                ;;
             tfa__subcmd__help,namespace)
                 cmd="tfa__subcmd__help__subcmd__namespace"
                 ;;
@@ -102,6 +117,9 @@ _tfa() {
                 ;;
             tfa__subcmd__help,qr)
                 cmd="tfa__subcmd__help__subcmd__qr"
+                ;;
+            tfa__subcmd__help,rename)
+                cmd="tfa__subcmd__help__subcmd__rename"
                 ;;
             tfa__subcmd__help,show)
                 cmd="tfa__subcmd__help__subcmd__show"
@@ -236,7 +254,7 @@ _tfa() {
 
     case "${cmd}" in
         tfa)
-            opts="-C -n -h -V --config --storage --clipboard --clip-command --namespace --help --version generate instant watch add qr list status delete show export import completions man namespace password help"
+            opts="-C -n -h -V --config --storage --clipboard --clip-command --namespace --help --version generate instant watch add qr list status delete rename move show export import completions man namespace password audit help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -320,6 +338,48 @@ _tfa() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
+                    return 0
+                    ;;
+                --clip-command)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --namespace)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -n)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__audit)
+            opts="-C -n -h --json --config --storage --clipboard --clip-command --namespace --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -486,7 +546,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__generate)
-            opts="-c -w -d -p -a -C -n -h --secret --copy --watch --counter --digits --period --algorithm --config --storage --clipboard --clip-command --namespace --help"
+            opts="-c -w -d -p -a -C -n -h --secret --copy --watch --counter --digits --period --algorithm --next --config --storage --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -568,7 +628,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__help)
-            opts="generate instant watch add qr list status delete show export import completions man namespace password help"
+            opts="generate instant watch add qr list status delete rename move show export import completions man namespace password audit help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -582,6 +642,20 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__help__subcmd__add)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__help__subcmd__audit)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -708,6 +782,20 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__help__subcmd__man)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__help__subcmd__move)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -890,6 +978,20 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__help__subcmd__qr)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__help__subcmd__rename)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -1140,6 +1242,56 @@ _tfa() {
                 return 0
             fi
             case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
+                    return 0
+                    ;;
+                --clip-command)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --namespace)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -n)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__move)
+            opts="-t -C -n -h --to --config --storage --clipboard --clip-command --namespace --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --to)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -t)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -1906,6 +2058,48 @@ _tfa() {
                     COMPREPLY=($(compgen -W "true false" -- "${cur}"))
                     return 0
                     ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -C)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --storage)
+                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    return 0
+                    ;;
+                --clipboard)
+                    COMPREPLY=($(compgen -W "system osc52" -- "${cur}"))
+                    return 0
+                    ;;
+                --clip-command)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --namespace)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -n)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        tfa__subcmd__rename)
+            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
