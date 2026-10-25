@@ -17,8 +17,12 @@ rustc-ice-*.txt
 
 # Logs & coverage
 *.log
-lcov.info
+*.lcov
+*.lcov.info
+lcov*.info
+coverage.lcov
 coverage/
+htmlcov/
 target/llvm-cov-target/
 /target/llvm-cov/
 
