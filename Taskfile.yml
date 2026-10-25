@@ -73,6 +73,12 @@ tasks:
       - cargo run -- completions fish > completions/tfa.fish
       - cargo run -- completions powershell > completions/_tfa.ps1
 
+  man:
+    desc: Generate UNIX roff man page (assets/tfa.1)
+    cmds:
+      - mkdir -p assets
+      - cargo run -- man > assets/tfa.1
+
   run:
     desc: Run the project (requires arguments or env vars, runs help by default)
     cmds:

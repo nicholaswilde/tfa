@@ -49,6 +49,9 @@ pub fn watch_account(
 ) -> Result<()> {
     let secret = store.get_secret(account)?;
     let engine = TfaTotp::from_input(account, &secret)?;
+    if engine.is_hotp() {
+        anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
+    }
     let total_step = engine.step();
 
     // Guard raw mode so terminal state is always restored

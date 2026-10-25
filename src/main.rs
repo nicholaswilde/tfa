@@ -42,7 +42,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Generate a TOTP token for an account
+    /// Generate a 2FA token (TOTP, Steam, or HOTP) for an account
     Generate {
         /// Name of the account (interactively prompted via fuzzy search if omitted)
         account: Option<String>,
@@ -52,6 +52,9 @@ pub enum Commands {
         /// Watch and continuously refresh code with progress bar
         #[arg(short, long)]
         watch: bool,
+        /// Counter value for counter-based (HOTP) token generation
+        #[arg(long, num_args = 0..=1)]
+        counter: Option<Option<u64>>,
     },
     /// Live watch mode displaying continuous TOTP countdown with progress bar
     Watch {
@@ -65,20 +68,23 @@ pub enum Commands {
     Add {
         /// Name of the account
         account: Option<String>,
-        /// TOTP secret key or otpauth:// URI (prompted if omitted and --qr not supplied)
+        /// TOTP/HOTP secret key or otpauth:// URI (prompted if omitted and --qr not supplied)
         secret: Option<String>,
         /// Decode account secret and parameters from a QR code image
         #[arg(long)]
         qr: Option<PathBuf>,
-        /// Number of digits in generated code (e.g. 6 or 8)
+        /// Number of digits in generated code (e.g. 5, 6, 8)
         #[arg(short, long)]
         digits: Option<u8>,
         /// Time step period in seconds (e.g. 30 or 60)
         #[arg(short, long)]
         period: Option<u64>,
-        /// Hash algorithm (sha1, sha256, sha512)
+        /// Hash algorithm (sha1, sha256, sha512, steam)
         #[arg(short, long)]
         algorithm: Option<totp_rs::Algorithm>,
+        /// Initial counter for counter-based (HOTP) accounts
+        #[arg(short, long)]
+        counter: Option<u64>,
     },
     /// Render account as a terminal QR code for mobile authenticator scanning
     Qr {
@@ -149,6 +155,8 @@ pub enum Commands {
         /// Shell to generate completions for
         shell: Shell,
     },
+    /// Generate UNIX roff man page
+    Man,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -194,12 +202,17 @@ pub fn display_accounts_overview(
             width = max_acc_len
         )?;
         for s in statuses {
+            let ttl_str = if s.ttl == 0 {
+                "-".to_string()
+            } else {
+                format!("{}s", s.ttl)
+            };
             writeln!(
                 out,
-                "{:<width$}  {:^8}  {:>4}s",
+                "{:<width$}  {:^8}  {:>5}",
                 s.account,
                 s.token,
-                s.ttl,
+                ttl_str,
                 width = max_acc_len
             )?;
         }
@@ -255,6 +268,13 @@ pub fn generate_completions(shell: Shell, writer: &mut dyn Write) {
     clap_complete::generate(shell, &mut cmd, bin_name, writer);
 }
 
+pub fn generate_manpage(writer: &mut dyn Write) -> anyhow::Result<()> {
+    let cmd = Cli::command();
+    let man = clap_mangen::Man::new(cmd);
+    man.render(writer)
+        .map_err(|e| anyhow::anyhow!("Failed rendering man page: {e}"))
+}
+
 pub fn run_app(
     cli: Cli,
     store: &dyn AccountStore,
@@ -266,24 +286,50 @@ pub fn run_app(
             account,
             copy,
             watch,
+            counter,
         }) => {
             let acct = match account {
                 Some(a) => a,
                 None => select_account_interactive(store, "Select account to generate token")?,
             };
             if watch {
+                let secret = store.get_secret(&acct)?;
+                let engine = TfaTotp::from_input(&acct, &secret)?;
+                if engine.is_hotp() {
+                    anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
+                }
                 watch::watch_account(&acct, store, clipboard, copy, out_writer, None)?;
             } else {
                 let secret = store.get_secret(&acct)?;
-                let engine = TfaTotp::from_input(&acct, &secret)?;
-                let code = engine.generate_current();
-                let ttl = engine.ttl();
+                let mut engine = TfaTotp::from_input(&acct, &secret)?;
+                if engine.is_hotp() {
+                    let current_c = match counter {
+                        Some(Some(c)) => c,
+                        _ => engine.counter().unwrap_or(0),
+                    };
+                    let code = engine.generate_at_counter(current_c)?;
+                    engine.set_counter(current_c + 1);
+                    store.set_secret(&acct, &engine.to_url()?)?;
 
-                if copy {
-                    clipboard.set_text(&code)?;
-                    writeln!(out_writer, "{code} ({ttl}s remaining) [copied]")?;
+                    if copy {
+                        clipboard.set_text(&code)?;
+                        writeln!(out_writer, "{code} (counter: {current_c}) [copied]")?;
+                    } else {
+                        writeln!(out_writer, "{code} (counter: {current_c})")?;
+                    }
                 } else {
-                    writeln!(out_writer, "{code} ({ttl}s remaining)")?;
+                    if counter.is_some() {
+                        anyhow::bail!("--counter can only be used with HOTP accounts");
+                    }
+                    let code = engine.generate_current();
+                    let ttl = engine.ttl();
+
+                    if copy {
+                        clipboard.set_text(&code)?;
+                        writeln!(out_writer, "{code} ({ttl}s remaining) [copied]")?;
+                    } else {
+                        writeln!(out_writer, "{code} ({ttl}s remaining)")?;
+                    }
                 }
             }
         }
@@ -292,6 +338,11 @@ pub fn run_app(
                 Some(a) => a,
                 None => select_account_interactive(store, "Select account to watch")?,
             };
+            let secret = store.get_secret(&acct)?;
+            let engine = TfaTotp::from_input(&acct, &secret)?;
+            if engine.is_hotp() {
+                anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
+            }
             watch::watch_account(&acct, store, clipboard, copy, out_writer, None)?;
         }
         Some(Commands::Add {
@@ -301,6 +352,7 @@ pub fn run_app(
             digits,
             period,
             algorithm,
+            counter,
         }) => {
             let (target_account, raw_secret) = if let Some(qr_path) = qr {
                 let decoded = qr::scan_qr_from_image(&qr_path)?;
@@ -334,7 +386,14 @@ pub fn run_app(
             };
 
             // Validate and generate canonical OTPAuth URL with custom parameters
-            let engine = TfaTotp::build(&target_account, &raw_secret, digits, period, algorithm)?;
+            let engine = TfaTotp::build(
+                &target_account,
+                &raw_secret,
+                digits,
+                period,
+                algorithm,
+                counter,
+            )?;
             let url = engine.to_url()?;
             store.set_secret(&target_account, &url)?;
             writeln!(out_writer, "Account '{target_account}' added successfully.")?;
@@ -389,20 +448,37 @@ pub fn run_app(
             } else {
                 let engine = TfaTotp::from_input(&account, &secret)?;
                 writeln!(out_writer, "Account:   {account}")?;
-                writeln!(out_writer, "Digits:    {}", engine.digits())?;
-                writeln!(out_writer, "Period:    {}s", engine.step())?;
-                writeln!(out_writer, "Algorithm: {}", engine.algorithm())?;
-                writeln!(out_writer, "Secret:    {secret}")?;
-                writeln!(
-                    out_writer,
-                    "Live Code: {} ({}s remaining)",
-                    engine.generate_current(),
-                    engine.ttl()
-                )?;
+                writeln!(out_writer, "Type:      {}", engine.account_type())?;
+                if engine.is_hotp() {
+                    writeln!(out_writer, "Digits:    {}", engine.digits())?;
+                    writeln!(out_writer, "Counter:   {}", engine.counter().unwrap_or(0))?;
+                    writeln!(out_writer, "Algorithm: {}", engine.algorithm())?;
+                    writeln!(out_writer, "Secret:    {secret}")?;
+                    writeln!(
+                        out_writer,
+                        "Live Code: {} (counter: {})",
+                        engine.generate_current(),
+                        engine.counter().unwrap_or(0)
+                    )?;
+                } else {
+                    writeln!(out_writer, "Digits:    {}", engine.digits())?;
+                    writeln!(out_writer, "Period:    {}s", engine.step())?;
+                    writeln!(out_writer, "Algorithm: {}", engine.algorithm())?;
+                    writeln!(out_writer, "Secret:    {secret}")?;
+                    writeln!(
+                        out_writer,
+                        "Live Code: {} ({}s remaining)",
+                        engine.generate_current(),
+                        engine.ttl()
+                    )?;
+                }
             }
         }
         Some(Commands::Completions { shell }) => {
             generate_completions(shell, out_writer);
+        }
+        Some(Commands::Man) => {
+            generate_manpage(out_writer)?;
         }
         Some(Commands::Export {
             file,
@@ -636,10 +712,12 @@ mod tests {
                 account,
                 copy,
                 watch,
+                counter,
             }) => {
                 assert_eq!(account, Some("github".to_string()));
                 assert!(!copy);
                 assert!(!watch);
+                assert_eq!(counter, None);
             }
             _ => panic!("Expected generate subcommand"),
         }
@@ -663,6 +741,7 @@ mod tests {
                 account,
                 copy,
                 watch,
+                counter: _,
             }) => {
                 assert_eq!(account, Some("github".to_string()));
                 assert!(copy);
@@ -678,6 +757,7 @@ mod tests {
                 account,
                 copy,
                 watch,
+                counter: _,
             }) => {
                 assert_eq!(account, Some("aws".to_string()));
                 assert!(copy);
@@ -804,6 +884,27 @@ mod tests {
         generate_completions(Shell::Fish, &mut fish_buf);
         let fish_out = String::from_utf8(fish_buf).unwrap();
         assert!(fish_out.contains("complete -c tfa"));
+    }
+
+    #[test]
+    fn test_generate_manpage_renders_roff() {
+        let mut man_buf = Vec::new();
+        assert!(generate_manpage(&mut man_buf).is_ok());
+        let man_str = String::from_utf8(man_buf).unwrap();
+        assert!(man_str.contains(".TH tfa 1"));
+        assert!(man_str.contains(".SH NAME"));
+        assert!(man_str.contains(".SH SYNOPSIS"));
+        assert!(man_str.contains(".SH DESCRIPTION"));
+        assert!(man_str.contains("generate"));
+    }
+
+    #[test]
+    fn test_cli_parse_man() {
+        let cli = Cli::try_parse_from(["tfa", "man"]).unwrap();
+        match cli.command {
+            Some(Commands::Man) => {}
+            _ => panic!("Expected man subcommand"),
+        }
     }
 
     #[test]
@@ -1368,5 +1469,184 @@ mod tests {
             assert!(out_str.contains("[copied]"));
             assert_eq!(cb.text.lock().unwrap().as_deref().unwrap().len(), 6);
         }
+    }
+
+    #[test]
+    fn test_run_app_steam_guard_lifecycle() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        // 1. Add steam account with -a steam
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "valve_steam",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "-a",
+            "steam",
+        ])
+        .unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // 2. Show steam account
+        let mut show_out = Vec::new();
+        let show_cli = Cli::try_parse_from(["tfa", "show", "valve_steam"]).unwrap();
+        assert!(run_app(show_cli, &store, &cb, &mut show_out).is_ok());
+        let show_str = String::from_utf8(show_out).unwrap();
+        assert!(show_str.contains("Account:   valve_steam"));
+        assert!(show_str.contains("Digits:    5"));
+        assert!(show_str.contains("Algorithm: STEAM"));
+
+        // 3. Generate steam token
+        let mut gen_out = Vec::new();
+        let gen_cli = Cli::try_parse_from(["tfa", "generate", "valve_steam", "-c"]).unwrap();
+        assert!(run_app(gen_cli, &store, &cb, &mut gen_out).is_ok());
+        let gen_str = String::from_utf8(gen_out).unwrap();
+        assert!(gen_str.contains("[copied]"));
+        let token = cb.text.lock().unwrap().clone().unwrap();
+        assert_eq!(token.len(), 5);
+        const STEAM_ALPHABET: &[u8] = b"23456789BCDFGHJKMNPQRTVWXY";
+        for b in token.bytes() {
+            assert!(STEAM_ALPHABET.contains(&b));
+        }
+    }
+
+    #[test]
+    fn test_run_app_hotp_lifecycle_and_counter_increment() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        // 1. Add HOTP account with --counter 0
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "my_hotp",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--counter",
+            "0",
+        ])
+        .unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // Verify URL in store is otpauth://hotp/
+        let stored_url = store.get_secret("my_hotp").unwrap();
+        assert!(stored_url.starts_with("otpauth://hotp/"));
+        assert!(stored_url.contains("counter=0"));
+
+        // 2. Show HOTP account (does not increment counter)
+        let mut show_out = Vec::new();
+        let show_cli = Cli::try_parse_from(["tfa", "show", "my_hotp"]).unwrap();
+        assert!(run_app(show_cli, &store, &cb, &mut show_out).is_ok());
+        let show_str = String::from_utf8(show_out).unwrap();
+        assert!(show_str.contains("Account:   my_hotp"));
+        assert!(show_str.contains("Counter:   0"));
+        assert!(show_str.contains("Digits:    6"));
+        assert!(show_str.contains("755224"));
+
+        // 3. Generate token (counter 0 -> 755224, then store increments to counter 1)
+        let mut gen1_out = Vec::new();
+        let gen1 = Cli::try_parse_from(["tfa", "generate", "my_hotp"]).unwrap();
+        assert!(run_app(gen1, &store, &cb, &mut gen1_out).is_ok());
+        let gen1_str = String::from_utf8(gen1_out).unwrap();
+        assert!(gen1_str.contains("755224 (counter: 0)"));
+
+        let updated_url1 = store.get_secret("my_hotp").unwrap();
+        assert!(updated_url1.contains("counter=1"));
+
+        // 4. Generate next token (counter 1 -> 287082, then store increments to 2)
+        let mut gen2_out = Vec::new();
+        let gen2 = Cli::try_parse_from(["tfa", "generate", "my_hotp", "-c"]).unwrap();
+        assert!(run_app(gen2, &store, &cb, &mut gen2_out).is_ok());
+        let gen2_str = String::from_utf8(gen2_out).unwrap();
+        assert!(gen2_str.contains("287082 (counter: 1) [copied]"));
+        assert_eq!(cb.text.lock().unwrap().as_deref().unwrap(), "287082");
+
+        let updated_url2 = store.get_secret("my_hotp").unwrap();
+        assert!(updated_url2.contains("counter=2"));
+
+        // 5. Generate with explicit --counter 5 (generates counter 5 -> 254676, updates store to 6)
+        let mut gen3_out = Vec::new();
+        let gen3 = Cli::try_parse_from(["tfa", "generate", "my_hotp", "--counter", "5"]).unwrap();
+        assert!(run_app(gen3, &store, &cb, &mut gen3_out).is_ok());
+        let gen3_str = String::from_utf8(gen3_out).unwrap();
+        assert!(gen3_str.contains("254676 (counter: 5)"));
+
+        let updated_url3 = store.get_secret("my_hotp").unwrap();
+        assert!(updated_url3.contains("counter=6"));
+
+        // 6. Generate with standalone --counter flag (uses current stored counter 6 -> 287922, updates to 7)
+        let mut gen4_out = Vec::new();
+        let gen4 = Cli::try_parse_from(["tfa", "generate", "my_hotp", "--counter"]).unwrap();
+        assert!(run_app(gen4, &store, &cb, &mut gen4_out).is_ok());
+        let gen4_str = String::from_utf8(gen4_out).unwrap();
+        assert!(gen4_str.contains("287922 (counter: 6)"));
+
+        // 7. Watch on HOTP account fails gracefully
+        let mut watch_out = Vec::new();
+        let watch_cli = Cli::try_parse_from(["tfa", "watch", "my_hotp"]).unwrap();
+        let watch_res = run_app(watch_cli, &store, &cb, &mut watch_out);
+        assert!(watch_res.is_err());
+        assert!(watch_res
+            .unwrap_err()
+            .to_string()
+            .contains("Watch mode is not supported for counter-based (HOTP) accounts"));
+
+        // 8. Passing --counter to a standard TOTP account fails gracefully
+        store
+            .set_secret("totp_acc", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+            .unwrap();
+        let mut err_out = Vec::new();
+        let err_cli =
+            Cli::try_parse_from(["tfa", "generate", "totp_acc", "--counter", "1"]).unwrap();
+        let err_res = run_app(err_cli, &store, &cb, &mut err_out);
+        assert!(err_res.is_err());
+        assert!(err_res
+            .unwrap_err()
+            .to_string()
+            .contains("--counter can only be used with HOTP accounts"));
+    }
+
+    #[test]
+    fn test_run_app_status_with_mixed_totp_steam_hotp() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("totp_acc", "JBSWY3DPEHPK3PXP").unwrap();
+        store
+            .set_secret(
+                "steam_acc",
+                "otpauth://steam/Steam:steam_acc?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            )
+            .unwrap();
+        store
+            .set_secret(
+                "hotp_acc",
+                "otpauth://hotp/hotp_acc?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&counter=2&digits=6",
+            )
+            .unwrap();
+
+        // 1. Status table output
+        let mut out = Vec::new();
+        let cli = Cli::try_parse_from(["tfa", "status"]).unwrap();
+        assert!(run_app(cli, &store, &cb, &mut out).is_ok());
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains("totp_acc"));
+        assert!(out_str.contains("steam_acc"));
+        assert!(out_str.contains("hotp_acc"));
+        assert!(out_str.contains("359152")); // counter 2 HOTP code
+        assert!(out_str.contains('-')); // HOTP shows '-' for TTL
+
+        // 2. Status JSON output
+        let mut json_out = Vec::new();
+        let json_cli = Cli::try_parse_from(["tfa", "status", "--json"]).unwrap();
+        assert!(run_app(json_cli, &store, &cb, &mut json_out).is_ok());
+        let json_str = String::from_utf8(json_out).unwrap();
+        let json_val: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        let arr = json_val.as_array().unwrap();
+        assert_eq!(arr.len(), 3);
+        let hotp_entry = arr.iter().find(|x| x["account"] == "hotp_acc").unwrap();
+        assert_eq!(hotp_entry["ttl"], 0);
+        assert_eq!(hotp_entry["token"], "359152");
     }
 }

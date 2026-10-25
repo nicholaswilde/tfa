@@ -1,0 +1,75 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH tfa 1  "tfa e39c503-dirty" 
+.SH NAME
+tfa \- CLI Two\-Factor Authentication (2FA) tool
+.SH SYNOPSIS
+\fBtfa\fR [\fB\-\-storage\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+CLI Two\-Factor Authentication (2FA) tool
+.SH OPTIONS
+.TP
+\fB\-\-storage\fR \fI<STORAGE>\fR [default: auto]
+Credential storage backend
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto: Attempt OS keyring first; fallback to local file store if unavailable
+.IP \(bu 2
+keyring: Strictly use system keyring (Secret Service, Keychain, Credential Manager)
+.IP \(bu 2
+file: Use local file storage (~/.local/share/tfa/credentials.json)
+.RE
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH SUBCOMMANDS
+.TP
+tfa\-generate(1)
+Generate a 2FA token (TOTP, Steam, or HOTP) for an account
+.TP
+tfa\-watch(1)
+Live watch mode displaying continuous TOTP countdown with progress bar
+.TP
+tfa\-add(1)
+Add a new account secret or OTPAuth URL
+.TP
+tfa\-qr(1)
+Render account as a terminal QR code for mobile authenticator scanning
+.TP
+tfa\-list(1)
+List all stored accounts or live token status
+.TP
+tfa\-status(1)
+Live overview status dashboard of all accounts and tokens (alias for list \-\-codes)
+.TP
+tfa\-delete(1)
+Delete an account secret
+.TP
+tfa\-show(1)
+Show account details and stored secret
+.TP
+tfa\-export(1)
+Export accounts to an encrypted backup file or stdout
+.TP
+tfa\-import(1)
+Import accounts from a backup file, migration URI, or JSON payload
+.TP
+tfa\-completions(1)
+Generate shell autocompletions script
+.TP
+tfa\-man(1)
+Generate UNIX roff man page
+.TP
+tfa\-help(1)
+Print this message or the help of the given subcommand(s)
+.SH VERSION
+ve39c503\-dirty
+.SH AUTHORS
+Nicholas Wilde

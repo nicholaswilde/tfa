@@ -62,6 +62,7 @@ tfa [COMMAND]
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `delete` | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
+| `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
 
 ### Adding Accounts
 
@@ -73,6 +74,12 @@ tfa add github JBSWY3DPEHPK3PXP
 
 # Using OTPAuth URI
 tfa add google "otpauth://totp/Google:user@gmail.com?secret=JBSWY3DPEHPK3PXP&issuer=Google"
+
+# Steam Guard account (5-character alphanumeric token):
+tfa add steam_account JBSWY3DPEHPK3PXP -a steam
+
+# Counter-based HOTP account (RFC 4226):
+tfa add hotp_account GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ --counter 0
 
 # Interactive prompt (avoids shell history leaks)
 tfa add aws
@@ -111,6 +118,14 @@ Select account to generate token |
 # With automatic clipboard copy:
 $ tfa generate github -c
 482910 (24s remaining) [copied]
+
+# HOTP token generation (increments stored counter automatically):
+$ tfa generate hotp_account
+755224 (counter: 0)
+
+# Generate HOTP token for specific counter value:
+$ tfa generate hotp_account --counter 5
+254676 (counter: 5)
 
 # Live watch mode with dynamic progress bar:
 $ tfa watch github
@@ -207,6 +222,22 @@ tfa completions fish > ~/.config/fish/completions/tfa.fish
 ```
 
 Pre-generated completion scripts are also available in the [`completions/`](completions/) folder.
+
+---
+
+## :page_facing_up: Man Page
+
+Generate or view the UNIX man page:
+
+```bash
+# Generate man page
+task man
+# Or with binary
+tfa man > assets/tfa.1
+
+# Preview formatted man page
+man -l assets/tfa.1
+```
 
 ---
 
