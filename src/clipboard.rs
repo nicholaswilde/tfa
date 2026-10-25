@@ -263,17 +263,31 @@ mod tests {
         assert!(err.to_string().contains("Selection too long"));
     }
 
+    fn test_pipe_command(output_file: &std::path::Path) -> String {
+        #[cfg(windows)]
+        {
+            let path = output_file.to_str().unwrap().replace('\\', "/");
+            format!(
+                "powershell -NoProfile -Command \"[System.IO.File]::WriteAllText('{path}', [System.Console]::In.ReadToEnd())\""
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            format!("cat > '{}'", output_file.display())
+        }
+    }
+
     #[test]
     fn test_command_clipboard_pipes_stdin_successfully() {
         let dir = tempfile::tempdir().unwrap();
         let output_file = dir.path().join("copied.txt");
-        let cmd = format!("cat > '{}'", output_file.display());
+        let cmd = test_pipe_command(&output_file);
 
         let cb = CommandClipboard::new(cmd);
         assert!(cb.set_text("789012").is_ok());
 
         let saved = std::fs::read_to_string(output_file).unwrap();
-        assert_eq!(saved, "789012");
+        assert_eq!(saved.trim_start_matches('\u{feff}').trim(), "789012");
     }
 
     #[test]
@@ -294,12 +308,12 @@ mod tests {
     fn test_dispatching_clipboard_prefers_custom_command() {
         let dir = tempfile::tempdir().unwrap();
         let output_file = dir.path().join("dispatch.txt");
-        let cmd = format!("cat > '{}'", output_file.display());
+        let cmd = test_pipe_command(&output_file);
 
         let dispatcher = DispatchingClipboard::new(ClipboardProvider::System, Some(cmd));
         assert!(dispatcher.set_text("999888").is_ok());
 
         let saved = std::fs::read_to_string(output_file).unwrap();
-        assert_eq!(saved, "999888");
+        assert_eq!(saved.trim_start_matches('\u{feff}').trim(), "999888");
     }
 }
