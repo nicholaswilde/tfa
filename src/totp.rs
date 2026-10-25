@@ -576,4 +576,68 @@ mod tests {
         assert_eq!(loaded.counter(), Some(1));
         assert_eq!(loaded.generate_current(), "287082");
     }
+
+    #[test]
+    fn test_totp_and_hotp_edge_cases() {
+        let secret = b"12345678901234567890";
+        // Invalid digits
+        assert!(generate_hotp(secret, 0, 5, Algorithm::SHA1).is_err());
+        assert!(generate_hotp(secret, 0, 9, Algorithm::SHA1).is_err());
+
+        // SHA256 and SHA512 HOTP
+        let c256 = generate_hotp(secret, 0, 6, Algorithm::SHA256).unwrap();
+        assert_eq!(c256.len(), 6);
+        let c512 = generate_hotp(secret, 0, 6, Algorithm::SHA512).unwrap();
+        assert_eq!(c512.len(), 6);
+
+        // URL parsing errors & algorithms
+        assert!(TfaHotp::from_url("https://example.com").is_err());
+        assert!(TfaHotp::from_url("otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP").is_err());
+
+        let url_sha256 = "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0&algorithm=SHA256";
+        let h256 = TfaHotp::from_url(url_sha256).unwrap();
+        assert_eq!(h256.algorithm, Algorithm::SHA256);
+        let exp256 = h256.to_url().unwrap();
+        assert!(exp256.contains("algorithm=SHA256"));
+
+        let url_sha512 = "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0&algorithm=SHA512";
+        let h512 = TfaHotp::from_url(url_sha512).unwrap();
+        assert_eq!(h512.algorithm, Algorithm::SHA512);
+        let exp512 = h512.to_url().unwrap();
+        assert!(exp512.contains("algorithm=SHA512"));
+
+        let url_steam = "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0&algorithm=STEAM";
+        let hsteam = TfaHotp::from_url(url_steam).unwrap();
+        assert_eq!(hsteam.algorithm, Algorithm::Steam);
+        let expsteam = hsteam.to_url().unwrap();
+        assert!(expsteam.contains("algorithm=STEAM"));
+
+        // HOTP step is 0
+        let hotp_totp = TfaTotp::from_input("alice", url_sha256).unwrap();
+        assert_eq!(hotp_totp.step(), 0);
+
+        // Steam with 6 digits fails
+        assert!(TfaTotp::build(
+            "steam_acc",
+            "JBSWY3DPEHPK3PXP",
+            Some(6),
+            None,
+            Some(Algorithm::Steam),
+            None
+        )
+        .is_err());
+
+        // Standard TOTP counter and generate_at_counter
+        let totp = TfaTotp::build(
+            "totp_acc",
+            "JBSWY3DPEHPK3PXP",
+            Some(6),
+            Some(30),
+            Some(Algorithm::SHA1),
+            None,
+        )
+        .unwrap();
+        assert_eq!(totp.counter(), None);
+        assert!(totp.generate_at_counter(1).is_err());
+    }
 }

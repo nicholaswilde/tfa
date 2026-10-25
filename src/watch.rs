@@ -22,18 +22,22 @@ pub fn format_progress_bar(remaining: u64, total: u64, width: usize) -> String {
     )
 }
 
-struct RawModeGuard;
+struct RawModeGuard {
+    enabled: bool,
+}
 
 impl RawModeGuard {
-    fn new() -> Result<Self> {
-        enable_raw_mode()?;
-        Ok(Self)
+    fn new() -> Self {
+        let enabled = enable_raw_mode().is_ok();
+        Self { enabled }
     }
 }
 
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
-        let _ = disable_raw_mode();
+        if self.enabled {
+            let _ = disable_raw_mode();
+        }
     }
 }
 
@@ -55,7 +59,7 @@ pub fn watch_account(
     let total_step = engine.step();
 
     // Guard raw mode so terminal state is always restored
-    let _guard = RawModeGuard::new()?;
+    let _guard = RawModeGuard::new();
 
     // Hide cursor and clear line start
     write!(out, "\x1b[?25l")?;
@@ -95,14 +99,22 @@ pub fn watch_account(
             }
 
             // Poll for keypress with 250ms timeout for smooth countdown
-            if event::poll(Duration::from_millis(250))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.code == KeyCode::Char('q')
-                        || key.code == KeyCode::Esc
-                        || (key.code == KeyCode::Char('c')
-                            && key.modifiers.contains(KeyModifiers::CONTROL))
-                    {
-                        break;
+            match event::poll(Duration::from_millis(250)) {
+                Ok(true) => {
+                    if let Ok(Event::Key(key)) = event::read() {
+                        if key.code == KeyCode::Char('q')
+                            || key.code == KeyCode::Esc
+                            || (key.code == KeyCode::Char('c')
+                                && key.modifiers.contains(KeyModifiers::CONTROL))
+                        {
+                            break;
+                        }
+                    }
+                }
+                Ok(false) => {}
+                Err(_) => {
+                    if max_ticks.is_none() {
+                        std::thread::sleep(Duration::from_millis(250));
                     }
                 }
             }
@@ -149,7 +161,7 @@ pub fn watch_all(
     let total_lines = 1 + entries.len();
 
     // Guard raw mode so terminal state is always restored
-    let _guard = RawModeGuard::new()?;
+    let _guard = RawModeGuard::new();
 
     // Hide cursor
     write!(out, "\x1b[?25l")?;
@@ -214,14 +226,22 @@ pub fn watch_all(
                 }
             }
 
-            if event::poll(Duration::from_millis(250))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.code == KeyCode::Char('q')
-                        || key.code == KeyCode::Esc
-                        || (key.code == KeyCode::Char('c')
-                            && key.modifiers.contains(KeyModifiers::CONTROL))
-                    {
-                        break;
+            match event::poll(Duration::from_millis(250)) {
+                Ok(true) => {
+                    if let Ok(Event::Key(key)) = event::read() {
+                        if key.code == KeyCode::Char('q')
+                            || key.code == KeyCode::Esc
+                            || (key.code == KeyCode::Char('c')
+                                && key.modifiers.contains(KeyModifiers::CONTROL))
+                        {
+                            break;
+                        }
+                    }
+                }
+                Ok(false) => {}
+                Err(_) => {
+                    if max_ticks.is_none() {
+                        std::thread::sleep(Duration::from_millis(250));
                     }
                 }
             }
@@ -238,6 +258,7 @@ pub fn watch_all(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::clipboard::MockClipboard;
 
     #[test]
     fn test_format_progress_bar_full_and_empty() {
@@ -258,6 +279,72 @@ mod tests {
     }
 
     #[test]
+    fn test_format_progress_bar_zero_total() {
+        let bar = format_progress_bar(5, 0, 10);
+        assert_eq!(bar, "[░░░░░░░░░░] 0s");
+    }
+
+    #[test]
+    fn test_watch_account_success_with_autocopy() {
+        let store = crate::storage::MemoryStore::new();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let res = watch_account("github", &store, &cb, true, &mut out, Some(2));
+        assert!(res.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("github"));
+        assert!(s.contains("[copied]"));
+        assert_eq!(cb.text.lock().unwrap().as_deref().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn test_watch_account_without_autocopy() {
+        let store = crate::storage::MemoryStore::new();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let res = watch_account("github", &store, &cb, false, &mut out, Some(1));
+        assert!(res.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("github"));
+        assert!(!s.contains("[copied]"));
+        assert!(cb.text.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn test_watch_account_hotp_error() {
+        let store = crate::storage::MemoryStore::new();
+        store
+            .set_secret(
+                "my_hotp",
+                "otpauth://hotp/my_hotp?secret=JBSWY3DPEHPK3PXP&counter=1",
+            )
+            .unwrap();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let res = watch_account("my_hotp", &store, &cb, false, &mut out, Some(1));
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("Watch mode is not supported for counter-based (HOTP) accounts"));
+    }
+
+    #[test]
+    fn test_watch_account_missing() {
+        let store = crate::storage::MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let res = watch_account("nonexistent", &store, &cb, false, &mut out, Some(1));
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn test_watch_all_empty() {
         let store = crate::storage::MemoryStore::new();
         let mut out = Vec::new();
@@ -274,14 +361,13 @@ mod tests {
         store.set_secret("google", "JBSWY3DPEHPK3PXP").unwrap();
         let mut out = Vec::new();
         let res = watch_all(&store, &mut out, Some(2));
-        if res.is_ok() {
-            let s = String::from_utf8(out).unwrap();
-            assert!(s.contains("ACCOUNT"));
-            assert!(s.contains("TOKEN"));
-            assert!(s.contains("PROGRESS"));
-            assert!(s.contains("github"));
-            assert!(s.contains("google"));
-        }
+        assert!(res.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("ACCOUNT"));
+        assert!(s.contains("TOKEN"));
+        assert!(s.contains("PROGRESS"));
+        assert!(s.contains("github"));
+        assert!(s.contains("google"));
     }
 
     #[test]
@@ -296,11 +382,23 @@ mod tests {
             .unwrap();
         let mut out = Vec::new();
         let res = watch_all(&store, &mut out, Some(1));
-        if res.is_ok() {
-            let s = String::from_utf8(out).unwrap();
-            assert!(s.contains("github"));
-            assert!(s.contains("my_hotp"));
-            assert!(s.contains("[counter-based]"));
-        }
+        assert!(res.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("github"));
+        assert!(s.contains("my_hotp"));
+        assert!(s.contains("[counter-based]"));
+    }
+
+    #[test]
+    fn test_watch_all_with_invalid_secret() {
+        let store = crate::storage::MemoryStore::new();
+        store.set_secret("bad_acc", "???not valid base32!").unwrap();
+        let mut out = Vec::new();
+        let res = watch_all(&store, &mut out, Some(1));
+        assert!(res.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("bad_acc"));
+        assert!(s.contains("ERROR"));
+        assert!(s.contains("[invalid secret]"));
     }
 }

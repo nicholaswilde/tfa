@@ -2670,4 +2670,252 @@ light: true
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");
     }
+
+    #[test]
+    fn test_run_app_namespace_create_and_set_default() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+
+        // 1. Create namespace
+        let cli_create = Cli::try_parse_from(["tfa", "namespace", "create", "WorkSpace"]).unwrap();
+        let mut out = Vec::new();
+        assert!(run_app(cli_create, &store, &cb, &mut out).is_ok());
+        assert!(String::from_utf8(out)
+            .unwrap()
+            .contains("Namespace 'workspace' created."));
+
+        // 2. Set default namespace
+        let cli_default = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "namespace",
+            "set-default",
+            "workspace",
+        ])
+        .unwrap();
+        let mut out_def = Vec::new();
+        assert!(run_app(cli_default, &store, &cb, &mut out_def).is_ok());
+        assert!(String::from_utf8(out_def)
+            .unwrap()
+            .contains("Default namespace set to 'workspace'"));
+
+        // 3. Delete namespace without force in non-interactive fails
+        let cli_del = Cli::try_parse_from(["tfa", "namespace", "delete", "workspace"]).unwrap();
+        let mut out_del = Vec::new();
+        let err = run_app(cli_del, &store, &cb, &mut out_del).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Cannot delete namespace without --force"));
+    }
+
+    #[test]
+    fn test_run_app_import_dry_run_full() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("alice", "JBSWY3DPEHPK3PXP").unwrap();
+
+        let payload = "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP\notpauth://totp/bob?secret=JBSWY3DPEHPK3PXP\n";
+
+        // 1. Dry run without overwrite: alice skipped, bob imported
+        let cli_dry = Cli::try_parse_from(["tfa", "import", "--dry-run", payload]).unwrap();
+        let mut out1 = Vec::new();
+        assert!(run_app(cli_dry, &store, &cb, &mut out1).is_ok());
+        let s1 = String::from_utf8(out1).unwrap();
+        assert!(s1.contains("[dry-run] Would skip existing account 'alice'"));
+        assert!(s1.contains("[dry-run] Would import account 'bob'"));
+        assert!(s1.contains("[dry-run] Summary: 1 to import, 0 to update, 1 to skip."));
+        // Check bob was not actually stored
+        assert!(store.get_secret("bob").is_err());
+
+        // 2. Dry run with overwrite: alice updated, bob imported
+        let cli_dry_ow =
+            Cli::try_parse_from(["tfa", "import", "--dry-run", "--overwrite", payload]).unwrap();
+        let mut out2 = Vec::new();
+        assert!(run_app(cli_dry_ow, &store, &cb, &mut out2).is_ok());
+        let s2 = String::from_utf8(out2).unwrap();
+        assert!(s2.contains("[dry-run] Would update account 'alice'"));
+        assert!(s2.contains("[dry-run] Would import account 'bob'"));
+    }
+
+    #[test]
+    fn test_run_app_list_and_status_empty_json() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        let cli_list_json = Cli::try_parse_from(["tfa", "list", "--json"]).unwrap();
+        let mut out1 = Vec::new();
+        assert!(run_app(cli_list_json, &store, &cb, &mut out1).is_ok());
+        assert_eq!(String::from_utf8(out1).unwrap().trim(), "[]");
+
+        let cli_status_json = Cli::try_parse_from(["tfa", "status", "--json"]).unwrap();
+        let mut out2 = Vec::new();
+        assert!(run_app(cli_status_json, &store, &cb, &mut out2).is_ok());
+        assert_eq!(String::from_utf8(out2).unwrap().trim(), "[]");
+
+        let cli_status = Cli::try_parse_from(["tfa", "status"]).unwrap();
+        let mut out3 = Vec::new();
+        assert!(run_app(cli_status, &store, &cb, &mut out3).is_ok());
+        assert_eq!(
+            String::from_utf8(out3).unwrap().trim(),
+            "No accounts configured."
+        );
+    }
+
+    #[test]
+    fn test_run_app_show_hotp_and_manpage() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store
+            .set_secret(
+                "my_hotp",
+                "otpauth://hotp/my_hotp?secret=JBSWY3DPEHPK3PXP&counter=0",
+            )
+            .unwrap();
+
+        let cli_show = Cli::try_parse_from(["tfa", "show", "my_hotp"]).unwrap();
+        let mut out1 = Vec::new();
+        assert!(run_app(cli_show, &store, &cb, &mut out1).is_ok());
+        let s1 = String::from_utf8(out1).unwrap();
+        assert!(s1.contains("Type:      HOTP"));
+        assert!(s1.contains("Counter:   0"));
+        assert!(s1.contains("Live Code:"));
+
+        let cli_man = Cli::try_parse_from(["tfa", "man"]).unwrap();
+        let mut out2 = Vec::new();
+        assert!(run_app(cli_man, &store, &cb, &mut out2).is_ok());
+        let s2 = String::from_utf8(out2).unwrap();
+        assert!(s2.contains(".TH"));
+    }
+
+    #[test]
+    fn test_get_password_env_var_and_validation() {
+        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+
+        // Empty password passed explicitly
+        assert!(get_password(Some("".to_string()), false, "prompt").is_err());
+
+        // Environment variable
+        std::env::set_var("TFA_PASSWORD", "secret_env_pass");
+        let pass = get_password(None, false, "prompt").unwrap();
+        assert_eq!(pass, "secret_env_pass");
+        std::env::remove_var("TFA_PASSWORD");
+
+        // Non-interactive without env variable
+        assert!(get_password(None, false, "prompt").is_err());
+    }
+
+    #[test]
+    fn test_run_app_password_edge_flows() {
+        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let auth_path = dir.path().join("auth.json");
+        let session_path = dir.path().join("session.json");
+
+        std::env::set_var("TFA_AUTH_FILE", &auth_path);
+        std::env::set_var("TFA_SESSION_FILE", &session_path);
+
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // 1. Password status when unconfigured
+        let cli_status = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "status",
+        ])
+        .unwrap();
+        let mut out1 = Vec::new();
+        assert!(run_app(cli_status, &store, &cb, &mut out1).is_ok());
+        let s1 = String::from_utf8(out1).unwrap();
+        assert!(s1.contains("Password Configured:   No"));
+
+        // 2. Add password
+        let cli_add = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "add",
+            "--password",
+            "Master123!",
+        ])
+        .unwrap();
+        let mut out2 = Vec::new();
+        assert!(run_app(cli_add, &store, &cb, &mut out2).is_ok());
+
+        // 3. Unlock when already unlocked
+        let cli_unlock_again = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "unlock",
+            "--password",
+            "Master123!",
+        ])
+        .unwrap();
+        let mut out3 = Vec::new();
+        assert!(run_app(cli_unlock_again, &store, &cb, &mut out3).is_ok());
+        assert!(String::from_utf8(out3)
+            .unwrap()
+            .contains("Session already unlocked"));
+
+        // 4. Lock session, then unlock with wrong password
+        let cli_lock = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "lock",
+        ])
+        .unwrap();
+        assert!(run_app(cli_lock, &store, &cb, &mut Vec::new()).is_ok());
+
+        let cli_unlock_bad = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "unlock",
+            "--password",
+            "Wrong123!",
+        ])
+        .unwrap();
+        assert!(run_app(cli_unlock_bad, &store, &cb, &mut Vec::new()).is_err());
+
+        // 5. Remove password with wrong password fails
+        let cli_remove_bad = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "remove",
+            "--password",
+            "Wrong123!",
+        ])
+        .unwrap();
+        assert!(run_app(cli_remove_bad, &store, &cb, &mut Vec::new()).is_err());
+
+        // 6. Remove password with correct password succeeds
+        let cli_remove_good = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "remove",
+            "--password",
+            "Master123!",
+        ])
+        .unwrap();
+        assert!(run_app(cli_remove_good, &store, &cb, &mut Vec::new()).is_ok());
+
+        std::env::remove_var("TFA_AUTH_FILE");
+        std::env::remove_var("TFA_SESSION_FILE");
+    }
 }

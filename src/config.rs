@@ -617,6 +617,7 @@ auto_copy = false
 
     #[test]
     fn test_hierarchical_precedence_full_chain() {
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
         // Test hierarchy: CLI > ENV > FILE > DEFAULT
         // We will isolate by temporary environment variables
         let dir = tempfile::tempdir().unwrap();
@@ -755,5 +756,163 @@ auto_copy = false
         ConfigFile::set_password_config_in_file(Some(&config_file_path), false, None).unwrap();
         let reloaded_disabled = ConfigFile::load_from_path(&config_file_path).unwrap();
         assert!(!reloaded_disabled.is_password_enabled());
+    }
+
+    static TEST_CONFIG_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn test_config_unsupported_format_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad_path = dir.path().join("config.unknown");
+        fs::write(&bad_path, "foo = bar").unwrap();
+
+        assert!(ConfigFile::load_from_path(&bad_path).is_err());
+        assert!(ConfigFile::default().save_to_path(&bad_path).is_err());
+    }
+
+    #[test]
+    fn test_config_save_and_reload_yaml_and_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = ConfigFile {
+            default_namespace: Some("my_ns".to_string()),
+            digits: Some(8),
+            ..Default::default()
+        };
+
+        // Save & reload YAML
+        let yaml_path = dir.path().join("config.yaml");
+        cfg.save_to_path(&yaml_path).unwrap();
+        let reloaded_yaml = ConfigFile::load_from_path(&yaml_path).unwrap();
+        assert_eq!(reloaded_yaml.default_namespace.as_deref(), Some("my_ns"));
+        assert_eq!(reloaded_yaml.digits, Some(8));
+
+        // Save & reload JSON
+        let json_path = dir.path().join("config.json");
+        cfg.save_to_path(&json_path).unwrap();
+        let reloaded_json = ConfigFile::load_from_path(&json_path).unwrap();
+        assert_eq!(reloaded_json.default_namespace.as_deref(), Some("my_ns"));
+        assert_eq!(reloaded_json.digits, Some(8));
+    }
+
+    #[test]
+    fn test_resolved_config_default_and_algorithms() {
+        let def = ResolvedConfig::default();
+        assert_eq!(def.storage, StorageBackend::Auto);
+        assert_eq!(def.clipboard, ClipboardProvider::System);
+        assert_eq!(def.namespace, "default");
+        assert_eq!(def.password_timeout, ConfigFile::DEFAULT_PASSWORD_TIMEOUT);
+
+        assert_eq!(
+            parse_algorithm_str("sha1").unwrap(),
+            totp_rs::Algorithm::SHA1
+        );
+        assert_eq!(
+            parse_algorithm_str("sha256").unwrap(),
+            totp_rs::Algorithm::SHA256
+        );
+        assert_eq!(
+            parse_algorithm_str("sha512").unwrap(),
+            totp_rs::Algorithm::SHA512
+        );
+        assert_eq!(
+            parse_algorithm_str("steam").unwrap(),
+            totp_rs::Algorithm::Steam
+        );
+        assert!(parse_algorithm_str("invalid_algo").is_err());
+    }
+
+    #[test]
+    fn test_resolve_configuration_env_edge_cases() {
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+
+        // 1. Invalid storage
+        std::env::set_var("TFA_STORAGE", "invalid_storage");
+        assert!(resolve_configuration(None, None, None, None, None).is_err());
+        std::env::set_var("TFA_STORAGE", "file");
+        let (res_storage, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_storage.storage, StorageBackend::File);
+        std::env::remove_var("TFA_STORAGE");
+
+        // 2. Invalid clipboard
+        std::env::set_var("TFA_CLIPBOARD", "invalid_cb");
+        assert!(resolve_configuration(None, None, None, None, None).is_err());
+        std::env::remove_var("TFA_CLIPBOARD");
+
+        // 3. Auto-copy false and invalid
+        std::env::set_var("TFA_AUTO_COPY", "false");
+        let (res_ac, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert!(!res_ac.auto_copy);
+        std::env::set_var("TFA_AUTO_COPY", "not_a_bool");
+        assert!(resolve_configuration(None, None, None, None, None).is_err());
+        std::env::remove_var("TFA_AUTO_COPY");
+
+        // 4. Light false and invalid
+        std::env::set_var("TFA_LIGHT", "0");
+        let (res_light, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert!(!res_light.light);
+        std::env::set_var("TFA_LIGHT", "invalid");
+        assert!(resolve_configuration(None, None, None, None, None).is_err());
+        std::env::remove_var("TFA_LIGHT");
+
+        // 5. Password enabled and invalid
+        std::env::set_var("TFA_PASSWORD_ENABLED", "1");
+        let (res_pw, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert!(res_pw.password_enabled);
+        std::env::set_var("TFA_PASSWORD_ENABLED", "0");
+        let (res_pw0, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert!(!res_pw0.password_enabled);
+        std::env::set_var("TFA_PASSWORD_ENABLED", "invalid");
+        assert!(resolve_configuration(None, None, None, None, None).is_err());
+        std::env::remove_var("TFA_PASSWORD_ENABLED");
+
+        // 6. Password timeout
+        std::env::set_var("TFA_PASSWORD_TIMEOUT", "450");
+        let (res_pt, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_pt.password_timeout, 450);
+        std::env::set_var("TFA_PASSWORD_TIMEOUT", "invalid_num");
+        assert!(resolve_configuration(None, None, None, None, None).is_err());
+        std::env::remove_var("TFA_PASSWORD_TIMEOUT");
+
+        // 7. TFA_STEP
+        std::env::set_var("TFA_STEP", "45");
+        let (res_step, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_step.period, Some(45));
+        std::env::remove_var("TFA_STEP");
+
+        // 8. Config path pointing to directory (not regular file)
+        assert!(resolve_configuration(Some(dir.path()), None, None, None, None).is_err());
+        std::env::set_var("TFA_CONFIG", dir.path().to_str().unwrap());
+        assert!(resolve_configuration(None, None, None, None, None).is_err());
+        std::env::remove_var("TFA_CONFIG");
+    }
+
+    #[test]
+    fn test_set_default_namespace_no_path_creates_default() {
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", dir.path().to_str().unwrap());
+
+        let saved_path = ConfigFile::set_default_namespace_in_file(None, "new_default").unwrap();
+        assert!(saved_path.is_file());
+        let reloaded = ConfigFile::load_from_path(&saved_path).unwrap();
+        assert_eq!(reloaded.default_namespace.as_deref(), Some("new_default"));
+
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
+
+    #[test]
+    fn test_set_password_config_no_path_creates_default() {
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", dir.path().to_str().unwrap());
+
+        let saved_path = ConfigFile::set_password_config_in_file(None, true, Some(180)).unwrap();
+        assert!(saved_path.is_file());
+        let reloaded = ConfigFile::load_from_path(&saved_path).unwrap();
+        assert!(reloaded.is_password_enabled());
+        assert_eq!(reloaded.password_timeout(), 180);
+
+        std::env::remove_var("XDG_CONFIG_HOME");
     }
 }

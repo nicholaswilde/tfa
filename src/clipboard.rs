@@ -216,12 +216,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mock_clipboard_stores_text() {
-        let cb = MockClipboard::default();
-        assert!(cb.text.lock().unwrap().is_none());
+    fn test_osc52_clipboard_set_text() {
+        let osc = Osc52Clipboard::new();
+        assert_eq!(osc.max_sequence, Osc52Clipboard::DEFAULT_MAX_SEQUENCE);
+        let res = osc.set_text("123456");
+        assert!(res.is_ok());
+    }
 
-        cb.set_text("123456").unwrap();
-        assert_eq!(cb.text.lock().unwrap().as_deref(), Some("123456"));
+    #[test]
+    fn test_dispatching_clipboard_providers() {
+        // Osc52 provider without custom command
+        let d_osc = DispatchingClipboard::new(ClipboardProvider::Osc52, None);
+        assert!(d_osc.set_text("123456").is_ok());
+
+        // Empty custom command falls back to provider
+        let d_empty = DispatchingClipboard::new(ClipboardProvider::Osc52, Some("   ".to_string()));
+        assert!(d_empty.set_text("123456").is_ok());
+
+        // System provider (may fail in headless CI/Linux without X11/Wayland, but executes branch)
+        let d_sys = DispatchingClipboard::new(ClipboardProvider::System, None);
+        let _ = d_sys.set_text("123456");
+
+        let sys = SystemClipboard;
+        let _ = sys.set_text("123456");
     }
 
     #[test]

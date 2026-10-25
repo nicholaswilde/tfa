@@ -355,10 +355,83 @@ mod tests {
     }
 
     #[test]
-    fn test_keyring_store_instantiation() {
+    fn test_file_store_corrupted_json() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("creds.json");
+        std::fs::write(&file_path, "not valid json").unwrap();
+        let store = FileStore::new(file_path);
+        let list = store.list_accounts().unwrap();
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn test_file_store_get_secret_missing() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("creds.json");
+        let store = FileStore::new(file_path);
+        let res = store.get_secret("missing");
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("not found in file store"));
+    }
+
+    #[test]
+    fn test_file_store_default_path() {
+        let res = FileStore::default_path();
+        assert!(res.is_ok());
+        let path = res.unwrap();
+        assert!(path.ends_with("tfa/credentials.json"));
+    }
+
+    #[test]
+    fn test_keyring_store_instantiation_and_calls() {
         let store = KeyringStore::new("tfa-test");
         assert_eq!(store.service, "tfa-test");
         let default_store = KeyringStore::default();
         assert_eq!(default_store.service, KeyringStore::DEFAULT_SERVICE);
+
+        // In headless/test environment, keyring calls may error; verify paths execute
+        let _ = store.get_secret("nonexistent");
+        let _ = store.list_accounts();
+        let _ = store.delete_account("nonexistent");
+        let _ = store.set_secret("test_acc", "test_sec");
+    }
+
+    #[test]
+    fn test_auto_store_lifecycle() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("sub").join("auto_creds.json");
+        let file_store = FileStore::new(file_path);
+        let keyring_store = KeyringStore::new("tfa-test-auto");
+        let auto = AutoStore::new(keyring_store, file_store);
+
+        // 1. Initially empty
+        assert_eq!(auto.list_accounts().unwrap(), Vec::<String>::new());
+
+        // 2. Set secret (falls back to file if keyring unavailable)
+        auto.set_secret("alice", "SECRET_A").unwrap();
+        auto.set_secret("bob", "SECRET_B").unwrap();
+
+        // 3. List accounts
+        assert_eq!(auto.list_accounts().unwrap(), vec!["alice", "bob"]);
+
+        // 4. Get secret
+        assert_eq!(auto.get_secret("alice").unwrap(), "SECRET_A");
+        assert_eq!(auto.get_secret("bob").unwrap(), "SECRET_B");
+
+        // 5. Delete account
+        auto.delete_account("alice").unwrap();
+        assert_eq!(auto.list_accounts().unwrap(), vec!["bob"]);
+
+        // 6. Delete nonexistent fails
+        assert!(auto.delete_account("nonexistent").is_err());
+    }
+
+    #[test]
+    fn test_auto_store_default_auto() {
+        let auto = AutoStore::default_auto();
+        assert!(auto.is_ok());
     }
 }

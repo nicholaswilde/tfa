@@ -196,5 +196,45 @@ mod tests {
         })
         .unwrap();
         assert!(decrypt_backup(&bad_nonce, "pass").is_err());
+
+        // Invalid base64 in salt, nonce, ciphertext
+        let bad_b64_salt = serde_json::to_string(&EncryptedBackup {
+            version: 1,
+            kdf: "argon2id".to_string(),
+            cipher: "aes-256-gcm".to_string(),
+            salt: "!not-base64!".to_string(),
+            nonce: "c29tZXNhbHQxMjM0".to_string(),
+            ciphertext: "AA==".to_string(),
+        })
+        .unwrap();
+        assert!(decrypt_backup(&bad_b64_salt, "pass").is_err());
+
+        let bad_b64_nonce = serde_json::to_string(&EncryptedBackup {
+            version: 1,
+            kdf: "argon2id".to_string(),
+            cipher: "aes-256-gcm".to_string(),
+            salt: "c29tZXNhbHQxMjM0NTY3OA==".to_string(),
+            nonce: "!not-base64!".to_string(),
+            ciphertext: "AA==".to_string(),
+        })
+        .unwrap();
+        assert!(decrypt_backup(&bad_b64_nonce, "pass").is_err());
+
+        let bad_b64_cipher = serde_json::to_string(&EncryptedBackup {
+            version: 1,
+            kdf: "argon2id".to_string(),
+            cipher: "aes-256-gcm".to_string(),
+            salt: "c29tZXNhbHQxMjM0NTY3OA==".to_string(),
+            nonce: "MTIzNDU2Nzg5MDEy".to_string(),
+            ciphertext: "!not-base64!".to_string(),
+        })
+        .unwrap();
+        assert!(decrypt_backup(&bad_b64_cipher, "pass").is_err());
+
+        // Debug and PartialEq on EncryptedBackup
+        let b1: EncryptedBackup = serde_json::from_str(&bad_b64_cipher).unwrap();
+        let b2: EncryptedBackup = serde_json::from_str(&bad_b64_cipher).unwrap();
+        assert_eq!(b1, b2);
+        assert!(!format!("{b1:?}").is_empty());
     }
 }

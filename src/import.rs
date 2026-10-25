@@ -282,5 +282,42 @@ mod tests {
         assert!(parse_import_payload("").is_err());
         assert!(parse_import_payload("   ").is_err());
         assert!(parse_import_payload("just plain text without uri").is_err());
+        assert!(parse_import_payload("{}").is_err());
+        assert!(parse_import_payload("[]").is_err());
+        assert!(parse_import_payload(r#"{"items": []}"#).is_err());
+        assert!(parse_import_payload(r#"{"db": {"entries": []}}"#).is_err());
+        assert!(parse_import_payload(r#"[{"no_secret": 123}, 42]"#).is_err());
+    }
+
+    #[test]
+    fn test_import_multiline_with_comments_and_migration() {
+        let migration_uri = "otpauth-migration://offline?data=CjMKCkhlbGxvId6tvu8SGFRlc3QxOnRlc3QxQGV4YW1wbGUxLmNvbRoFVGVzdDEgASgBMAIKMwoKSGVsbG8h3q2%2B8BIYVGVzdDI6dGVzdDJAZXhhbXBsZTIuY29tGgVUZXN0MiABKAEwAgozCgpIZWxsbyHerb7xEhhUZXN0Mzp0ZXN0M0BleGFtcGxlMy5jb20aBVRlc3QzIAEoATACEAEYASAAKI3orYEE";
+        let content = format!(
+            "# Header comment\n\n{}\n# Another comment\notpauth://totp/alice?secret=JBSWY3DPEHPK3PXP\n",
+            migration_uri
+        );
+        let items = parse_import_payload(&content).unwrap();
+        assert_eq!(items.len(), 4);
+        assert_eq!(items[3].account, "alice");
+    }
+
+    #[test]
+    fn test_extract_account_from_otpauth_variations() {
+        assert_eq!(
+            extract_account_from_otpauth("otpauth://totp/single"),
+            "single"
+        );
+        assert_eq!(
+            extract_account_from_otpauth("otpauth://totp/issuer:user"),
+            "user"
+        );
+        assert_eq!(
+            extract_account_from_otpauth("otpauth://totp/"),
+            "imported_account"
+        );
+        assert_eq!(
+            extract_account_from_otpauth("://invalid"),
+            "imported_account"
+        );
     }
 }

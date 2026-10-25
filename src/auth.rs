@@ -359,13 +359,117 @@ pub mod tests {
         let pass = "Password";
         let mut record = create_password_record(pass).unwrap();
 
-        // Corrupt salt
+        // 1. Corrupt salt
         record.salt = "invalid-base64!".to_string();
         assert!(!verify_password(pass, &record));
 
-        // Corrupt hash
+        // 2. Corrupt hash
         record.hash = "invalid-base64!".to_string();
         assert!(!verify_password(pass, &record));
+
+        // 3. Wrong length salt / hash
+        record.salt = Base64::encode_string(&[1u8; 8]); // 8 bytes instead of 16
+        record.hash = Base64::encode_string(&[2u8; 32]);
+        assert!(!verify_password(pass, &record));
+
+        // 4. Compute auth token
+        let token = compute_auth_token(&record);
+        assert!(token.contains(':'));
+    }
+
+    #[test]
+    fn test_auth_and_session_file_paths() {
+        let _guard = TEST_AUTH_MUTEX.lock().unwrap();
+        let dir = tempdir().unwrap();
+        let dir_str = dir.path().to_str().unwrap();
+
+        std::env::set_var("XDG_DATA_HOME", dir_str);
+        std::env::set_var("XDG_RUNTIME_DIR", dir_str);
+        std::env::remove_var("TFA_AUTH_FILE");
+        std::env::remove_var("TFA_SESSION_FILE");
+
+        let auth_path = auth_file_path();
+        assert!(auth_path.starts_with(dir.path()));
+        assert!(auth_path.ends_with(".password_hash"));
+
+        let sess_path = session_file_path();
+        assert!(sess_path.starts_with(dir.path()));
+        assert!(sess_path.ends_with("session"));
+
+        std::env::remove_var("XDG_DATA_HOME");
+        std::env::remove_var("XDG_RUNTIME_DIR");
+    }
+
+    #[test]
+    fn test_auth_record_default_storage_fallback() {
+        let _guard = TEST_AUTH_MUTEX.lock().unwrap();
+        let dir = tempdir().unwrap();
+        let dir_str = dir.path().to_str().unwrap();
+
+        std::env::remove_var("TFA_AUTH_FILE");
+        std::env::set_var("XDG_DATA_HOME", dir_str);
+
+        let record = create_password_record("DefaultStoragePass").unwrap();
+        save_password_record(&record).unwrap();
+
+        let loaded = get_password_record().unwrap();
+        assert!(loaded.is_some());
+        assert_eq!(loaded.unwrap(), record);
+
+        delete_password_record().unwrap();
+        assert!(get_password_record().unwrap().is_none());
+
+        std::env::remove_var("XDG_DATA_HOME");
+    }
+
+    #[test]
+    fn test_session_edge_cases() {
+        let _guard = TEST_AUTH_MUTEX.lock().unwrap();
+        let dir = tempdir().unwrap();
+        let session_path = dir.path().join("edge_session.json");
+        std::env::set_var("TFA_SESSION_FILE", &session_path);
+
+        let token = "edge_token_123";
+
+        // 1. Corrupt json in session file
+        std::fs::write(&session_path, "not json").unwrap();
+        assert!(!is_session_unlocked(token, 300));
+        assert_eq!(session_status(token, 300), None);
+
+        // 2. Clock tampering (future timestamp)
+        let future_session = SessionCache {
+            unlocked_at: u64::MAX,
+            last_accessed: u64::MAX,
+            auth_token: token.to_string(),
+        };
+        std::fs::write(
+            &session_path,
+            serde_json::to_string(&future_session).unwrap(),
+        )
+        .unwrap();
+        assert!(!is_session_unlocked(token, 300));
+        assert_eq!(session_status(token, 300), None);
+
+        // 3. Expired session
+        let expired_session = SessionCache {
+            unlocked_at: 100,
+            last_accessed: 100,
+            auth_token: token.to_string(),
+        };
+        std::fs::write(
+            &session_path,
+            serde_json::to_string(&expired_session).unwrap(),
+        )
+        .unwrap();
+        assert!(!is_session_unlocked(token, 10));
+        assert_eq!(session_status(token, 10), None);
+
+        // 4. Wrong token session status
+        record_unlock(token).unwrap();
+        assert_eq!(session_status("other_token", 300), None);
+        assert_eq!(session_status(token, 0), None);
+
+        std::env::remove_var("TFA_SESSION_FILE");
     }
 
     #[test]
