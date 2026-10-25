@@ -266,10 +266,17 @@ mod tests {
     fn test_pipe_command(output_file: &std::path::Path) -> String {
         #[cfg(windows)]
         {
+            use base64ct::{Base64, Encoding};
             let path = output_file.to_str().unwrap().replace('\\', "/");
-            format!(
-                "powershell -NoProfile -Command \"[System.IO.File]::WriteAllText('{path}', [System.Console]::In.ReadToEnd())\""
-            )
+            let script = format!(
+                "[System.IO.File]::WriteAllText('{path}', [System.Console]::In.ReadToEnd())"
+            );
+            let utf16: Vec<u8> = script
+                .encode_utf16()
+                .flat_map(|u| u.to_le_bytes())
+                .collect();
+            let b64 = Base64::encode_string(&utf16);
+            format!("powershell -NoProfile -EncodedCommand {b64}")
         }
         #[cfg(not(windows))]
         {
