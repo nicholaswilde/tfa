@@ -53,6 +53,18 @@ pub fn watch_account(
 ) -> Result<()> {
     let secret = store.get_secret(account)?;
     let engine = TfaTotp::from_input(account, &secret)?;
+    watch_engine(account, &engine, clipboard, auto_copy, out, max_ticks)
+}
+
+/// Run watch mode for a TOTP engine instance.
+pub fn watch_engine(
+    label: &str,
+    engine: &TfaTotp,
+    clipboard: &dyn Clipboard,
+    auto_copy: bool,
+    out: &mut dyn Write,
+    max_ticks: Option<usize>,
+) -> Result<()> {
     if engine.is_hotp() {
         anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
     }
@@ -87,7 +99,7 @@ pub fn watch_account(
             write!(
                 out,
                 "\r\x1b[2K{}  {}  {}{}",
-                account, code, bar, copy_indicator
+                label, code, bar, copy_indicator
             )?;
             out.flush()?;
 

@@ -40,9 +40,16 @@ osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
         case $line[1] in
             (generate)
 _arguments "${_arguments_options[@]}" : \
+'--secret=[Generate token instantly from secret, URI, or "-" (stdin) without saving to storage]:SECRET:_default' \
 '-c+[Copy generated token to clipboard]::COPY:(true false)' \
 '--copy=[Copy generated token to clipboard]::COPY:(true false)' \
 '--counter=[Counter value for counter-based (HOTP) token generation]::COUNTER:_default' \
+'-d+[Number of digits in generated code (e.g. 5, 6, 8)]:DIGITS:_default' \
+'--digits=[Number of digits in generated code (e.g. 5, 6, 8)]:DIGITS:_default' \
+'-p+[Time step period in seconds (e.g. 30 or 60)]:PERIOD:_default' \
+'--period=[Time step period in seconds (e.g. 30 or 60)]:PERIOD:_default' \
+'-a+[Hash algorithm (sha1, sha256, sha512, steam)]:ALGORITHM:_default' \
+'--algorithm=[Hash algorithm (sha1, sha256, sha512, steam)]:ALGORITHM:_default' \
 '-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
@@ -57,13 +64,70 @@ osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 '--watch[Watch and continuously refresh code with progress bar]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'::account -- Name of the account (interactively prompted via fuzzy search if omitted):_default' \
+'::account -- Name of the account (interactively prompted via fuzzy search if omitted and --secret not supplied):_default' \
+&& ret=0
+;;
+(instant)
+_arguments "${_arguments_options[@]}" : \
+'--secret=[Explicit secret key or otpauth\:// URI flag]:SECRET_FLAG:_default' \
+'--qr=[Decode secret and parameters from a QR code image]:QR:_files' \
+'-d+[Number of digits in generated code (e.g. 5, 6, 8)]:DIGITS:_default' \
+'--digits=[Number of digits in generated code (e.g. 5, 6, 8)]:DIGITS:_default' \
+'-p+[Time step period in seconds (e.g. 30 or 60)]:PERIOD:_default' \
+'--period=[Time step period in seconds (e.g. 30 or 60)]:PERIOD:_default' \
+'-a+[Hash algorithm (sha1, sha256, sha512, steam)]:ALGORITHM:_default' \
+'--algorithm=[Hash algorithm (sha1, sha256, sha512, steam)]:ALGORITHM:_default' \
+'--counter=[Initial/current counter for counter-based (HOTP) token generation]:COUNTER:_default' \
+'-c+[Copy generated token to clipboard]::COPY:(true false)' \
+'--copy=[Copy generated token to clipboard]::COPY:(true false)' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-w[Watch and continuously refresh code with progress bar]' \
+'--watch[Watch and continuously refresh code with progress bar]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::secret -- TOTP/HOTP secret key, otpauth\:// URI, or "-" to read from stdin:_default' \
 && ret=0
 ;;
 (watch)
 _arguments "${_arguments_options[@]}" : \
-'-c+[Copy token to clipboard on every cycle]::COPY:(true false)' \
-'--copy=[Copy token to clipboard on every cycle]::COPY:(true false)' \
+'-c+[Copy token to clipboard on every cycle (single account only)]::COPY:(true false)' \
+'--copy=[Copy token to clipboard on every cycle (single account only)]::COPY:(true false)' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-a[Watch all accounts in the active namespace]' \
+'--all[Watch all accounts in the active namespace]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::account -- Name of the account (interactively prompted via fuzzy search if omitted):_default' \
+":: :_tfa__subcmd__watch_commands" \
+"*::: :->watch" \
+&& ret=0
+
+    case $state in
+    (watch)
+        words=($line[2] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-watch-command-$line[2]:"
+        case $line[2] in
+            (all)
+_arguments "${_arguments_options[@]}" : \
 '-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
@@ -76,8 +140,35 @@ osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 '--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'::account -- Name of the account (interactively prompted via fuzzy search if omitted):_default' \
 && ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_tfa__subcmd__watch__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-watch-help-command-$line[1]:"
+        case $line[1] in
+            (all)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
 ;;
 (add)
 _arguments "${_arguments_options[@]}" : \
@@ -424,6 +515,161 @@ esac
     ;;
 esac
 ;;
+(password)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+":: :_tfa__subcmd__password_commands" \
+"*::: :->password" \
+&& ret=0
+
+    case $state in
+    (password)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-password-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Timeout in seconds before unlock expires (default\: 300)]:TIMEOUT:_default' \
+'--timeout=[Timeout in seconds before unlock expires (default\: 300)]:TIMEOUT:_default' \
+'--password=[Master password (prompted securely if omitted)]:PASSWORD:_default' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+'--password=[Current master password (prompted securely if omitted)]:PASSWORD:_default' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-f[Skip password verification prompt]' \
+'--force[Skip password verification prompt]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(lock)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(unlock)
+_arguments "${_arguments_options[@]}" : \
+'--password=[Master password (prompted securely if omitted)]:PASSWORD:_default' \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_tfa__subcmd__password__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-password-help-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(lock)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(unlock)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_tfa__subcmd__help_commands" \
@@ -440,9 +686,29 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
-(watch)
+(instant)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
+;;
+(watch)
+_arguments "${_arguments_options[@]}" : \
+":: :_tfa__subcmd__help__subcmd__watch_commands" \
+"*::: :->watch" \
+&& ret=0
+
+    case $state in
+    (watch)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-help-watch-command-$line[1]:"
+        case $line[1] in
+            (all)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
 ;;
 (add)
 _arguments "${_arguments_options[@]}" : \
@@ -520,6 +786,42 @@ _arguments "${_arguments_options[@]}" : \
     ;;
 esac
 ;;
+(password)
+_arguments "${_arguments_options[@]}" : \
+":: :_tfa__subcmd__help__subcmd__password_commands" \
+"*::: :->password" \
+&& ret=0
+
+    case $state in
+    (password)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-help-password-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(lock)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(unlock)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -537,6 +839,7 @@ esac
 _tfa_commands() {
     local commands; commands=(
 'generate:Generate a 2FA token (TOTP, Steam, or HOTP) for an account' \
+'instant:Generate a 2FA token instantly from raw secret, URI, or stdin without storage' \
 'watch:Live watch mode displaying continuous TOTP countdown with progress bar' \
 'add:Add a new account secret or OTPAuth URL' \
 'qr:Render account as a terminal QR code for mobile authenticator scanning' \
@@ -549,6 +852,7 @@ _tfa_commands() {
 'completions:Generate shell autocompletions script' \
 'man:Generate UNIX roff man page' \
 'namespace:Manage and isolate accounts across multi-tenant namespaces' \
+'password:Manage master password protection and unlock sessions' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'tfa commands' commands "$@"
@@ -582,6 +886,7 @@ _tfa__subcmd__generate_commands() {
 _tfa__subcmd__help_commands() {
     local commands; commands=(
 'generate:Generate a 2FA token (TOTP, Steam, or HOTP) for an account' \
+'instant:Generate a 2FA token instantly from raw secret, URI, or stdin without storage' \
 'watch:Live watch mode displaying continuous TOTP countdown with progress bar' \
 'add:Add a new account secret or OTPAuth URL' \
 'qr:Render account as a terminal QR code for mobile authenticator scanning' \
@@ -594,6 +899,7 @@ _tfa__subcmd__help_commands() {
 'completions:Generate shell autocompletions script' \
 'man:Generate UNIX roff man page' \
 'namespace:Manage and isolate accounts across multi-tenant namespaces' \
+'password:Manage master password protection and unlock sessions' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'tfa help commands' commands "$@"
@@ -632,6 +938,11 @@ _tfa__subcmd__help__subcmd__help_commands() {
 _tfa__subcmd__help__subcmd__import_commands() {
     local commands; commands=()
     _describe -t commands 'tfa help import commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__instant_commands] )) ||
+_tfa__subcmd__help__subcmd__instant_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help instant commands' commands "$@"
 }
 (( $+functions[_tfa__subcmd__help__subcmd__list_commands] )) ||
 _tfa__subcmd__help__subcmd__list_commands() {
@@ -679,6 +990,42 @@ _tfa__subcmd__help__subcmd__namespace__subcmd__set-default_commands() {
     local commands; commands=()
     _describe -t commands 'tfa help namespace set-default commands' commands "$@"
 }
+(( $+functions[_tfa__subcmd__help__subcmd__password_commands] )) ||
+_tfa__subcmd__help__subcmd__password_commands() {
+    local commands; commands=(
+'add:Set master password and enable password protection' \
+'remove:Remove master password and disable password protection' \
+'lock:Lock the active session immediately' \
+'unlock:Unlock session for the configured timeout' \
+'status:Show current password protection and session unlock status' \
+    )
+    _describe -t commands 'tfa help password commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__password__subcmd__add_commands] )) ||
+_tfa__subcmd__help__subcmd__password__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help password add commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__password__subcmd__lock_commands] )) ||
+_tfa__subcmd__help__subcmd__password__subcmd__lock_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help password lock commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__password__subcmd__remove_commands] )) ||
+_tfa__subcmd__help__subcmd__password__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help password remove commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__password__subcmd__status_commands] )) ||
+_tfa__subcmd__help__subcmd__password__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help password status commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__password__subcmd__unlock_commands] )) ||
+_tfa__subcmd__help__subcmd__password__subcmd__unlock_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help password unlock commands' commands "$@"
+}
 (( $+functions[_tfa__subcmd__help__subcmd__qr_commands] )) ||
 _tfa__subcmd__help__subcmd__qr_commands() {
     local commands; commands=()
@@ -696,13 +1043,25 @@ _tfa__subcmd__help__subcmd__status_commands() {
 }
 (( $+functions[_tfa__subcmd__help__subcmd__watch_commands] )) ||
 _tfa__subcmd__help__subcmd__watch_commands() {
-    local commands; commands=()
+    local commands; commands=(
+'all:Watch all accounts in the active namespace' \
+    )
     _describe -t commands 'tfa help watch commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__watch__subcmd__all_commands] )) ||
+_tfa__subcmd__help__subcmd__watch__subcmd__all_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help watch all commands' commands "$@"
 }
 (( $+functions[_tfa__subcmd__import_commands] )) ||
 _tfa__subcmd__import_commands() {
     local commands; commands=()
     _describe -t commands 'tfa import commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__instant_commands] )) ||
+_tfa__subcmd__instant_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa instant commands' commands "$@"
 }
 (( $+functions[_tfa__subcmd__list_commands] )) ||
 _tfa__subcmd__list_commands() {
@@ -793,6 +1152,85 @@ _tfa__subcmd__namespace__subcmd__set-default_commands() {
     local commands; commands=()
     _describe -t commands 'tfa namespace set-default commands' commands "$@"
 }
+(( $+functions[_tfa__subcmd__password_commands] )) ||
+_tfa__subcmd__password_commands() {
+    local commands; commands=(
+'add:Set master password and enable password protection' \
+'remove:Remove master password and disable password protection' \
+'lock:Lock the active session immediately' \
+'unlock:Unlock session for the configured timeout' \
+'status:Show current password protection and session unlock status' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'tfa password commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__add_commands] )) ||
+_tfa__subcmd__password__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password add commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__help_commands] )) ||
+_tfa__subcmd__password__subcmd__help_commands() {
+    local commands; commands=(
+'add:Set master password and enable password protection' \
+'remove:Remove master password and disable password protection' \
+'lock:Lock the active session immediately' \
+'unlock:Unlock session for the configured timeout' \
+'status:Show current password protection and session unlock status' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'tfa password help commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__help__subcmd__add_commands] )) ||
+_tfa__subcmd__password__subcmd__help__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password help add commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__help__subcmd__help_commands] )) ||
+_tfa__subcmd__password__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password help help commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__help__subcmd__lock_commands] )) ||
+_tfa__subcmd__password__subcmd__help__subcmd__lock_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password help lock commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__help__subcmd__remove_commands] )) ||
+_tfa__subcmd__password__subcmd__help__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password help remove commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__help__subcmd__status_commands] )) ||
+_tfa__subcmd__password__subcmd__help__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password help status commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__help__subcmd__unlock_commands] )) ||
+_tfa__subcmd__password__subcmd__help__subcmd__unlock_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password help unlock commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__lock_commands] )) ||
+_tfa__subcmd__password__subcmd__lock_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password lock commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__remove_commands] )) ||
+_tfa__subcmd__password__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password remove commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__status_commands] )) ||
+_tfa__subcmd__password__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password status commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__password__subcmd__unlock_commands] )) ||
+_tfa__subcmd__password__subcmd__unlock_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa password unlock commands' commands "$@"
+}
 (( $+functions[_tfa__subcmd__qr_commands] )) ||
 _tfa__subcmd__qr_commands() {
     local commands; commands=()
@@ -810,8 +1248,34 @@ _tfa__subcmd__status_commands() {
 }
 (( $+functions[_tfa__subcmd__watch_commands] )) ||
 _tfa__subcmd__watch_commands() {
-    local commands; commands=()
+    local commands; commands=(
+'all:Watch all accounts in the active namespace' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
     _describe -t commands 'tfa watch commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__watch__subcmd__all_commands] )) ||
+_tfa__subcmd__watch__subcmd__all_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa watch all commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__watch__subcmd__help_commands] )) ||
+_tfa__subcmd__watch__subcmd__help_commands() {
+    local commands; commands=(
+'all:Watch all accounts in the active namespace' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'tfa watch help commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__watch__subcmd__help__subcmd__all_commands] )) ||
+_tfa__subcmd__watch__subcmd__help__subcmd__all_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa watch help all commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__watch__subcmd__help__subcmd__help_commands] )) ||
+_tfa__subcmd__watch__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa watch help help commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_tfa" ]; then

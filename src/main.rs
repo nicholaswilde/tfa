@@ -69,8 +69,11 @@ pub enum Commands {
     /// Generate a 2FA token (TOTP, Steam, or HOTP) for an account
     #[command(alias = "gen")]
     Generate {
-        /// Name of the account (interactively prompted via fuzzy search if omitted)
+        /// Name of the account (interactively prompted via fuzzy search if omitted and --secret not supplied)
         account: Option<String>,
+        /// Generate token instantly from secret, URI, or "-" (stdin) without saving to storage
+        #[arg(long)]
+        secret: Option<String>,
         /// Copy generated token to clipboard
         #[arg(short, long, num_args = 0..=1, default_missing_value = "true")]
         copy: Option<bool>,
@@ -80,6 +83,45 @@ pub enum Commands {
         /// Counter value for counter-based (HOTP) token generation
         #[arg(long, num_args = 0..=1)]
         counter: Option<Option<u64>>,
+        /// Number of digits in generated code (e.g. 5, 6, 8)
+        #[arg(short, long)]
+        digits: Option<u8>,
+        /// Time step period in seconds (e.g. 30 or 60)
+        #[arg(short, long)]
+        period: Option<u64>,
+        /// Hash algorithm (sha1, sha256, sha512, steam)
+        #[arg(short, long)]
+        algorithm: Option<totp_rs::Algorithm>,
+    },
+    /// Generate a 2FA token instantly from raw secret, URI, or stdin without storage
+    #[command(alias = "ins")]
+    Instant {
+        /// TOTP/HOTP secret key, otpauth:// URI, or "-" to read from stdin
+        secret: Option<String>,
+        /// Explicit secret key or otpauth:// URI flag
+        #[arg(long = "secret")]
+        secret_flag: Option<String>,
+        /// Decode secret and parameters from a QR code image
+        #[arg(long)]
+        qr: Option<PathBuf>,
+        /// Number of digits in generated code (e.g. 5, 6, 8)
+        #[arg(short, long)]
+        digits: Option<u8>,
+        /// Time step period in seconds (e.g. 30 or 60)
+        #[arg(short, long)]
+        period: Option<u64>,
+        /// Hash algorithm (sha1, sha256, sha512, steam)
+        #[arg(short, long)]
+        algorithm: Option<totp_rs::Algorithm>,
+        /// Initial/current counter for counter-based (HOTP) token generation
+        #[arg(long)]
+        counter: Option<u64>,
+        /// Copy generated token to clipboard
+        #[arg(short, long, num_args = 0..=1, default_missing_value = "true")]
+        copy: Option<bool>,
+        /// Watch and continuously refresh code with progress bar
+        #[arg(short, long)]
+        watch: bool,
     },
     /// Live watch mode displaying continuous TOTP countdown with progress bar
     Watch {
@@ -388,8 +430,121 @@ pub fn generate_manpage(writer: &mut dyn Write) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed rendering man page: {e}"))
 }
 
+/// Resolve instant secret from argument, stdin ("-"), pipe, environment variable, or interactive prompt.
+pub fn resolve_instant_secret_with_reader<R: BufRead>(
+    secret_arg: Option<String>,
+    qr_arg: Option<&Path>,
+    mut reader: R,
+    is_terminal: bool,
+) -> anyhow::Result<String> {
+    if let Some(qr_path) = qr_arg {
+        let decoded = qr::scan_qr_from_image(qr_path)?;
+        let trimmed = decoded.trim().to_string();
+        if trimmed.is_empty() {
+            anyhow::bail!("QR code contained empty secret");
+        }
+        return Ok(trimmed);
+    }
+
+    if let Some(s) = secret_arg {
+        if s == "-" {
+            let mut buffer = String::new();
+            reader.read_to_string(&mut buffer)?;
+            let trimmed = buffer
+                .lines()
+                .map(|l| l.trim())
+                .find(|l| !l.is_empty())
+                .unwrap_or("")
+                .to_string();
+            if trimmed.is_empty() {
+                anyhow::bail!("Secret read from stdin is empty");
+            }
+            return Ok(trimmed);
+        } else {
+            let trimmed = s.trim().to_string();
+            if trimmed.is_empty() {
+                anyhow::bail!("Secret cannot be empty");
+            }
+            return Ok(trimmed);
+        }
+    }
+
+    if let Ok(env_val) = std::env::var("TOTP_TOKEN").or_else(|_| std::env::var("TFA_SECRET")) {
+        let trimmed = env_val.trim().to_string();
+        if !trimmed.is_empty() {
+            return Ok(trimmed);
+        }
+    }
+
+    if !is_terminal {
+        let mut buffer = String::new();
+        reader.read_to_string(&mut buffer)?;
+        let trimmed = buffer
+            .lines()
+            .map(|l| l.trim())
+            .find(|l| !l.is_empty())
+            .unwrap_or("")
+            .to_string();
+        if trimmed.is_empty() {
+            anyhow::bail!("Secret or URI is required (stdin is empty)");
+        }
+        return Ok(trimmed);
+    }
+
+    eprint!("Enter TOTP secret or URI: ");
+    let mut buffer = String::new();
+    reader.read_line(&mut buffer)?;
+    let trimmed = buffer.trim().to_string();
+    if trimmed.is_empty() {
+        anyhow::bail!("Secret cannot be empty");
+    }
+    Ok(trimmed)
+}
+
+pub fn resolve_instant_secret(
+    secret_arg: Option<String>,
+    qr_arg: Option<&Path>,
+) -> anyhow::Result<String> {
+    let stdin = io::stdin();
+    let is_term = stdin.is_terminal();
+    resolve_instant_secret_with_reader(secret_arg, qr_arg, stdin.lock(), is_term)
+}
+
+fn emit_instant_token(
+    engine: &TfaTotp,
+    counter: Option<u64>,
+    should_copy: bool,
+    clipboard: &dyn Clipboard,
+    out_writer: &mut dyn Write,
+) -> anyhow::Result<()> {
+    if engine.is_hotp() {
+        let c = counter.or_else(|| engine.counter()).unwrap_or(0);
+        let code = engine.generate_at_counter(c)?;
+        if should_copy {
+            clipboard.set_text(&code)?;
+            writeln!(out_writer, "{code} (counter: {c}) [copied]")?;
+        } else {
+            writeln!(out_writer, "{code} (counter: {c})")?;
+        }
+    } else {
+        if counter.is_some() {
+            anyhow::bail!("--counter can only be used with HOTP accounts");
+        }
+        let code = engine.generate_current();
+        let ttl = engine.ttl();
+
+        if should_copy {
+            clipboard.set_text(&code)?;
+            writeln!(out_writer, "{code} ({ttl}s remaining) [copied]")?;
+        } else {
+            writeln!(out_writer, "{code} ({ttl}s remaining)")?;
+        }
+    }
+    Ok(())
+}
+
 pub fn run_app(
-    cli: Cli,
+    mut cli: Cli,
     store: &dyn AccountStore,
     clipboard: &dyn Clipboard,
     out_writer: &mut dyn Write,
@@ -398,8 +553,8 @@ pub fn run_app(
         cli.config.as_deref(),
         cli.storage,
         cli.clipboard,
-        cli.clip_command,
-        cli.namespace,
+        cli.clip_command.clone(),
+        cli.namespace.clone(),
     )?;
 
     // If the subcommand is Namespace management, operate on the root store directly
@@ -612,10 +767,29 @@ pub fn run_app(
         }
     }
 
+    // Normalize `tfa generate -` to instant generation from stdin
+    if let Some(Commands::Generate {
+        ref mut account,
+        ref mut secret,
+        ..
+    }) = cli.command
+    {
+        if account.as_deref() == Some("-") && secret.is_none() {
+            *secret = Some("-".to_string());
+            *account = None;
+        }
+    }
+
     // If password protection is enabled, enforce unlock for protected commands
     if resolved_cfg.password_enabled {
-        match cli.command {
-            Some(Commands::Completions { .. }) | Some(Commands::Man) | None => {}
+        match &cli.command {
+            Some(Commands::Completions { .. })
+            | Some(Commands::Man)
+            | Some(Commands::Instant { .. })
+            | Some(Commands::Generate {
+                secret: Some(_), ..
+            })
+            | None => {}
             _ => {
                 ensure_unlocked(resolved_cfg.password_timeout)?;
             }
@@ -629,10 +803,51 @@ pub fn run_app(
     match cli.command {
         Some(Commands::Generate {
             account,
+            secret,
             copy,
             watch,
             counter,
+            digits,
+            period,
+            algorithm,
         }) => {
+            if let Some(sec) = secret {
+                let resolved_digits = digits.or(resolved_cfg.digits);
+                let resolved_period = period.or(resolved_cfg.period);
+                let resolved_algorithm = algorithm.or(resolved_cfg.algorithm);
+                let secret_val = resolve_instant_secret(Some(sec), None)?;
+                let c_val = counter.flatten();
+                let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
+
+                let engine = TfaTotp::build(
+                    account.as_deref().unwrap_or("instant"),
+                    &secret_val,
+                    resolved_digits,
+                    resolved_period,
+                    resolved_algorithm,
+                    c_val,
+                )?;
+
+                if watch {
+                    if engine.is_hotp() {
+                        anyhow::bail!(
+                            "Watch mode is not supported for counter-based (HOTP) accounts"
+                        );
+                    }
+                    watch::watch_engine(
+                        account.as_deref().unwrap_or("instant"),
+                        &engine,
+                        clipboard,
+                        should_copy,
+                        out_writer,
+                        None,
+                    )?;
+                } else {
+                    emit_instant_token(&engine, c_val, should_copy, clipboard, out_writer)?;
+                }
+                return Ok(());
+            }
+
             let acct = match account {
                 Some(a) => a,
                 None => select_account_interactive(store, "Select account to generate token")?,
@@ -677,6 +892,41 @@ pub fn run_app(
                         writeln!(out_writer, "{code} ({ttl}s remaining)")?;
                     }
                 }
+            }
+        }
+        Some(Commands::Instant {
+            secret,
+            secret_flag,
+            qr,
+            digits,
+            period,
+            algorithm,
+            counter,
+            copy,
+            watch,
+        }) => {
+            let secret_val = resolve_instant_secret(secret.or(secret_flag), qr.as_deref())?;
+            let resolved_digits = digits.or(resolved_cfg.digits);
+            let resolved_period = period.or(resolved_cfg.period);
+            let resolved_algorithm = algorithm.or(resolved_cfg.algorithm);
+            let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
+
+            let engine = TfaTotp::build(
+                "instant",
+                &secret_val,
+                resolved_digits,
+                resolved_period,
+                resolved_algorithm,
+                counter,
+            )?;
+
+            if watch {
+                if engine.is_hotp() {
+                    anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
+                }
+                watch::watch_engine("instant", &engine, clipboard, should_copy, out_writer, None)?;
+            } else {
+                emit_instant_token(&engine, counter, should_copy, clipboard, out_writer)?;
             }
         }
         Some(Commands::Watch {
@@ -1144,6 +1394,7 @@ mod tests {
                 copy,
                 watch,
                 counter,
+                ..
             }) => {
                 assert_eq!(account, Some("github".to_string()));
                 assert_eq!(copy, None);
@@ -1181,7 +1432,7 @@ mod tests {
                 account,
                 copy,
                 watch,
-                counter: _,
+                ..
             }) => {
                 assert_eq!(account, Some("github".to_string()));
                 assert_eq!(copy, Some(true));
@@ -1197,7 +1448,7 @@ mod tests {
                 account,
                 copy,
                 watch,
-                counter: _,
+                ..
             }) => {
                 assert_eq!(account, Some("aws".to_string()));
                 assert_eq!(copy, Some(true));
@@ -2914,6 +3165,416 @@ light: true
         ])
         .unwrap();
         assert!(run_app(cli_remove_good, &store, &cb, &mut Vec::new()).is_ok());
+
+        std::env::remove_var("TFA_AUTH_FILE");
+        std::env::remove_var("TFA_SESSION_FILE");
+    }
+
+    #[test]
+    fn test_resolve_instant_secret_with_reader() {
+        // 1. Direct secret
+        let res = resolve_instant_secret_with_reader(
+            Some("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ".to_string()),
+            None,
+            io::Cursor::new(b""),
+            false,
+        )
+        .unwrap();
+        assert_eq!(res, "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+
+        // 2. Empty direct secret fails
+        let res_empty = resolve_instant_secret_with_reader(
+            Some("   ".to_string()),
+            None,
+            io::Cursor::new(b""),
+            false,
+        );
+        assert!(res_empty.is_err());
+
+        // 3. Stdin via "-"
+        let res_dash = resolve_instant_secret_with_reader(
+            Some("-".to_string()),
+            None,
+            io::Cursor::new(b"  GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ  \n"),
+            false,
+        )
+        .unwrap();
+        assert_eq!(res_dash, "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+
+        // 4. Stdin via "-" with empty input fails
+        let res_dash_empty = resolve_instant_secret_with_reader(
+            Some("-".to_string()),
+            None,
+            io::Cursor::new(b"  \n  "),
+            false,
+        );
+        assert!(res_dash_empty.is_err());
+
+        // 5. Non-terminal piped stdin when secret is None
+        let res_pipe = resolve_instant_secret_with_reader(
+            None,
+            None,
+            io::Cursor::new(b"JBSWY3DPEHPK3PXP\n"),
+            false,
+        )
+        .unwrap();
+        assert_eq!(res_pipe, "JBSWY3DPEHPK3PXP");
+
+        // 6. Non-terminal piped stdin when empty fails
+        let res_pipe_empty =
+            resolve_instant_secret_with_reader(None, None, io::Cursor::new(b"  \n"), false);
+        assert!(res_pipe_empty.is_err());
+
+        // 7. Interactive terminal reader
+        let res_term = resolve_instant_secret_with_reader(
+            None,
+            None,
+            io::Cursor::new(b"JBSWY3DPEHPK3PXP\n"),
+            true,
+        )
+        .unwrap();
+        assert_eq!(res_term, "JBSWY3DPEHPK3PXP");
+
+        // 8. Interactive terminal with empty input fails
+        let res_term_empty =
+            resolve_instant_secret_with_reader(None, None, io::Cursor::new(b"\n"), true);
+        assert!(res_term_empty.is_err());
+
+        // 9. Environment variable TOTP_TOKEN
+        std::env::set_var("TOTP_TOKEN", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+        let res_env =
+            resolve_instant_secret_with_reader(None, None, io::Cursor::new(b""), false).unwrap();
+        assert_eq!(res_env, "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+        std::env::remove_var("TOTP_TOKEN");
+    }
+
+    #[test]
+    fn test_cli_parse_instant() {
+        // Positional argument
+        let cli =
+            Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"]).unwrap();
+        match cli.command {
+            Some(Commands::Instant {
+                secret,
+                secret_flag,
+                qr,
+                digits,
+                period,
+                algorithm,
+                counter,
+                copy,
+                watch,
+            }) => {
+                assert_eq!(secret, Some("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ".to_string()));
+                assert_eq!(secret_flag, None);
+                assert_eq!(qr, None);
+                assert_eq!(digits, None);
+                assert_eq!(period, None);
+                assert_eq!(algorithm, None);
+                assert_eq!(counter, None);
+                assert_eq!(copy, None);
+                assert!(!watch);
+            }
+            _ => panic!("Expected instant subcommand"),
+        }
+
+        // Subcommand alias "ins" with all flags
+        let cli_alias = Cli::try_parse_from([
+            "tfa",
+            "ins",
+            "--secret",
+            "JBSWY3DPEHPK3PXP",
+            "-d",
+            "8",
+            "-p",
+            "60",
+            "-a",
+            "sha256",
+            "--counter",
+            "42",
+            "-c",
+            "-w",
+        ])
+        .unwrap();
+        match cli_alias.command {
+            Some(Commands::Instant {
+                secret,
+                secret_flag,
+                digits,
+                period,
+                algorithm,
+                counter,
+                copy,
+                watch,
+                ..
+            }) => {
+                assert_eq!(secret, None);
+                assert_eq!(secret_flag, Some("JBSWY3DPEHPK3PXP".to_string()));
+                assert_eq!(digits, Some(8));
+                assert_eq!(period, Some(60));
+                assert_eq!(algorithm, Some(totp_rs::Algorithm::SHA256));
+                assert_eq!(counter, Some(42));
+                assert_eq!(copy, Some(true));
+                assert!(watch);
+            }
+            _ => panic!("Expected instant via ins alias"),
+        }
+
+        // Generate with --secret
+        let cli_gen_sec = Cli::try_parse_from([
+            "tfa",
+            "generate",
+            "--secret",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "-d",
+            "7",
+            "-p",
+            "45",
+            "-a",
+            "sha512",
+        ])
+        .unwrap();
+        match cli_gen_sec.command {
+            Some(Commands::Generate {
+                secret,
+                digits,
+                period,
+                algorithm,
+                ..
+            }) => {
+                assert_eq!(secret, Some("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ".to_string()));
+                assert_eq!(digits, Some(7));
+                assert_eq!(period, Some(45));
+                assert_eq!(algorithm, Some(totp_rs::Algorithm::SHA512));
+            }
+            _ => panic!("Expected generate subcommand with secret"),
+        }
+    }
+
+    #[test]
+    fn test_run_app_instant_flows() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // 1. Instant with raw Base32 secret
+        let mut out = Vec::new();
+        let cli1 =
+            Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"]).unwrap();
+        assert!(run_app(cli1, &store, &cb, &mut out).is_ok());
+        let out_str1 = String::from_utf8(out).unwrap();
+        assert!(out_str1.contains("remaining)"));
+        let token1 = out_str1.split_whitespace().next().unwrap();
+        assert_eq!(token1.len(), 6);
+        assert!(token1.chars().all(|c| c.is_ascii_digit()));
+
+        // 2. Instant with copy flag
+        let mut out2 = Vec::new();
+        let cli2 =
+            Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "-c"])
+                .unwrap();
+        assert!(run_app(cli2, &store, &cb, &mut out2).is_ok());
+        let copied = cb.text.lock().unwrap().clone();
+        assert!(copied.is_some());
+        assert_eq!(copied.unwrap(), token1);
+
+        // 3. Instant with custom parameters (-d 8 -p 60 -a sha256)
+        let mut out3 = Vec::new();
+        let cli3 = Cli::try_parse_from([
+            "tfa",
+            "instant",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "-d",
+            "8",
+            "-p",
+            "60",
+            "-a",
+            "sha256",
+        ])
+        .unwrap();
+        assert!(run_app(cli3, &store, &cb, &mut out3).is_ok());
+        let out_str3 = String::from_utf8(out3).unwrap();
+        let token3 = out_str3.split_whitespace().next().unwrap();
+        assert_eq!(token3.len(), 8);
+
+        // 4. Instant with OTPAuth URI
+        let mut out4 = Vec::new();
+        let uri = "otpauth://totp/TestAcct?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8&period=60&algorithm=SHA256";
+        let cli4 = Cli::try_parse_from(["tfa", "instant", uri]).unwrap();
+        assert!(run_app(cli4, &store, &cb, &mut out4).is_ok());
+        let out_str4 = String::from_utf8(out4).unwrap();
+        let token4 = out_str4.split_whitespace().next().unwrap();
+        assert_eq!(token4.len(), 8);
+        assert_eq!(token3, token4);
+
+        // 5. Instant with HOTP URI
+        let mut out5 = Vec::new();
+        let hotp_uri = "otpauth://hotp/HotpTest?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&counter=3";
+        let cli5 = Cli::try_parse_from(["tfa", "instant", hotp_uri]).unwrap();
+        assert!(run_app(cli5, &store, &cb, &mut out5).is_ok());
+        let out_str5 = String::from_utf8(out5).unwrap();
+        assert!(out_str5.contains("(counter: 3)"));
+        let token5 = out_str5.split_whitespace().next().unwrap();
+        // RFC 4226 test vector for counter=3 is 969429
+        assert_eq!(token5, "969429");
+
+        // 6. Generate --secret flow
+        let mut out6 = Vec::new();
+        let cli6 = Cli::try_parse_from([
+            "tfa",
+            "generate",
+            "--secret",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        ])
+        .unwrap();
+        assert!(run_app(cli6, &store, &cb, &mut out6).is_ok());
+        let out_str6 = String::from_utf8(out6).unwrap();
+        let token6 = out_str6.split_whitespace().next().unwrap();
+        assert_eq!(token6, token1);
+
+        // 7. Instant with invalid secret fails
+        let mut out7 = Vec::new();
+        let cli7 = Cli::try_parse_from(["tfa", "instant", "INVALID_BASE32_189!"]).unwrap();
+        assert!(run_app(cli7, &store, &cb, &mut out7).is_err());
+
+        // 8. Instant with raw secret and --counter 5 generates HOTP code at counter 5
+        let mut out8 = Vec::new();
+        let cli8 = Cli::try_parse_from([
+            "tfa",
+            "instant",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--counter",
+            "5",
+        ])
+        .unwrap();
+        assert!(run_app(cli8, &store, &cb, &mut out8).is_ok());
+        let out_str8 = String::from_utf8(out8).unwrap();
+        assert!(out_str8.contains("(counter: 5)"));
+        let token8 = out_str8.split_whitespace().next().unwrap();
+        // RFC 4226 test vector for counter=5 is 254676
+        assert_eq!(token8, "254676");
+
+        // 9. Instant with QR image
+        let tmp_qr = tempfile::Builder::new().suffix(".png").tempfile().unwrap();
+        let qr_payload =
+            "otpauth://totp/GitLab:user@gitlab.com?secret=JBSWY3DPEHPK3PXP&issuer=GitLab";
+        let qr_code =
+            qrcodegen::QrCode::encode_text(qr_payload, qrcodegen::QrCodeEcc::Medium).unwrap();
+        let size = qr_code.size() as u32;
+        let border = 4u32;
+        let img_dim = size + border * 2;
+        let mut img_buf = image::GrayImage::new(img_dim, img_dim);
+        for pixel in img_buf.pixels_mut() {
+            *pixel = image::Luma([255u8]);
+        }
+        for y in 0..size {
+            for x in 0..size {
+                if qr_code.get_module(x as i32, y as i32) {
+                    img_buf.put_pixel(x + border, y + border, image::Luma([0u8]));
+                }
+            }
+        }
+        img_buf.save(tmp_qr.path()).unwrap();
+
+        let mut out_qr = Vec::new();
+        let cli_qr =
+            Cli::try_parse_from(["tfa", "instant", "--qr", tmp_qr.path().to_str().unwrap()])
+                .unwrap();
+        assert!(run_app(cli_qr, &store, &cb, &mut out_qr).is_ok());
+        let out_str_qr = String::from_utf8(out_qr).unwrap();
+        let token_qr = out_str_qr.split_whitespace().next().unwrap();
+        assert_eq!(token_qr.len(), 6);
+
+        // 10. Instant with TOTP_TOKEN env var
+        std::env::set_var("TOTP_TOKEN", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+        let mut out10 = Vec::new();
+        let cli10 = Cli::try_parse_from(["tfa", "instant"]).unwrap();
+        assert!(run_app(cli10, &store, &cb, &mut out10).is_ok());
+        let out_str10 = String::from_utf8(out10).unwrap();
+        let token10 = out_str10.split_whitespace().next().unwrap();
+        assert_eq!(token10, token1);
+        std::env::remove_var("TOTP_TOKEN");
+
+        // 11. Generate with "-" when stdin is empty fails
+        let cli11 = Cli::try_parse_from(["tfa", "generate", "-"]).unwrap();
+        assert!(run_app(cli11, &store, &cb, &mut Vec::new()).is_err());
+    }
+
+    #[test]
+    fn test_run_app_instant_with_password_protection_does_not_block() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let auth_path = tmp_dir.path().join("auth.json");
+        let session_path = tmp_dir.path().join("session.json");
+        let config_path = tmp_dir.path().join("config.toml");
+
+        std::env::set_var("TFA_AUTH_FILE", &auth_path);
+        std::env::set_var("TFA_SESSION_FILE", &session_path);
+
+        let cfg_content = "storage = \"file\"\n[password]\nenabled = true\ntimeout = 300\n";
+        std::fs::write(&config_path, cfg_content).unwrap();
+
+        // Configure password
+        let cli_add = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "add",
+            "--password",
+            "SecretPass123!",
+        ])
+        .unwrap();
+        assert!(run_app(cli_add, &store, &cb, &mut Vec::new()).is_ok());
+
+        // Lock session immediately
+        let cli_lock = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "lock",
+        ])
+        .unwrap();
+        assert!(run_app(cli_lock, &store, &cb, &mut Vec::new()).is_ok());
+
+        // Normal generate should fail because session is locked and environment is non-interactive
+        let cli_gen_locked = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "generate",
+            "dummy_acct",
+        ])
+        .unwrap();
+        assert!(run_app(cli_gen_locked, &store, &cb, &mut Vec::new()).is_err());
+
+        // Instant generation MUST SUCCEED even when session is locked!
+        let mut out_instant = Vec::new();
+        let cli_instant = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "instant",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        ])
+        .unwrap();
+        assert!(run_app(cli_instant, &store, &cb, &mut out_instant).is_ok());
+        let token = String::from_utf8(out_instant).unwrap();
+        assert!(token.contains("remaining)"));
+
+        // Generate --secret MUST ALSO SUCCEED even when session is locked!
+        let mut out_gen_sec = Vec::new();
+        let cli_gen_sec = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "generate",
+            "--secret",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        ])
+        .unwrap();
+        assert!(run_app(cli_gen_sec, &store, &cb, &mut out_gen_sec).is_ok());
 
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");

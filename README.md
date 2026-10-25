@@ -57,6 +57,7 @@ tfa [COMMAND]
 | `generate` (`gen`) | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account]` |
 | `generate -c` | Generate token and copy to clipboard | `tfa generate [account] -c` |
 | `generate -w` | Watch token countdown with progress bar | `tfa generate [account] -w` |
+| `instant` (`ins`) | Generate token instantly from secret, URI, or stdin without storage | `tfa instant [secret_or_uri]` |
 | `watch` | Watch live TOTP countdown with progress bar | `tfa watch [account] [-c]` |
 | `watch all` | Watch all passwords in active namespace | `tfa watch all` |
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
@@ -151,6 +152,34 @@ $ tfa watch --all
 
 # Or via generate flag:
 $ tfa generate github -w -c
+```
+
+### Stateless / Instant Token Generation
+
+Generate tokens directly from a raw secret, `otpauth://` URI, stdin pipe, or QR image without saving to keyring or file storage:
+
+```bash
+# Instant from Base32 secret
+tfa instant JBSWY3DPEHPK3PXP
+
+# Instant with custom parameters
+tfa instant JBSWY3DPEHPK3PXP -d 8 -p 60 -a sha256
+
+# Instant from OTPAuth URI
+tfa instant "otpauth://totp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example"
+
+# Reading from stdin pipe or dash
+echo "JBSWY3DPEHPK3PXP" | tfa instant -
+echo "JBSWY3DPEHPK3PXP" | tfa instant
+
+# Stateless via generate flag
+tfa generate --secret JBSWY3DPEHPK3PXP
+
+# From environment variable (TOTP_TOKEN)
+TOTP_TOKEN=JBSWY3DPEHPK3PXP tfa instant
+
+# Instant from QR code image
+tfa instant --qr /path/to/qr.png
 ```
 
 ### Dashboard & Status Overview
