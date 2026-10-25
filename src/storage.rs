@@ -80,13 +80,34 @@ impl FileStore {
             }
         }
         if let Ok(home) = std::env::var("HOME") {
-            return Ok(PathBuf::from(home)
-                .join(".local")
-                .join("share")
-                .join("tfa")
-                .join("credentials.json"));
+            if !home.is_empty() {
+                return Ok(PathBuf::from(home)
+                    .join(".local")
+                    .join("share")
+                    .join("tfa")
+                    .join("credentials.json"));
+            }
         }
-        bail!("Unable to determine user data directory (HOME / XDG_DATA_HOME not set)");
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            if !local.is_empty() {
+                return Ok(PathBuf::from(local).join("tfa").join("credentials.json"));
+            }
+        }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            if !appdata.is_empty() {
+                return Ok(PathBuf::from(appdata).join("tfa").join("credentials.json"));
+            }
+        }
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            if !userprofile.is_empty() {
+                return Ok(PathBuf::from(userprofile)
+                    .join(".local")
+                    .join("share")
+                    .join("tfa")
+                    .join("credentials.json"));
+            }
+        }
+        bail!("Unable to determine user data directory (HOME / XDG_DATA_HOME / LOCALAPPDATA / USERPROFILE not set)");
     }
 
     fn load(&self) -> Result<HashMap<String, String>> {
@@ -382,7 +403,8 @@ mod tests {
         let res = FileStore::default_path();
         assert!(res.is_ok());
         let path = res.unwrap();
-        assert!(path.ends_with("tfa/credentials.json"));
+        assert_eq!(path.file_name().unwrap(), "credentials.json");
+        assert_eq!(path.parent().unwrap().file_name().unwrap(), "tfa");
     }
 
     #[test]
