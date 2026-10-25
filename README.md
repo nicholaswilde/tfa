@@ -13,6 +13,7 @@ A high-performance, single-binary CLI Two-Factor Authentication (2FA / TOTP) app
 - **Security First:** Credentials and secret seeds reside securely in your OS keychain/keyring (`secret-service`/D-Bus on Linux, Keychain on macOS, Windows Credential Manager).
 - **Headless Fallback:** Automatically falls back to secure user-only file storage (`0600` permissions at `~/.local/share/tfa/credentials.json`) when headless or without active Secret Service daemon. Configurable via `--storage <auto|keyring|file>` or `TFA_STORAGE`.
 - **RFC 6238 Compliant:** Standard time-based one-time passwords (TOTP) powered by [`totp-rs`](https://github.com/constantoine/totp-rs).
+- **Live Watch & Countdown:** Watch an individual token or all accounts in a namespace in real-time with continuous progress bars (`tfa watch`, `tfa watch all`).
 - **QR Code Support:** Render terminal-native ANSI/Unicode block QR codes for mobile authenticator scanning (`tfa qr`), and scan QR code images (`tfa add --qr`) to import accounts automatically.
 - **Flexible Secret Input:** Supports raw Base32 secret keys and standard `otpauth://totp/...` URIs.
 - **Clipboard Integration:** Instantly copy tokens to your system clipboard with `-c` / `--copy`.
@@ -49,10 +50,11 @@ tfa [COMMAND]
 
 | Command | Description | Example |
 | :--- | :--- | :--- |
-| `generate` | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account]` |
+| `generate` (`gen`) | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account]` |
 | `generate -c` | Generate token and copy to clipboard | `tfa generate [account] -c` |
 | `generate -w` | Watch token countdown with progress bar | `tfa generate [account] -w` |
 | `watch` | Watch live TOTP countdown with progress bar | `tfa watch [account] [-c]` |
+| `watch all` | Watch all passwords in active namespace | `tfa watch all` |
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
 | `qr` | Render account as terminal QR code | `tfa qr github [--light]` |
 | `list` | List all configured accounts | `tfa list [--codes] [--json]` |
@@ -61,6 +63,7 @@ tfa [COMMAND]
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `delete` | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
+| `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
 | `namespace` (`ns`) | Multi-tenant namespace management (`list`, `create`, `rename`, `delete`, `set-default`) | `tfa ns list` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
 | `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
@@ -132,6 +135,16 @@ $ tfa generate hotp_account --counter 5
 $ tfa watch github
 github  482910  [████████░░░░] 18s
 
+# Watch all passwords in the active namespace:
+$ tfa watch all
+ACCOUNT   TOKEN     PROGRESS
+aws       789012    [████░░░░░░░░] 10s
+github    482910    [████████░░░░] 18s
+google    654321    [████████████] 30s
+
+# Or via --all flag:
+$ tfa watch --all
+
 # Or via generate flag:
 $ tfa generate github -w -c
 ```
@@ -200,6 +213,35 @@ tfa import backup.enc --skip
 
 ---
 
+## :lock: Password Protection & Unlock Caching
+
+`tfa` supports optional master password protection with session caching similar to `sudo` or `gpg-agent`. When enabled, running `tfa` prompts for the master password, which remains unlocked for a configurable timeout period (default: 300 seconds / 5 minutes) via a sliding window session cache.
+
+### Password Commands
+
+```bash
+# Set or update master password and enable protection:
+tfa password add
+# Or specify a custom timeout in seconds:
+tfa password add --timeout 600
+
+# View current password protection and unlock status:
+tfa password status
+
+# Lock the active session immediately (like 'sudo -k'):
+tfa password lock
+
+# Manually unlock the session:
+tfa password unlock
+
+# Remove password protection and delete stored master password:
+tfa password remove
+```
+
+When password protection is enabled in the configuration file, any `tfa` command that accesses or generates credentials verifies that the session is unlocked or prompts for the password securely without leaking to shell history.
+
+---
+
 ## :books: Shell Completions
 
 Generate and source completions for your shell:
@@ -237,6 +279,17 @@ Settings resolve in strict hierarchical precedence order (highest to lowest):
 3. **Configuration File** (`-C <path>` / `--config <path>`, or default locations: `~/.config/tfa/config.{toml,yaml,yml,json}`)
 4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, namespace: `default`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
 
+### Storage Backends & Headless Environments
+
+`tfa` supports three storage options via `storage` in config, `--storage`, or `TFA_STORAGE`:
+
+- **`auto` (default):** Attempts the OS system keyring first (Secret Service on Linux, Keychain on macOS, Credential Manager on Windows). If the keyring daemon is unreachable, locked, or running in a headless/SSH session (`SS error`), `tfa` displays a notice and automatically falls back to local user file storage (`0600` permissions at `~/.local/share/tfa/credentials.json`).
+  ```
+  [notice] Keyring unavailable (Failed saving secret in keyring: Couldn't access platform storage: SS error: result not returned from SS API); saving to local file store
+  ```
+- **`file`:** Directly reads and writes to `~/.local/share/tfa/credentials.json` without querying DBus or system keyring, silencing fallback notices in headless, SSH, or server environments.
+- **`keyring`:** Strictly requires the OS system keyring and returns a hard error if unavailable.
+
 ### Example Configuration Files
 
 #### TOML (`~/.config/tfa/config.toml`)
@@ -250,6 +303,8 @@ period = 30                   # 30 or 60
 algorithm = "sha1"            # sha1, sha256, sha512, or steam
 auto_copy = true              # automatically copy generated tokens
 light = false                 # terminal QR light theme
+password = true               # enable master password protection
+password_timeout = 300        # unlock cache TTL in seconds (default: 300)
 ```
 
 #### YAML (`~/.config/tfa/config.yaml`)
@@ -263,6 +318,8 @@ period: 30
 algorithm: sha1
 auto_copy: true
 light: false
+password: true
+password_timeout: 300
 ```
 
 #### JSON (`~/.config/tfa/config.json`)
@@ -276,7 +333,9 @@ light: false
   "period": 30,
   "algorithm": "sha1",
   "auto_copy": true,
-  "light": false
+  "light": false,
+  "password": true,
+  "password_timeout": 300
 }
 ```
 
@@ -291,6 +350,7 @@ Organize personal, home, and work 2FA tokens into completely segregated namespac
 tfa -n work add aws JBSWY3DPEHPK3PXP
 tfa -n work list
 tfa -n work generate aws
+tfa -n work watch all
 
 # List all namespaces
 tfa ns list

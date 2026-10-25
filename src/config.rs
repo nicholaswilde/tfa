@@ -26,6 +26,18 @@ impl ConfigFormat {
     }
 }
 
+/// Configuration for master password protection.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum PasswordConfig {
+    Bool(bool),
+    Table {
+        #[serde(default)]
+        enabled: Option<bool>,
+        timeout: Option<u64>,
+    },
+}
+
 /// Representation of values loaded from a configuration file.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfigFile {
@@ -40,6 +52,9 @@ pub struct ConfigFile {
     pub algorithm: Option<String>,
     pub auto_copy: Option<bool>,
     pub light: Option<bool>,
+    #[serde(alias = "password_enabled")]
+    pub password: Option<PasswordConfig>,
+    pub password_timeout: Option<u64>,
 }
 
 impl ConfigFile {
@@ -138,6 +153,62 @@ impl ConfigFile {
         config.save_to_path(&target_path)?;
         Ok(target_path)
     }
+
+    pub const DEFAULT_PASSWORD_TIMEOUT: u64 = 300;
+
+    /// Whether master password protection is enabled in configuration.
+    pub fn is_password_enabled(&self) -> bool {
+        match &self.password {
+            Some(PasswordConfig::Bool(b)) => *b,
+            Some(PasswordConfig::Table { enabled, .. }) => enabled.unwrap_or(true),
+            None => false,
+        }
+    }
+
+    /// Timeout in seconds before password unlocks expire. Defaults to 300 seconds.
+    pub fn password_timeout(&self) -> u64 {
+        if let Some(t) = self.password_timeout {
+            return t;
+        }
+        if let Some(PasswordConfig::Table {
+            timeout: Some(t), ..
+        }) = &self.password
+        {
+            return *t;
+        }
+        Self::DEFAULT_PASSWORD_TIMEOUT
+    }
+
+    /// Set password protection status and optional timeout in the configuration file and persist it.
+    pub fn set_password_config_in_file(
+        path: Option<&Path>,
+        enabled: bool,
+        timeout: Option<u64>,
+    ) -> Result<PathBuf> {
+        let (target_path, mut config) = if let Some(p) = path {
+            let cfg = if p.is_file() {
+                Self::load_from_path(p)?
+            } else {
+                Self::default()
+            };
+            (p.to_path_buf(), cfg)
+        } else if let Some((p, cfg)) = Self::load_default()? {
+            (p, cfg)
+        } else {
+            let default_paths = default_config_paths();
+            let first = default_paths.into_iter().next().ok_or_else(|| {
+                anyhow::anyhow!("Unable to determine default config file location")
+            })?;
+            (first, Self::default())
+        };
+
+        config.password = Some(PasswordConfig::Bool(enabled));
+        if let Some(t) = timeout {
+            config.password_timeout = Some(t);
+        }
+        config.save_to_path(&target_path)?;
+        Ok(target_path)
+    }
 }
 
 /// Standard candidate locations for default configuration files.
@@ -187,6 +258,8 @@ pub struct ResolvedConfig {
     pub algorithm: Option<totp_rs::Algorithm>,
     pub auto_copy: bool,
     pub light: bool,
+    pub password_enabled: bool,
+    pub password_timeout: u64,
 }
 
 impl Default for ResolvedConfig {
@@ -201,6 +274,8 @@ impl Default for ResolvedConfig {
             algorithm: None,
             auto_copy: false,
             light: false,
+            password_enabled: false,
+            password_timeout: ConfigFile::DEFAULT_PASSWORD_TIMEOUT,
         }
     }
 }
@@ -231,10 +306,26 @@ pub fn resolve_configuration(
 ) -> Result<(ResolvedConfig, Option<ConfigFile>)> {
     // Determine config file path: explicit CLI / TFA_CONFIG or default discovery
     let config_file = if let Some(path) = cli_config_path {
-        Some(ConfigFile::load_from_path(path)?)
+        if path.is_file() {
+            Some(ConfigFile::load_from_path(path)?)
+        } else if path.exists() {
+            anyhow::bail!(
+                "Configuration path '{}' is not a regular file",
+                path.display()
+            );
+        } else {
+            None
+        }
     } else if let Ok(env_path) = std::env::var("TFA_CONFIG") {
         if !env_path.trim().is_empty() {
-            Some(ConfigFile::load_from_path(Path::new(&env_path))?)
+            let p = Path::new(&env_path);
+            if p.is_file() {
+                Some(ConfigFile::load_from_path(p)?)
+            } else if p.exists() {
+                anyhow::bail!("Configuration path '{}' is not a regular file", p.display());
+            } else {
+                None
+            }
         } else {
             ConfigFile::load_default()?.map(|(_, cfg)| cfg)
         }
@@ -357,6 +448,32 @@ pub fn resolve_configuration(
             .unwrap_or_default()
     };
 
+    // 7. Password protection precedence: Env > Config File > Default (false)
+    let password_enabled = if let Ok(p_env) = std::env::var("TFA_PASSWORD_ENABLED") {
+        match p_env.to_lowercase().as_str() {
+            "1" | "true" | "yes" => true,
+            "0" | "false" | "no" => false,
+            other => anyhow::bail!("Invalid boolean for TFA_PASSWORD_ENABLED: '{other}'"),
+        }
+    } else {
+        config_file
+            .as_ref()
+            .map(|c| c.is_password_enabled())
+            .unwrap_or(false)
+    };
+
+    // 8. Password timeout precedence: Env > Config File > Default (300)
+    let password_timeout = if let Ok(pt_env) = std::env::var("TFA_PASSWORD_TIMEOUT") {
+        pt_env
+            .parse::<u64>()
+            .context("Invalid TFA_PASSWORD_TIMEOUT value")?
+    } else {
+        config_file
+            .as_ref()
+            .map(|c| c.password_timeout())
+            .unwrap_or(ConfigFile::DEFAULT_PASSWORD_TIMEOUT)
+    };
+
     Ok((
         ResolvedConfig {
             storage,
@@ -368,6 +485,8 @@ pub fn resolve_configuration(
             algorithm,
             auto_copy,
             light,
+            password_enabled,
+            password_timeout,
         },
         config_file,
     ))
@@ -592,5 +711,49 @@ auto_copy = false
 
         let reloaded = ConfigFile::load_from_path(&config_file_path).unwrap();
         assert_eq!(reloaded.default_namespace.as_deref(), Some("production"));
+    }
+
+    #[test]
+    fn test_parse_password_config_options() {
+        // 1. Boolean format: password = true
+        let toml_bool = "password = true\npassword_timeout = 600\n";
+        let cfg = ConfigFile::parse(toml_bool, ConfigFormat::Toml).unwrap();
+        assert!(cfg.is_password_enabled());
+        assert_eq!(cfg.password_timeout(), 600);
+
+        // 2. Table format: [password] enabled = true, timeout = 120
+        let toml_table = "[password]\nenabled = true\ntimeout = 120\n";
+        let cfg2 = ConfigFile::parse(toml_table, ConfigFormat::Toml).unwrap();
+        assert!(cfg2.is_password_enabled());
+        assert_eq!(cfg2.password_timeout(), 120);
+
+        // 3. Disabled format
+        let toml_disabled = "password = false\n";
+        let cfg3 = ConfigFile::parse(toml_disabled, ConfigFormat::Toml).unwrap();
+        assert!(!cfg3.is_password_enabled());
+        assert_eq!(
+            cfg3.password_timeout(),
+            ConfigFile::DEFAULT_PASSWORD_TIMEOUT
+        );
+    }
+
+    #[test]
+    fn test_set_password_config_persists_to_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file_path = dir.path().join("config.toml");
+
+        let saved =
+            ConfigFile::set_password_config_in_file(Some(&config_file_path), true, Some(450))
+                .unwrap();
+        assert_eq!(saved, config_file_path);
+
+        let reloaded = ConfigFile::load_from_path(&config_file_path).unwrap();
+        assert!(reloaded.is_password_enabled());
+        assert_eq!(reloaded.password_timeout(), 450);
+
+        // Disable password
+        ConfigFile::set_password_config_in_file(Some(&config_file_path), false, None).unwrap();
+        let reloaded_disabled = ConfigFile::load_from_path(&config_file_path).unwrap();
+        assert!(!reloaded_disabled.is_password_enabled());
     }
 }

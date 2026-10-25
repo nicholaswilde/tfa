@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
+mod auth;
 mod backup;
 mod clipboard;
 mod config;
@@ -35,7 +36,7 @@ pub enum StorageBackend {
     File,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(name = "tfa")]
 #[command(author, version = env!("PROJECT_VERSION"), about = "CLI Two-Factor Authentication (2FA) tool", long_about = None)]
 pub struct Cli {
@@ -63,9 +64,10 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Generate a 2FA token (TOTP, Steam, or HOTP) for an account
+    #[command(alias = "gen")]
     Generate {
         /// Name of the account (interactively prompted via fuzzy search if omitted)
         account: Option<String>,
@@ -81,9 +83,14 @@ pub enum Commands {
     },
     /// Live watch mode displaying continuous TOTP countdown with progress bar
     Watch {
+        #[command(subcommand)]
+        command: Option<WatchCommands>,
         /// Name of the account (interactively prompted via fuzzy search if omitted)
         account: Option<String>,
-        /// Copy token to clipboard on every cycle
+        /// Watch all accounts in the active namespace
+        #[arg(short, long)]
+        all: bool,
+        /// Copy token to clipboard on every cycle (single account only)
         #[arg(short, long, num_args = 0..=1, default_missing_value = "true")]
         copy: Option<bool>,
     },
@@ -186,9 +193,55 @@ pub enum Commands {
         #[command(subcommand)]
         command: NamespaceCommands,
     },
+    /// Manage master password protection and unlock sessions
+    #[command(alias = "pwd", alias = "pw")]
+    Password {
+        #[command(subcommand)]
+        command: PasswordCommands,
+    },
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
+pub enum PasswordCommands {
+    /// Set master password and enable password protection
+    #[command(alias = "set")]
+    Add {
+        /// Timeout in seconds before unlock expires (default: 300)
+        #[arg(short, long)]
+        timeout: Option<u64>,
+        /// Master password (prompted securely if omitted)
+        #[arg(long, env = "TFA_PASSWORD")]
+        password: Option<String>,
+    },
+    /// Remove master password and disable password protection
+    #[command(alias = "rm")]
+    Remove {
+        /// Current master password (prompted securely if omitted)
+        #[arg(long, env = "TFA_PASSWORD")]
+        password: Option<String>,
+        /// Skip password verification prompt
+        #[arg(short, long)]
+        force: bool,
+    },
+    /// Lock the active session immediately
+    Lock,
+    /// Unlock session for the configured timeout
+    Unlock {
+        /// Master password (prompted securely if omitted)
+        #[arg(long, env = "TFA_PASSWORD")]
+        password: Option<String>,
+    },
+    /// Show current password protection and session unlock status
+    Status,
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum WatchCommands {
+    /// Watch all accounts in the active namespace
+    All,
+}
+
+#[derive(Subcommand, Debug, Clone)]
 pub enum NamespaceCommands {
     /// List all namespaces and indicate the active/default one
     List,
@@ -421,6 +474,154 @@ pub fn run_app(
         }
     }
 
+    // If the subcommand is Password management, handle it directly
+    if let Some(Commands::Password {
+        command: ref pwd_cmd,
+    }) = cli.command
+    {
+        match pwd_cmd {
+            PasswordCommands::Add { timeout, password } => {
+                let target_timeout = timeout.unwrap_or(resolved_cfg.password_timeout);
+                // If a password record already exists, ensure authorized
+                if let Some(existing_record) = auth::get_password_record()? {
+                    let token = auth::compute_auth_token(&existing_record);
+                    if !auth::is_session_unlocked(&token, resolved_cfg.password_timeout) {
+                        let current_pass =
+                            get_password(None, false, "Enter current master password: ")?;
+                        if !auth::verify_password(&current_pass, &existing_record) {
+                            anyhow::bail!("Incorrect master password");
+                        }
+                    }
+                }
+
+                let new_pass = get_password(password.clone(), true, "Enter new master password: ")?;
+                let record = auth::create_password_record(&new_pass)?;
+                auth::save_password_record(&record)?;
+                let token = auth::compute_auth_token(&record);
+                auth::record_unlock(&token)?;
+
+                let config_path = ConfigFile::set_password_config_in_file(
+                    cli.config.as_deref(),
+                    true,
+                    Some(target_timeout),
+                )?;
+                writeln!(
+                    out_writer,
+                    "Master password set and unlocked for {}s (config: '{}').",
+                    target_timeout,
+                    config_path.display()
+                )?;
+                return Ok(());
+            }
+            PasswordCommands::Remove { password, force } => {
+                if !force {
+                    if let Some(existing_record) = auth::get_password_record()? {
+                        let token = auth::compute_auth_token(&existing_record);
+                        if !auth::is_session_unlocked(&token, resolved_cfg.password_timeout) {
+                            let current_pass = get_password(
+                                password.clone(),
+                                false,
+                                "Enter current master password: ",
+                            )?;
+                            if !auth::verify_password(&current_pass, &existing_record) {
+                                anyhow::bail!("Incorrect master password");
+                            }
+                        }
+                    }
+                }
+                auth::delete_password_record()?;
+                let _ = auth::clear_session();
+                let config_path =
+                    ConfigFile::set_password_config_in_file(cli.config.as_deref(), false, None)?;
+                writeln!(
+                    out_writer,
+                    "Master password removed and password protection disabled (config: '{}').",
+                    config_path.display()
+                )?;
+                return Ok(());
+            }
+            PasswordCommands::Lock => {
+                auth::clear_session()?;
+                writeln!(out_writer, "Session locked.")?;
+                return Ok(());
+            }
+            PasswordCommands::Unlock { password } => {
+                let Some(record) = auth::get_password_record()? else {
+                    anyhow::bail!("No master password configured. Run 'tfa password add' first.");
+                };
+                let token = auth::compute_auth_token(&record);
+                if auth::is_session_unlocked(&token, resolved_cfg.password_timeout) {
+                    let remaining =
+                        auth::session_status(&token, resolved_cfg.password_timeout).unwrap_or(0);
+                    writeln!(
+                        out_writer,
+                        "Session already unlocked ({}s remaining).",
+                        remaining
+                    )?;
+                    return Ok(());
+                }
+                let pass = get_password(password.clone(), false, "Enter master password: ")?;
+                if !auth::verify_password(&pass, &record) {
+                    anyhow::bail!("Incorrect master password");
+                }
+                auth::record_unlock(&token)?;
+                writeln!(
+                    out_writer,
+                    "Session unlocked for {}s.",
+                    resolved_cfg.password_timeout
+                )?;
+                return Ok(());
+            }
+            PasswordCommands::Status => {
+                let maybe_record = auth::get_password_record()?;
+                let (status_str, is_configured) = match &maybe_record {
+                    Some(record) => {
+                        let token = auth::compute_auth_token(record);
+                        match auth::session_status(&token, resolved_cfg.password_timeout) {
+                            Some(rem) => (format!("Unlocked ({rem}s remaining)"), true),
+                            None => ("Locked".to_string(), true),
+                        }
+                    }
+                    None => ("Locked (no password configured)".to_string(), false),
+                };
+
+                writeln!(
+                    out_writer,
+                    "{:<22} {}",
+                    "Password Protection:",
+                    if resolved_cfg.password_enabled {
+                        "Enabled"
+                    } else {
+                        "Disabled"
+                    }
+                )?;
+                writeln!(
+                    out_writer,
+                    "{:<22} {}",
+                    "Password Configured:",
+                    if is_configured { "Yes" } else { "No" }
+                )?;
+                writeln!(
+                    out_writer,
+                    "{:<22} {}s",
+                    "Timeout:", resolved_cfg.password_timeout
+                )?;
+                writeln!(out_writer, "{:<22} {}", "Session Status:", status_str)?;
+                return Ok(());
+            }
+        }
+    }
+
+    // If password protection is enabled, enforce unlock for protected commands
+    if resolved_cfg.password_enabled {
+        match cli.command {
+            Some(Commands::Completions { .. }) | Some(Commands::Man) | None => {}
+            _ => {
+                ensure_unlocked(resolved_cfg.password_timeout)?;
+            }
+        }
+    }
+
     // For all other commands, scope store access to the active namespace
     let scoped_store = NamespaceStore::new(store, &resolved_cfg.namespace);
     let store = &scoped_store;
@@ -478,18 +679,31 @@ pub fn run_app(
                 }
             }
         }
-        Some(Commands::Watch { account, copy }) => {
-            let acct = match account {
-                Some(a) => a,
-                None => select_account_interactive(store, "Select account to watch")?,
-            };
-            let secret = store.get_secret(&acct)?;
-            let engine = TfaTotp::from_input(&acct, &secret)?;
-            if engine.is_hotp() {
-                anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
+        Some(Commands::Watch {
+            command,
+            account,
+            all,
+            copy,
+        }) => {
+            let is_all = all
+                || matches!(command, Some(WatchCommands::All))
+                || account.as_deref() == Some("all");
+
+            if is_all {
+                watch::watch_all(store, out_writer, None)?;
+            } else {
+                let acct = match account {
+                    Some(a) => a,
+                    None => select_account_interactive(store, "Select account to watch")?,
+                };
+                let secret = store.get_secret(&acct)?;
+                let engine = TfaTotp::from_input(&acct, &secret)?;
+                if engine.is_hotp() {
+                    anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
+                }
+                let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
+                watch::watch_account(&acct, store, clipboard, should_copy, out_writer, None)?;
             }
-            let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
-            watch::watch_account(&acct, store, clipboard, should_copy, out_writer, None)?;
         }
         Some(Commands::Add {
             account,
@@ -790,6 +1004,7 @@ pub fn run_app(
             }
         }
         Some(Commands::Namespace { .. }) => unreachable!("Handled above"),
+        Some(Commands::Password { .. }) => unreachable!("Handled above"),
         None => {
             writeln!(out_writer, "Use --help for usage instructions.")?;
         }
@@ -797,27 +1012,69 @@ pub fn run_app(
     Ok(())
 }
 
-fn get_passphrase(password: Option<String>, confirm: bool) -> anyhow::Result<String> {
+fn get_password(password: Option<String>, confirm: bool, prompt: &str) -> anyhow::Result<String> {
     if let Some(p) = password {
         if p.is_empty() {
-            anyhow::bail!("Passphrase cannot be empty");
+            anyhow::bail!("Password cannot be empty");
         }
         return Ok(p);
     }
 
-    let pass = rpassword::prompt_password("Enter master passphrase: ")?;
+    if let Ok(env_pass) = std::env::var("TFA_PASSWORD") {
+        if !env_pass.is_empty() {
+            return Ok(env_pass);
+        }
+    }
+
+    #[cfg(test)]
+    {
+        if std::env::var("TFA_TEST_INTERACTIVE").is_err() {
+            anyhow::bail!("Password is required in non-interactive environment");
+        }
+    }
+
+    if !io::stdin().is_terminal() {
+        anyhow::bail!("Password is required in non-interactive environment");
+    }
+
+    let pass = rpassword::prompt_password(prompt)?;
     if pass.is_empty() {
-        anyhow::bail!("Passphrase cannot be empty");
+        anyhow::bail!("Password cannot be empty");
     }
 
     if confirm {
-        let confirm_pass = rpassword::prompt_password("Confirm master passphrase: ")?;
+        let confirm_pass = rpassword::prompt_password("Confirm master password: ")?;
         if pass != confirm_pass {
-            anyhow::bail!("Passphrases do not match");
+            anyhow::bail!("Passwords do not match");
         }
     }
 
     Ok(pass)
+}
+
+fn ensure_unlocked(timeout: u64) -> anyhow::Result<()> {
+    let Some(record) = auth::get_password_record()? else {
+        anyhow::bail!(
+            "Password protection is enabled in configuration, but no master password has been configured. Run 'tfa password add' to set one."
+        );
+    };
+
+    let token = auth::compute_auth_token(&record);
+    if auth::is_session_unlocked(&token, timeout) {
+        return Ok(());
+    }
+
+    let pass = get_password(None, false, "Enter master password: ")?;
+    if !auth::verify_password(&pass, &record) {
+        anyhow::bail!("Incorrect master password");
+    }
+
+    auth::record_unlock(&token)?;
+    Ok(())
+}
+
+fn get_passphrase(password: Option<String>, confirm: bool) -> anyhow::Result<String> {
+    get_password(password, confirm, "Enter master passphrase: ")
 }
 
 fn main() -> anyhow::Result<()> {
@@ -896,6 +1153,15 @@ mod tests {
             _ => panic!("Expected generate subcommand"),
         }
 
+        // Test alias "gen"
+        let cli_alias = Cli::try_parse_from(["tfa", "gen", "github"]).unwrap();
+        match cli_alias.command {
+            Some(Commands::Generate { account, .. }) => {
+                assert_eq!(account, Some("github".to_string()));
+            }
+            _ => panic!("Expected generate subcommand via gen alias"),
+        }
+
         // Without account argument
         let cli_no_acc = Cli::try_parse_from(["tfa", "generate"]).unwrap();
         match cli_no_acc.command {
@@ -945,9 +1211,16 @@ mod tests {
     fn test_cli_parse_watch() {
         let cli = Cli::try_parse_from(["tfa", "watch", "github", "-c"]).unwrap();
         match cli.command {
-            Some(Commands::Watch { account, copy }) => {
+            Some(Commands::Watch {
+                account,
+                copy,
+                command,
+                all,
+            }) => {
                 assert_eq!(account, Some("github".to_string()));
                 assert_eq!(copy, Some(true));
+                assert_eq!(command, None);
+                assert!(!all);
             }
             _ => panic!("Expected watch subcommand"),
         }
@@ -959,6 +1232,50 @@ mod tests {
             }
             _ => panic!("Expected generate subcommand with watch"),
         }
+    }
+
+    #[test]
+    fn test_cli_parse_watch_all() {
+        let cli1 = Cli::try_parse_from(["tfa", "watch", "all"]).unwrap();
+        match cli1.command {
+            Some(Commands::Watch {
+                command,
+                account,
+                all,
+                ..
+            }) => {
+                assert_eq!(command, Some(WatchCommands::All));
+                assert_eq!(account, None);
+                assert!(!all);
+            }
+            _ => panic!("Expected watch all subcommand"),
+        }
+
+        let cli2 = Cli::try_parse_from(["tfa", "watch", "--all"]).unwrap();
+        match cli2.command {
+            Some(Commands::Watch {
+                command,
+                account,
+                all,
+                ..
+            }) => {
+                assert_eq!(command, None);
+                assert_eq!(account, None);
+                assert!(all);
+            }
+            _ => panic!("Expected watch --all"),
+        }
+
+        let cli3 = Cli::try_parse_from(["tfa", "watch", "-a"]).unwrap();
+        match cli3.command {
+            Some(Commands::Watch { all, .. }) => {
+                assert!(all);
+            }
+            _ => panic!("Expected watch -a"),
+        }
+
+        let cli4 = Cli::try_parse_from(["tfa", "-n", "work", "watch", "all"]).unwrap();
+        assert_eq!(cli4.namespace, Some("work".to_string()));
     }
 
     #[test]
@@ -1646,6 +1963,44 @@ mod tests {
     }
 
     #[test]
+    fn test_watch_all_lifecycle() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // 1. Empty store run_app returns Ok and prints "No accounts configured."
+        let mut out = Vec::new();
+        let cli = Cli::try_parse_from(["tfa", "watch", "all"]).unwrap();
+        let res = run_app(cli, &store, &cb, &mut out);
+        assert!(res.is_ok());
+        assert!(String::from_utf8(out)
+            .unwrap()
+            .contains("No accounts configured."));
+
+        // 2. Namespace scoping with watch all
+        let mut out_work = Vec::new();
+        store.set_secret("work:corp", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("personal", "JBSWY3DPEHPK3PXP").unwrap();
+
+        let cli_work = Cli::try_parse_from(["tfa", "-n", "other", "watch", "all"]).unwrap();
+        let res_work = run_app(cli_work, &store, &cb, &mut out_work);
+        assert!(res_work.is_ok());
+        assert!(String::from_utf8(out_work)
+            .unwrap()
+            .contains("No accounts configured."));
+
+        // 3. Directly test watch_all with max_ticks
+        let mut out_watch = Vec::new();
+        let res_watch = watch::watch_all(&store, &mut out_watch, Some(2));
+        if res_watch.is_ok() {
+            let out_str = String::from_utf8(out_watch).unwrap();
+            assert!(out_str.contains("ACCOUNT"));
+            assert!(out_str.contains("TOKEN"));
+            assert!(out_str.contains("PROGRESS"));
+            assert!(out_str.contains("personal"));
+        }
+    }
+
+    #[test]
     fn test_run_app_steam_guard_lifecycle() {
         let store = MemoryStore::new();
         let cb = MockClipboard::default();
@@ -1977,5 +2332,342 @@ light: true
         assert!(String::from_utf8(office_after_out)
             .unwrap()
             .contains("No accounts configured."));
+    }
+
+    #[test]
+    fn test_cli_parse_password_commands() {
+        // 1. password add
+        let cli_add = Cli::try_parse_from([
+            "tfa",
+            "password",
+            "add",
+            "-t",
+            "600",
+            "--password",
+            "secret123",
+        ])
+        .unwrap();
+        match cli_add.command {
+            Some(Commands::Password {
+                command: PasswordCommands::Add { timeout, password },
+            }) => {
+                assert_eq!(timeout, Some(600));
+                assert_eq!(password, Some("secret123".to_string()));
+            }
+            _ => panic!("Expected PasswordCommands::Add"),
+        }
+
+        // 2. password remove
+        let cli_rm = Cli::try_parse_from(["tfa", "password", "remove", "-f"]).unwrap();
+        match cli_rm.command {
+            Some(Commands::Password {
+                command: PasswordCommands::Remove { force, .. },
+            }) => {
+                assert!(force);
+            }
+            _ => panic!("Expected PasswordCommands::Remove"),
+        }
+
+        // 3. password lock
+        let cli_lock = Cli::try_parse_from(["tfa", "password", "lock"]).unwrap();
+        match cli_lock.command {
+            Some(Commands::Password {
+                command: PasswordCommands::Lock,
+            }) => {}
+            _ => panic!("Expected PasswordCommands::Lock"),
+        }
+
+        // 4. password status
+        let cli_status = Cli::try_parse_from(["tfa", "password", "status"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Password {
+                command: PasswordCommands::Status,
+            }) => {}
+            _ => panic!("Expected PasswordCommands::Status"),
+        }
+
+        // 5. alias pw
+        let cli_pw = Cli::try_parse_from(["tfa", "pw", "status"]).unwrap();
+        match cli_pw.command {
+            Some(Commands::Password {
+                command: PasswordCommands::Status,
+            }) => {}
+            _ => panic!("Expected PasswordCommands::Status via pw alias"),
+        }
+
+        // 6. alias pwd
+        let cli_pwd = Cli::try_parse_from(["tfa", "pwd", "status"]).unwrap();
+        match cli_pwd.command {
+            Some(Commands::Password {
+                command: PasswordCommands::Status,
+            }) => {}
+            _ => panic!("Expected PasswordCommands::Status via pwd alias"),
+        }
+    }
+
+    #[test]
+    fn test_password_add_unlock_lock_flow() {
+        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let auth_path = dir.path().join("auth.json");
+        let session_path = dir.path().join("session.json");
+
+        std::env::set_var("TFA_AUTH_FILE", &auth_path);
+        std::env::set_var("TFA_SESSION_FILE", &session_path);
+
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // 1. Add password
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "add",
+            "-t",
+            "300",
+            "--password",
+            "MySecretPassword",
+        ])
+        .unwrap();
+        let mut out = Vec::new();
+        run_app(add_cli, &store, &cb, &mut out).unwrap();
+
+        // Check config updated
+        let loaded_cfg = ConfigFile::load_from_path(&config_path).unwrap();
+        assert!(loaded_cfg.is_password_enabled());
+        assert_eq!(loaded_cfg.password_timeout(), 300);
+
+        // 2. Status shows Unlocked
+        let status_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "status",
+        ])
+        .unwrap();
+        let mut status_out = Vec::new();
+        assert!(run_app(status_cli.clone(), &store, &cb, &mut status_out).is_ok());
+        let status_str = String::from_utf8(status_out).unwrap();
+        assert!(status_str.contains("Unlocked"));
+
+        // 3. List command succeeds without prompt because it's currently unlocked
+        let list_cli =
+            Cli::try_parse_from(["tfa", "-C", config_path.to_str().unwrap(), "list"]).unwrap();
+        let mut list_out = Vec::new();
+        assert!(run_app(list_cli.clone(), &store, &cb, &mut list_out).is_ok());
+        let list_str = String::from_utf8(list_out).unwrap();
+        assert!(list_str.contains("github"));
+
+        // 4. Lock session
+        let lock_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "lock",
+        ])
+        .unwrap();
+        let mut lock_out = Vec::new();
+        assert!(run_app(lock_cli, &store, &cb, &mut lock_out).is_ok());
+
+        // Status shows Locked
+        let mut status_out2 = Vec::new();
+        assert!(run_app(status_cli, &store, &cb, &mut status_out2).is_ok());
+        assert!(String::from_utf8(status_out2).unwrap().contains("Locked"));
+
+        // 5. Running command while locked with correct TFA_PASSWORD succeeds and unlocks
+        std::env::set_var("TFA_PASSWORD", "MySecretPassword");
+        let mut list_out2 = Vec::new();
+        assert!(run_app(list_cli.clone(), &store, &cb, &mut list_out2).is_ok());
+
+        // 6. Running command with wrong TFA_PASSWORD fails
+        let _ = auth::clear_session();
+        std::env::set_var("TFA_PASSWORD", "WrongPassword");
+        let mut list_out3 = Vec::new();
+        match run_app(list_cli, &store, &cb, &mut list_out3) {
+            Ok(_) => panic!("Expected run_app to fail with wrong password"),
+            Err(e) => {
+                assert!(
+                    e.to_string().contains("Incorrect master password"),
+                    "Unexpected error: {e}"
+                );
+            }
+        }
+
+        std::env::remove_var("TFA_PASSWORD");
+        std::env::remove_var("TFA_AUTH_FILE");
+        std::env::remove_var("TFA_SESSION_FILE");
+    }
+
+    #[test]
+    fn test_password_remove_flow() {
+        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let auth_path = dir.path().join("auth.json");
+        let session_path = dir.path().join("session.json");
+
+        std::env::set_var("TFA_AUTH_FILE", &auth_path);
+        std::env::set_var("TFA_SESSION_FILE", &session_path);
+
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // Add password first
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "add",
+            "--password",
+            "RemoveMe123",
+        ])
+        .unwrap();
+        let mut out = Vec::new();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // Remove password with --force
+        let rm_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "remove",
+            "-f",
+        ])
+        .unwrap();
+        let mut rm_out = Vec::new();
+        assert!(run_app(rm_cli, &store, &cb, &mut rm_out).is_ok());
+
+        // Verify config shows disabled
+        let reloaded_cfg = ConfigFile::load_from_path(&config_path).unwrap();
+        assert!(!reloaded_cfg.is_password_enabled());
+
+        // Verify list executes without password
+        let list_cli =
+            Cli::try_parse_from(["tfa", "-C", config_path.to_str().unwrap(), "list"]).unwrap();
+        let mut list_out = Vec::new();
+        assert!(run_app(list_cli, &store, &cb, &mut list_out).is_ok());
+        assert!(String::from_utf8(list_out).unwrap().contains("github"));
+
+        std::env::remove_var("TFA_AUTH_FILE");
+        std::env::remove_var("TFA_SESSION_FILE");
+    }
+
+    #[test]
+    fn test_password_unlock_command_flow() {
+        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let auth_path = dir.path().join("auth.json");
+        let session_path = dir.path().join("session.json");
+
+        std::env::set_var("TFA_AUTH_FILE", &auth_path);
+        std::env::set_var("TFA_SESSION_FILE", &session_path);
+
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // 1. Unlocking when no password configured fails
+        let unlock_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "unlock",
+        ])
+        .unwrap();
+        let mut out1 = Vec::new();
+        let err1 = run_app(unlock_cli.clone(), &store, &cb, &mut out1).unwrap_err();
+        assert!(err1.to_string().contains("No master password configured"));
+
+        // 2. Add password
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "add",
+            "--password",
+            "Passcode99",
+        ])
+        .unwrap();
+        let mut out2 = Vec::new();
+        assert!(run_app(add_cli, &store, &cb, &mut out2).is_ok());
+
+        // 3. Unlocking while already unlocked notices active session
+        let mut out3 = Vec::new();
+        assert!(run_app(unlock_cli.clone(), &store, &cb, &mut out3).is_ok());
+        assert!(String::from_utf8(out3)
+            .unwrap()
+            .contains("already unlocked"));
+
+        // 4. Lock session
+        let lock_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "lock",
+        ])
+        .unwrap();
+        let mut out4 = Vec::new();
+        assert!(run_app(lock_cli, &store, &cb, &mut out4).is_ok());
+
+        // 5. Unlock with explicit password flag
+        let unlock_with_pass = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "password",
+            "unlock",
+            "--password",
+            "Passcode99",
+        ])
+        .unwrap();
+        let mut out5 = Vec::new();
+        assert!(run_app(unlock_with_pass, &store, &cb, &mut out5).is_ok());
+        assert!(String::from_utf8(out5)
+            .unwrap()
+            .contains("Session unlocked"));
+
+        std::env::remove_var("TFA_AUTH_FILE");
+        std::env::remove_var("TFA_SESSION_FILE");
+    }
+
+    #[test]
+    fn test_password_enabled_without_configured_password_fails() {
+        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let auth_path = dir.path().join("auth.json");
+        let session_path = dir.path().join("session.json");
+
+        std::env::set_var("TFA_AUTH_FILE", &auth_path);
+        std::env::set_var("TFA_SESSION_FILE", &session_path);
+
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // Config has password = true, but no password has been added
+        std::fs::write(&config_path, "password = true\n").unwrap();
+
+        let list_cli =
+            Cli::try_parse_from(["tfa", "-C", config_path.to_str().unwrap(), "list"]).unwrap();
+        let mut out = Vec::new();
+        let err = run_app(list_cli, &store, &cb, &mut out).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("no master password has been configured"));
+
+        std::env::remove_var("TFA_AUTH_FILE");
+        std::env::remove_var("TFA_SESSION_FILE");
     }
 }

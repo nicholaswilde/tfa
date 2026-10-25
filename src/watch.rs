@@ -117,6 +117,124 @@ pub fn watch_account(
     res
 }
 
+/// Run watch mode for all accounts in the active store/namespace.
+/// Updates live countdowns and codes every interval in a formatted table.
+/// Exits cleanly when 'q', Esc, or Ctrl+C is pressed, or if max_ticks is reached (for testing).
+pub fn watch_all(
+    store: &dyn AccountStore,
+    out: &mut dyn Write,
+    max_ticks: Option<usize>,
+) -> Result<()> {
+    let accounts = store.list_accounts()?;
+    if accounts.is_empty() {
+        writeln!(out, "No accounts configured.")?;
+        return Ok(());
+    }
+
+    let mut entries = Vec::new();
+    for acc in &accounts {
+        let engine_res = store
+            .get_secret(acc)
+            .and_then(|sec| TfaTotp::from_input(acc, &sec));
+        entries.push((acc.clone(), engine_res));
+    }
+
+    let max_acc_len = entries
+        .iter()
+        .map(|(a, _)| a.len())
+        .max()
+        .unwrap_or(7)
+        .max(7);
+
+    let total_lines = 1 + entries.len();
+
+    // Guard raw mode so terminal state is always restored
+    let _guard = RawModeGuard::new()?;
+
+    // Hide cursor
+    write!(out, "\x1b[?25l")?;
+    out.flush()?;
+
+    let mut ticks = 0;
+    let res = (|| -> Result<()> {
+        loop {
+            if ticks > 0 {
+                write!(out, "\x1b[{}A\r", total_lines - 1)?;
+            }
+
+            write!(
+                out,
+                "\x1b[2K{:<width$}  {:^8}  PROGRESS\r\n",
+                "ACCOUNT",
+                "TOKEN",
+                width = max_acc_len
+            )?;
+
+            for (i, (acc, engine_res)) in entries.iter().enumerate() {
+                let is_last = i + 1 == entries.len();
+                let (token, bar) = match engine_res {
+                    Ok(engine) => {
+                        let token = engine.generate_current();
+                        let bar = if engine.is_hotp() {
+                            "[counter-based]".to_string()
+                        } else {
+                            format_progress_bar(engine.ttl(), engine.step(), 12)
+                        };
+                        (token, bar)
+                    }
+                    Err(_) => ("ERROR".to_string(), "[invalid secret]".to_string()),
+                };
+
+                if is_last {
+                    write!(
+                        out,
+                        "\x1b[2K{:<width$}  {:^8}  {}",
+                        acc,
+                        token,
+                        bar,
+                        width = max_acc_len
+                    )?;
+                } else {
+                    write!(
+                        out,
+                        "\x1b[2K{:<width$}  {:^8}  {}\r\n",
+                        acc,
+                        token,
+                        bar,
+                        width = max_acc_len
+                    )?;
+                }
+            }
+            out.flush()?;
+
+            ticks += 1;
+            if let Some(max) = max_ticks {
+                if ticks >= max {
+                    break;
+                }
+            }
+
+            if event::poll(Duration::from_millis(250))? {
+                if let Event::Key(key) = event::read()? {
+                    if key.code == KeyCode::Char('q')
+                        || key.code == KeyCode::Esc
+                        || (key.code == KeyCode::Char('c')
+                            && key.modifiers.contains(KeyModifiers::CONTROL))
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    })();
+
+    let _ = write!(out, "\x1b[?25h\r\n");
+    let _ = out.flush();
+
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,5 +255,52 @@ mod tests {
     fn test_format_progress_bar_custom_step() {
         let bar = format_progress_bar(45, 60, 12);
         assert_eq!(bar, "[█████████░░░] 45s");
+    }
+
+    #[test]
+    fn test_watch_all_empty() {
+        let store = crate::storage::MemoryStore::new();
+        let mut out = Vec::new();
+        let res = watch_all(&store, &mut out, Some(1));
+        assert!(res.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("No accounts configured."));
+    }
+
+    #[test]
+    fn test_watch_all_multiple_accounts() {
+        let store = crate::storage::MemoryStore::new();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("google", "JBSWY3DPEHPK3PXP").unwrap();
+        let mut out = Vec::new();
+        let res = watch_all(&store, &mut out, Some(2));
+        if res.is_ok() {
+            let s = String::from_utf8(out).unwrap();
+            assert!(s.contains("ACCOUNT"));
+            assert!(s.contains("TOKEN"));
+            assert!(s.contains("PROGRESS"));
+            assert!(s.contains("github"));
+            assert!(s.contains("google"));
+        }
+    }
+
+    #[test]
+    fn test_watch_all_with_hotp() {
+        let store = crate::storage::MemoryStore::new();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        store
+            .set_secret(
+                "my_hotp",
+                "otpauth://hotp/my_hotp?secret=JBSWY3DPEHPK3PXP&counter=1",
+            )
+            .unwrap();
+        let mut out = Vec::new();
+        let res = watch_all(&store, &mut out, Some(1));
+        if res.is_ok() {
+            let s = String::from_utf8(out).unwrap();
+            assert!(s.contains("github"));
+            assert!(s.contains("my_hotp"));
+            assert!(s.contains("[counter-based]"));
+        }
     }
 }

@@ -140,10 +140,8 @@ impl Clipboard for CommandClipboard {
             .with_context(|| format!("Failed to spawn clipboard command '{trimmed_cmd}'"))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(text.as_bytes())
-                .with_context(|| format!("Failed to write text to stdin of '{trimmed_cmd}'"))?;
-            stdin.flush()?;
+            let _ = stdin.write_all(text.as_bytes());
+            let _ = stdin.flush();
         }
 
         let output = child
