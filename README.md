@@ -13,6 +13,7 @@ A high-performance, single-binary CLI Two-Factor Authentication (2FA / TOTP) app
 - **Security First:** Credentials and secret seeds reside securely in your OS keychain/keyring (`secret-service`/D-Bus on Linux, Keychain on macOS, Windows Credential Manager).
 - **Headless Fallback:** Automatically falls back to secure user-only file storage (`0600` permissions at `~/.local/share/tfa/credentials.json`) when headless or without active Secret Service daemon. Configurable via `--storage <auto|keyring|file>` or `TFA_STORAGE`.
 - **RFC 6238 Compliant:** Standard time-based one-time passwords (TOTP) powered by [`totp-rs`](https://github.com/constantoine/totp-rs).
+- **QR Code Support:** Render terminal-native ANSI/Unicode block QR codes for mobile authenticator scanning (`tfa qr`), and scan QR code images (`tfa add --qr`) to import accounts automatically.
 - **Flexible Secret Input:** Supports raw Base32 secret keys and standard `otpauth://totp/...` URIs.
 - **Clipboard Integration:** Instantly copy tokens to your system clipboard with `-c` / `--copy`.
 - **Shell Completions:** Built-in completion generation for Bash, Zsh, Fish, PowerShell, and Elvish via `clap_complete`.
@@ -50,7 +51,10 @@ tfa [COMMAND]
 | :--- | :--- | :--- |
 | `generate` | Generate current 6-digit TOTP token | `tfa generate github` |
 | `generate -c` | Generate token and copy to clipboard | `tfa generate github -c` |
+| `generate -w` | Watch token countdown with progress bar | `tfa generate github -w` |
+| `watch` | Watch live TOTP countdown with progress bar | `tfa watch github [-c]` |
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
+| `qr` | Render account as terminal QR code | `tfa qr github [--light]` |
 | `list` | List all configured accounts | `tfa list` |
 | `show` | Display account parameters and stored secret | `tfa show github [-r]` |
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
@@ -72,6 +76,22 @@ tfa add google "otpauth://totp/Google:user@gmail.com?secret=JBSWY3DPEHPK3PXP&iss
 # Interactive prompt (avoids shell history leaks)
 tfa add aws
 Enter TOTP secret for 'aws':
+
+# Import directly from a QR code image / screenshot:
+tfa add --qr /path/to/qr_screenshot.png
+tfa add my_account --qr /path/to/qr_screenshot.png
+```
+
+### QR Code Display
+
+Render any account as a 2D ANSI/Unicode block QR code in the terminal to easily pair mobile authenticator apps:
+
+```bash
+# Standard dark-background terminal (default)
+tfa qr github
+
+# Light-background terminal
+tfa qr github --light
 ```
 
 ### Generating Tokens
@@ -83,6 +103,13 @@ $ tfa generate github
 # With automatic clipboard copy:
 $ tfa generate github -c
 482910 (24s remaining) [copied]
+
+# Live watch mode with dynamic progress bar:
+$ tfa watch github
+github  482910  [████████░░░░] 18s
+
+# Or via generate flag:
+$ tfa generate github -w -c
 ```
 
 ### Backup, Export & Import

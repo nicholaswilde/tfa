@@ -169,7 +169,7 @@ fn parse_json_export(json_str: &str) -> Result<Vec<ImportItem>> {
     Ok(items)
 }
 
-fn extract_account_from_otpauth(url_str: &str) -> String {
+pub fn extract_account_from_otpauth(url_str: &str) -> String {
     if let Ok(url) = url::Url::parse(url_str) {
         let path = url.path().trim_start_matches('/');
         if let Some(acc) = path.split(':').next_back() {

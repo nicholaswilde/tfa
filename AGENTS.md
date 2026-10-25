@@ -19,6 +19,11 @@ Instructions, conventions, and architectural context for AI agents working on `t
 - Generate time-based one-time passwords (TOTP) compliant with RFC 6238 via `totp-rs`.
 - Interactive and automated CLI flows powered by `clap`.
 
+### Reference Implementation
+For feature parity, capabilities, design inspiration, or CLI conveniences, refer to:
+- **Path:** `/home/nicholas/git/yitsushi/totp-cli`
+- Consult `totp-cli` commands, flags, configuration structure, and feature set when planning or expanding `tfa`.
+
 ---
 
 ## 2. Technology Stack

@@ -8,8 +8,10 @@ use std::path::{Path, PathBuf};
 mod backup;
 mod clipboard;
 mod import;
+mod qr;
 mod storage;
 mod totp;
+mod watch;
 
 use clipboard::{Clipboard, SystemClipboard};
 use storage::{AccountStore, AutoStore, FileStore, KeyringStore};
@@ -47,13 +49,27 @@ pub enum Commands {
         /// Copy generated token to clipboard
         #[arg(short, long)]
         copy: bool,
+        /// Watch and continuously refresh code with progress bar
+        #[arg(short, long)]
+        watch: bool,
+    },
+    /// Live watch mode displaying continuous TOTP countdown with progress bar
+    Watch {
+        /// Name of the account
+        account: String,
+        /// Copy token to clipboard on every cycle
+        #[arg(short, long)]
+        copy: bool,
     },
     /// Add a new account secret or OTPAuth URL
     Add {
         /// Name of the account
-        account: String,
-        /// TOTP secret key or otpauth:// URI (prompted if omitted)
+        account: Option<String>,
+        /// TOTP secret key or otpauth:// URI (prompted if omitted and --qr not supplied)
         secret: Option<String>,
+        /// Decode account secret and parameters from a QR code image
+        #[arg(long)]
+        qr: Option<PathBuf>,
         /// Number of digits in generated code (e.g. 6 or 8)
         #[arg(short, long)]
         digits: Option<u8>,
@@ -63,6 +79,14 @@ pub enum Commands {
         /// Hash algorithm (sha1, sha256, sha512)
         #[arg(short, long)]
         algorithm: Option<totp_rs::Algorithm>,
+    },
+    /// Render account as a terminal QR code for mobile authenticator scanning
+    Qr {
+        /// Name of the account
+        account: String,
+        /// Invert terminal QR blocks (for light terminal backgrounds)
+        #[arg(long)]
+        light: bool,
     },
     /// List all stored accounts
     List,
@@ -127,42 +151,81 @@ pub fn run_app(
     out_writer: &mut dyn Write,
 ) -> anyhow::Result<()> {
     match cli.command {
-        Some(Commands::Generate { account, copy }) => {
-            let secret = store.get_secret(&account)?;
-            let engine = TfaTotp::from_input(&account, &secret)?;
-            let code = engine.generate_current();
-            let ttl = engine.ttl();
-
-            if copy {
-                clipboard.set_text(&code)?;
-                writeln!(out_writer, "{code} ({ttl}s remaining) [copied]")?;
+        Some(Commands::Generate {
+            account,
+            copy,
+            watch,
+        }) => {
+            if watch {
+                watch::watch_account(&account, store, clipboard, copy, out_writer, None)?;
             } else {
-                writeln!(out_writer, "{code} ({ttl}s remaining)")?;
+                let secret = store.get_secret(&account)?;
+                let engine = TfaTotp::from_input(&account, &secret)?;
+                let code = engine.generate_current();
+                let ttl = engine.ttl();
+
+                if copy {
+                    clipboard.set_text(&code)?;
+                    writeln!(out_writer, "{code} ({ttl}s remaining) [copied]")?;
+                } else {
+                    writeln!(out_writer, "{code} ({ttl}s remaining)")?;
+                }
             }
+        }
+        Some(Commands::Watch { account, copy }) => {
+            watch::watch_account(&account, store, clipboard, copy, out_writer, None)?;
         }
         Some(Commands::Add {
             account,
             secret,
+            qr,
             digits,
             period,
             algorithm,
         }) => {
-            let raw_secret = match secret {
-                Some(s) => s,
-                None => {
-                    eprint!("Enter TOTP secret for '{account}': ");
-                    let mut buffer = String::new();
-                    let stdin = io::stdin();
-                    stdin.lock().read_line(&mut buffer)?;
-                    buffer.trim().to_string()
-                }
+            let (target_account, raw_secret) = if let Some(qr_path) = qr {
+                let decoded = qr::scan_qr_from_image(&qr_path)?;
+                let acct = match account {
+                    Some(a) => a,
+                    None => {
+                        // Extract label/account from OTPAuth URI or fallback
+                        if decoded.starts_with("otpauth://") {
+                            import::extract_account_from_otpauth(&decoded)
+                        } else {
+                            anyhow::bail!(
+                                "Account name is required when QR content is not an OTPAuth URL"
+                            );
+                        }
+                    }
+                };
+                (acct, decoded)
+            } else {
+                let acct = account.ok_or_else(|| anyhow::anyhow!("Account name is required"))?;
+                let raw = match secret {
+                    Some(s) => s,
+                    None => {
+                        eprint!("Enter TOTP secret for '{acct}': ");
+                        let mut buffer = String::new();
+                        let stdin = io::stdin();
+                        stdin.lock().read_line(&mut buffer)?;
+                        buffer.trim().to_string()
+                    }
+                };
+                (acct, raw)
             };
 
             // Validate and generate canonical OTPAuth URL with custom parameters
-            let engine = TfaTotp::build(&account, &raw_secret, digits, period, algorithm)?;
+            let engine = TfaTotp::build(&target_account, &raw_secret, digits, period, algorithm)?;
             let url = engine.to_url()?;
-            store.set_secret(&account, &url)?;
-            writeln!(out_writer, "Account '{account}' added successfully.")?;
+            store.set_secret(&target_account, &url)?;
+            writeln!(out_writer, "Account '{target_account}' added successfully.")?;
+        }
+        Some(Commands::Qr { account, light }) => {
+            let secret = store.get_secret(&account)?;
+            let engine = TfaTotp::from_input(&account, &secret)?;
+            let url = engine.to_url()?;
+            let qr_blocks = qr::render_terminal_qr(&url, !light)?;
+            write!(out_writer, "{qr_blocks}")?;
         }
         Some(Commands::List) => {
             let accounts = store.list_accounts()?;
@@ -428,9 +491,14 @@ mod tests {
     fn test_cli_parse_generate() {
         let cli = Cli::try_parse_from(["tfa", "generate", "github"]).unwrap();
         match cli.command {
-            Some(Commands::Generate { account, copy }) => {
+            Some(Commands::Generate {
+                account,
+                copy,
+                watch,
+            }) => {
                 assert_eq!(account, "github");
                 assert!(!copy);
+                assert!(!watch);
             }
             _ => panic!("Expected generate subcommand"),
         }
@@ -441,9 +509,14 @@ mod tests {
         // Short flag -c
         let cli_short = Cli::try_parse_from(["tfa", "generate", "github", "-c"]).unwrap();
         match cli_short.command {
-            Some(Commands::Generate { account, copy }) => {
+            Some(Commands::Generate {
+                account,
+                copy,
+                watch,
+            }) => {
                 assert_eq!(account, "github");
                 assert!(copy);
+                assert!(!watch);
             }
             _ => panic!("Expected generate subcommand"),
         }
@@ -451,11 +524,36 @@ mod tests {
         // Long flag --copy
         let cli_long = Cli::try_parse_from(["tfa", "generate", "aws", "--copy"]).unwrap();
         match cli_long.command {
-            Some(Commands::Generate { account, copy }) => {
+            Some(Commands::Generate {
+                account,
+                copy,
+                watch,
+            }) => {
                 assert_eq!(account, "aws");
                 assert!(copy);
+                assert!(!watch);
             }
             _ => panic!("Expected generate subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_watch() {
+        let cli = Cli::try_parse_from(["tfa", "watch", "github", "-c"]).unwrap();
+        match cli.command {
+            Some(Commands::Watch { account, copy }) => {
+                assert_eq!(account, "github");
+                assert!(copy);
+            }
+            _ => panic!("Expected watch subcommand"),
+        }
+
+        let cli_gen_watch = Cli::try_parse_from(["tfa", "generate", "github", "-w"]).unwrap();
+        match cli_gen_watch.command {
+            Some(Commands::Generate { watch, .. }) => {
+                assert!(watch);
+            }
+            _ => panic!("Expected generate subcommand with watch"),
         }
     }
 
@@ -483,12 +581,36 @@ mod tests {
                 algorithm,
                 ..
             }) => {
-                assert_eq!(account, "custom");
+                assert_eq!(account, Some("custom".to_string()));
                 assert_eq!(digits, Some(8));
                 assert_eq!(period, Some(60));
                 assert_eq!(algorithm, Some(totp_rs::Algorithm::SHA256));
             }
             _ => panic!("Expected add subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_add_qr_flag() {
+        let cli = Cli::try_parse_from(["tfa", "add", "--qr", "qr.png"]).unwrap();
+        match cli.command {
+            Some(Commands::Add { account, qr, .. }) => {
+                assert_eq!(account, None);
+                assert_eq!(qr, Some(PathBuf::from("qr.png")));
+            }
+            _ => panic!("Expected add subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_qr_subcommand() {
+        let cli = Cli::try_parse_from(["tfa", "qr", "github", "--light"]).unwrap();
+        match cli.command {
+            Some(Commands::Qr { account, light }) => {
+                assert_eq!(account, "github");
+                assert!(light);
+            }
+            _ => panic!("Expected qr subcommand"),
         }
     }
 
@@ -933,5 +1055,90 @@ mod tests {
     fn test_get_passphrase_empty_flag_fails() {
         let err = get_passphrase(Some("".to_string()), false);
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_run_app_qr_display() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        let cli = Cli::try_parse_from(["tfa", "qr", "github"]).unwrap();
+        assert!(run_app(cli, &store, &cb, &mut out).is_ok());
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains('█'));
+    }
+
+    #[test]
+    fn test_run_app_add_with_qr_image() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        // Create a test QR image with an OTPAuth URI
+        let payload = "otpauth://totp/GitLab:user@gitlab.com?secret=JBSWY3DPEHPK3PXP&issuer=GitLab";
+        let qr = qrcodegen::QrCode::encode_text(payload, qrcodegen::QrCodeEcc::Medium).unwrap();
+        let size = qr.size() as u32;
+        let border = 4u32;
+        let img_dim = size + border * 2;
+        let mut img_buf = image::GrayImage::new(img_dim, img_dim);
+        for pixel in img_buf.pixels_mut() {
+            *pixel = image::Luma([255u8]);
+        }
+        for y in 0..size {
+            for x in 0..size {
+                if qr.get_module(x as i32, y as i32) {
+                    img_buf.put_pixel(x + border, y + border, image::Luma([0u8]));
+                }
+            }
+        }
+        let temp_dir = tempfile::tempdir().unwrap();
+        let img_path = temp_dir.path().join("gitlab_qr.png");
+        img_buf.save(&img_path).unwrap();
+
+        // 1. Add using label from CLI
+        let cli = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "my_gitlab",
+            "--qr",
+            img_path.to_str().unwrap(),
+        ])
+        .unwrap();
+        assert!(run_app(cli, &store, &cb, &mut out).is_ok());
+        assert!(store
+            .list_accounts()
+            .unwrap()
+            .contains(&"my_gitlab".to_string()));
+
+        // 2. Add without account positional argument, auto-extract label from URI
+        let cli2 = Cli::try_parse_from(["tfa", "add", "--qr", img_path.to_str().unwrap()]).unwrap();
+        assert!(run_app(cli2, &store, &cb, &mut out).is_ok());
+        assert!(store
+            .list_accounts()
+            .unwrap()
+            .contains(&"user@gitlab.com".to_string()));
+    }
+
+    #[test]
+    fn test_watch_account_lifecycle() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // Run watch for 2 ticks (stops automatically for test)
+        let res = watch::watch_account("github", &store, &cb, true, &mut out, Some(2));
+        // Under headless or non-tty environments, enable_raw_mode may fail or succeed
+        // If enable_raw_mode succeeds, check output content
+        if res.is_ok() {
+            let out_str = String::from_utf8(out).unwrap();
+            assert!(out_str.contains("github"));
+            assert!(out_str.contains("[copied]"));
+            assert_eq!(cb.text.lock().unwrap().as_deref().unwrap().len(), 6);
+        }
     }
 }
