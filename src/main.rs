@@ -531,6 +531,18 @@ pub fn resolve_instant_secret(
     secret_arg: Option<String>,
     qr_arg: Option<&Path>,
 ) -> anyhow::Result<String> {
+    #[cfg(test)]
+    {
+        if std::env::var("TFA_TEST_INTERACTIVE").is_err() {
+            // When executing unit tests, avoid locking/reading inherited process stdin
+            return resolve_instant_secret_with_reader(
+                secret_arg,
+                qr_arg,
+                io::Cursor::new(Vec::new()),
+                false,
+            );
+        }
+    }
     let stdin = io::stdin();
     let is_term = stdin.is_terminal();
     resolve_instant_secret_with_reader(secret_arg, qr_arg, stdin.lock(), is_term)
@@ -642,6 +654,14 @@ pub fn run_app(
             NamespaceCommands::Delete { name, force } => {
                 let norm = namespace::normalize_namespace(name);
                 if !force {
+                    #[cfg(test)]
+                    {
+                        if std::env::var("TFA_TEST_INTERACTIVE").is_err() {
+                            anyhow::bail!(
+                                "Cannot delete namespace without --force in non-interactive mode"
+                            );
+                        }
+                    }
                     // Check if non-interactive environment
                     if !io::stdin().is_terminal() {
                         anyhow::bail!(
@@ -1041,6 +1061,17 @@ pub fn run_app(
                 let raw = match secret {
                     Some(s) => s,
                     None => {
+                        #[cfg(test)]
+                        {
+                            if std::env::var("TFA_TEST_INTERACTIVE").is_err() {
+                                anyhow::bail!(
+                                    "TOTP secret is required in non-interactive environment"
+                                );
+                            }
+                        }
+                        if !io::stdin().is_terminal() {
+                            anyhow::bail!("TOTP secret is required in non-interactive environment");
+                        }
                         eprint!("Enter TOTP secret for '{acct}': ");
                         let mut buffer = String::new();
                         let stdin = io::stdin();
