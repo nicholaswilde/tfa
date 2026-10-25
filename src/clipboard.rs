@@ -1,8 +1,9 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use base64ct::{Base64, Encoding};
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
+use std::process::{Command, Stdio};
 
 /// Clipboard backend provider
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -98,19 +99,97 @@ impl Clipboard for Osc52Clipboard {
     }
 }
 
-/// Dynamic clipboard dispatcher based on ClipboardProvider
+/// Custom external command clipboard (pipes token to standard input)
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CommandClipboard {
+    pub command: String,
+}
+
+impl CommandClipboard {
+    pub fn new(command: impl Into<String>) -> Self {
+        Self {
+            command: command.into(),
+        }
+    }
+}
+
+impl Clipboard for CommandClipboard {
+    fn set_text(&self, text: &str) -> Result<()> {
+        let trimmed_cmd = self.command.trim();
+        if trimmed_cmd.is_empty() {
+            anyhow::bail!("Clipboard command cannot be empty");
+        }
+
+        #[cfg(windows)]
+        let mut child = Command::new("cmd")
+            .args(["/C", trimmed_cmd])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .with_context(|| format!("Failed to spawn clipboard command '{trimmed_cmd}'"))?;
+
+        #[cfg(not(windows))]
+        let mut child = Command::new("sh")
+            .arg("-c")
+            .arg(trimmed_cmd)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .with_context(|| format!("Failed to spawn clipboard command '{trimmed_cmd}'"))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(text.as_bytes())
+                .with_context(|| format!("Failed to write text to stdin of '{trimmed_cmd}'"))?;
+            stdin.flush()?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .with_context(|| format!("Failed waiting for clipboard command '{trimmed_cmd}'"))?;
+
+        if !output.status.success() {
+            let stderr_str = String::from_utf8_lossy(&output.stderr);
+            let code = output
+                .status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "signal".to_string());
+            anyhow::bail!(
+                "Clipboard command '{trimmed_cmd}' failed with exit code {code}: {}",
+                stderr_str.trim()
+            );
+        }
+
+        Ok(())
+    }
+}
+
+/// Dynamic clipboard dispatcher based on custom command or ClipboardProvider
 pub struct DispatchingClipboard {
     provider: ClipboardProvider,
+    custom_command: Option<String>,
 }
 
 impl DispatchingClipboard {
-    pub fn new(provider: ClipboardProvider) -> Self {
-        Self { provider }
+    pub fn new(provider: ClipboardProvider, custom_command: Option<String>) -> Self {
+        Self {
+            provider,
+            custom_command,
+        }
     }
 }
 
 impl Clipboard for DispatchingClipboard {
     fn set_text(&self, text: &str) -> Result<()> {
+        if let Some(ref cmd) = self.custom_command {
+            if !cmd.trim().is_empty() {
+                return CommandClipboard::new(cmd.clone()).set_text(text);
+            }
+        }
+
         match self.provider {
             ClipboardProvider::System => SystemClipboard.set_text(text),
             ClipboardProvider::Osc52 => Osc52Clipboard::new().set_text(text),
@@ -184,5 +263,45 @@ mod tests {
     fn test_osc52_limit_exceeded_fails() {
         let err = Osc52Clipboard::format_sequence("this is too long", 5).unwrap_err();
         assert!(err.to_string().contains("Selection too long"));
+    }
+
+    #[test]
+    fn test_command_clipboard_pipes_stdin_successfully() {
+        let dir = tempfile::tempdir().unwrap();
+        let output_file = dir.path().join("copied.txt");
+        let cmd = format!("cat > '{}'", output_file.display());
+
+        let cb = CommandClipboard::new(cmd);
+        assert!(cb.set_text("789012").is_ok());
+
+        let saved = std::fs::read_to_string(output_file).unwrap();
+        assert_eq!(saved, "789012");
+    }
+
+    #[test]
+    fn test_command_clipboard_error_status_fails() {
+        let cb = CommandClipboard::new("exit 42");
+        let err = cb.set_text("dummy").unwrap_err();
+        assert!(err.to_string().contains("exit code 42"));
+    }
+
+    #[test]
+    fn test_command_clipboard_empty_command_fails() {
+        let cb = CommandClipboard::new("   ");
+        let err = cb.set_text("dummy").unwrap_err();
+        assert!(err.to_string().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_dispatching_clipboard_prefers_custom_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let output_file = dir.path().join("dispatch.txt");
+        let cmd = format!("cat > '{}'", output_file.display());
+
+        let dispatcher = DispatchingClipboard::new(ClipboardProvider::System, Some(cmd));
+        assert!(dispatcher.set_text("999888").is_ok());
+
+        let saved = std::fs::read_to_string(output_file).unwrap();
+        assert_eq!(saved, "999888");
     }
 }

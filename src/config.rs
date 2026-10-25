@@ -31,6 +31,9 @@ impl ConfigFormat {
 pub struct ConfigFile {
     pub storage: Option<StorageBackend>,
     pub clipboard: Option<ClipboardProvider>,
+    #[serde(alias = "clipboard_command")]
+    pub clip_command: Option<String>,
+    pub default_namespace: Option<String>,
     pub digits: Option<u8>,
     #[serde(alias = "step")]
     pub period: Option<u64>,
@@ -80,6 +83,61 @@ impl ConfigFile {
         }
         Ok(None)
     }
+
+    /// Save configuration file back to disk in its corresponding format.
+    pub fn save_to_path(&self, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let format = ConfigFormat::from_path(path).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Unsupported configuration format for '{}'. Expected .toml, .yaml, .yml, or .json",
+                path.display()
+            )
+        })?;
+
+        let text = match format {
+            ConfigFormat::Toml => {
+                toml::to_string_pretty(self).context("Failed serializing TOML")?
+            }
+            ConfigFormat::Yaml => {
+                serde_yaml_ng::to_string(self).context("Failed serializing YAML")?
+            }
+            ConfigFormat::Json => {
+                serde_json::to_string_pretty(self).context("Failed serializing JSON")?
+            }
+        };
+
+        fs::write(path, text)?;
+        Ok(())
+    }
+
+    /// Set default namespace in the configuration file and persist it.
+    pub fn set_default_namespace_in_file(
+        path: Option<&Path>,
+        new_default: &str,
+    ) -> Result<PathBuf> {
+        let (target_path, mut config) = if let Some(p) = path {
+            let cfg = if p.is_file() {
+                Self::load_from_path(p)?
+            } else {
+                Self::default()
+            };
+            (p.to_path_buf(), cfg)
+        } else if let Some((p, cfg)) = Self::load_default()? {
+            (p, cfg)
+        } else {
+            let default_paths = default_config_paths();
+            let first = default_paths.into_iter().next().ok_or_else(|| {
+                anyhow::anyhow!("Unable to determine default config file location")
+            })?;
+            (first, Self::default())
+        };
+
+        config.default_namespace = Some(new_default.to_string());
+        config.save_to_path(&target_path)?;
+        Ok(target_path)
+    }
 }
 
 /// Standard candidate locations for default configuration files.
@@ -122,6 +180,8 @@ pub fn default_config_paths() -> Vec<PathBuf> {
 pub struct ResolvedConfig {
     pub storage: StorageBackend,
     pub clipboard: ClipboardProvider,
+    pub clip_command: Option<String>,
+    pub namespace: String,
     pub digits: Option<u8>,
     pub period: Option<u64>,
     pub algorithm: Option<totp_rs::Algorithm>,
@@ -134,6 +194,8 @@ impl Default for ResolvedConfig {
         Self {
             storage: StorageBackend::Auto,
             clipboard: ClipboardProvider::System,
+            clip_command: None,
+            namespace: "default".to_string(),
             digits: None,
             period: None,
             algorithm: None,
@@ -157,13 +219,15 @@ pub fn parse_algorithm_str(s: &str) -> Result<totp_rs::Algorithm> {
 
 /// Resolves configuration taking into account:
 /// 1. Explicit CLI arguments (if passed)
-/// 2. Environment variables (`TFA_STORAGE`, `TFA_CLIPBOARD`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
+/// 2. Environment variables (`TFA_STORAGE`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
 /// 3. Configuration file (either explicit path via `--config` / `TFA_CONFIG`, or discovered default in `~/.config/tfa/config.*`)
 /// 4. Hardcoded defaults
 pub fn resolve_configuration(
     cli_config_path: Option<&Path>,
     cli_storage: Option<StorageBackend>,
     cli_clipboard: Option<ClipboardProvider>,
+    cli_clip_command: Option<String>,
+    cli_namespace: Option<String>,
 ) -> Result<(ResolvedConfig, Option<ConfigFile>)> {
     // Determine config file path: explicit CLI / TFA_CONFIG or default discovery
     let config_file = if let Some(path) = cli_config_path {
@@ -207,6 +271,37 @@ pub fn resolve_configuration(
         cp
     } else {
         ClipboardProvider::System
+    };
+
+    // 3. Custom clip_command precedence: CLI > Env > Config File
+    let clip_command = if let Some(cmd) = cli_clip_command {
+        Some(cmd)
+    } else if let Ok(cmd_env) = std::env::var("TFA_CLIP_COMMAND") {
+        if !cmd_env.trim().is_empty() {
+            Some(cmd_env)
+        } else {
+            None
+        }
+    } else {
+        config_file.as_ref().and_then(|c| c.clip_command.clone())
+    };
+
+    // 4. Namespace precedence: CLI > Env > Config File (default_namespace) > Default ("default")
+    let namespace = if let Some(ns) = cli_namespace {
+        ns.trim().to_lowercase()
+    } else if let Ok(ns_env) = std::env::var("TFA_NAMESPACE") {
+        if !ns_env.trim().is_empty() {
+            ns_env.trim().to_lowercase()
+        } else {
+            "default".to_string()
+        }
+    } else if let Some(ns_cfg) = config_file
+        .as_ref()
+        .and_then(|c| c.default_namespace.as_ref())
+    {
+        ns_cfg.trim().to_lowercase()
+    } else {
+        "default".to_string()
     };
 
     // 2. Digits precedence: Env > Config File
@@ -266,6 +361,8 @@ pub fn resolve_configuration(
         ResolvedConfig {
             storage,
             clipboard,
+            clip_command,
+            namespace,
             digits,
             period,
             algorithm,
@@ -366,6 +463,8 @@ light: false
             &config_file_path,
             r#"
 storage = "keyring"
+clip_command = "wl-copy"
+default_namespace = "work"
 digits = 8
 period = 60
 auto_copy = false
@@ -374,17 +473,27 @@ auto_copy = false
         .unwrap();
 
         // 1. File loaded only
-        let (resolved, _) = resolve_configuration(Some(&config_file_path), None, None).unwrap();
+        let (resolved, _) =
+            resolve_configuration(Some(&config_file_path), None, None, None, None).unwrap();
         assert_eq!(resolved.storage, StorageBackend::Keyring);
+        assert_eq!(resolved.clip_command.as_deref(), Some("wl-copy"));
+        assert_eq!(resolved.namespace, "work");
         assert_eq!(resolved.digits, Some(8));
         assert_eq!(resolved.period, Some(60));
         assert!(!resolved.auto_copy);
 
         // 2. CLI overrides file
-        let (resolved_cli, _) =
-            resolve_configuration(Some(&config_file_path), Some(StorageBackend::File), None)
-                .unwrap();
+        let (resolved_cli, _) = resolve_configuration(
+            Some(&config_file_path),
+            Some(StorageBackend::File),
+            None,
+            Some("xclip".to_string()),
+            Some("personal".to_string()),
+        )
+        .unwrap();
         assert_eq!(resolved_cli.storage, StorageBackend::File);
+        assert_eq!(resolved_cli.clip_command.as_deref(), Some("xclip"));
+        assert_eq!(resolved_cli.namespace, "personal");
     }
 
     #[test]
@@ -398,6 +507,8 @@ auto_copy = false
             r#"{
                 "storage": "file",
                 "clipboard": "system",
+                "clip_command": "xsel",
+                "default_namespace": "home",
                 "digits": 6,
                 "period": 30,
                 "algorithm": "sha1",
@@ -408,9 +519,12 @@ auto_copy = false
         .unwrap();
 
         // Level 3: Config file only (no env, no CLI)
-        let (res_file, _) = resolve_configuration(Some(&config_file_path), None, None).unwrap();
+        let (res_file, _) =
+            resolve_configuration(Some(&config_file_path), None, None, None, None).unwrap();
         assert_eq!(res_file.storage, StorageBackend::File);
         assert_eq!(res_file.clipboard, ClipboardProvider::System);
+        assert_eq!(res_file.clip_command.as_deref(), Some("xsel"));
+        assert_eq!(res_file.namespace, "home");
         assert_eq!(res_file.digits, Some(6));
         assert_eq!(res_file.period, Some(30));
         assert_eq!(res_file.algorithm, Some(totp_rs::Algorithm::SHA1));
@@ -420,15 +534,20 @@ auto_copy = false
         // Level 2: Environment variables override Config file
         std::env::set_var("TFA_STORAGE", "keyring");
         std::env::set_var("TFA_CLIPBOARD", "osc52");
+        std::env::set_var("TFA_CLIP_COMMAND", "pbcopy");
+        std::env::set_var("TFA_NAMESPACE", "ops");
         std::env::set_var("TFA_DIGITS", "8");
         std::env::set_var("TFA_PERIOD", "60");
         std::env::set_var("TFA_ALGORITHM", "sha256");
         std::env::set_var("TFA_AUTO_COPY", "true");
         std::env::set_var("TFA_LIGHT", "true");
 
-        let (res_env, _) = resolve_configuration(Some(&config_file_path), None, None).unwrap();
+        let (res_env, _) =
+            resolve_configuration(Some(&config_file_path), None, None, None, None).unwrap();
         assert_eq!(res_env.storage, StorageBackend::Keyring);
         assert_eq!(res_env.clipboard, ClipboardProvider::Osc52);
+        assert_eq!(res_env.clip_command.as_deref(), Some("pbcopy"));
+        assert_eq!(res_env.namespace, "ops");
         assert_eq!(res_env.digits, Some(8));
         assert_eq!(res_env.period, Some(60));
         assert_eq!(res_env.algorithm, Some(totp_rs::Algorithm::SHA256));
@@ -440,18 +559,38 @@ auto_copy = false
             Some(&config_file_path),
             Some(StorageBackend::File),
             Some(ClipboardProvider::System),
+            Some("custom-pipe".to_string()),
+            Some("dev".to_string()),
         )
         .unwrap();
         assert_eq!(res_cli.storage, StorageBackend::File);
         assert_eq!(res_cli.clipboard, ClipboardProvider::System);
+        assert_eq!(res_cli.clip_command.as_deref(), Some("custom-pipe"));
+        assert_eq!(res_cli.namespace, "dev");
 
         // Clean up environment variables
         std::env::remove_var("TFA_STORAGE");
         std::env::remove_var("TFA_CLIPBOARD");
+        std::env::remove_var("TFA_CLIP_COMMAND");
+        std::env::remove_var("TFA_NAMESPACE");
         std::env::remove_var("TFA_DIGITS");
         std::env::remove_var("TFA_PERIOD");
         std::env::remove_var("TFA_ALGORITHM");
         std::env::remove_var("TFA_AUTO_COPY");
         std::env::remove_var("TFA_LIGHT");
+    }
+
+    #[test]
+    fn test_set_default_namespace_persists_to_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file_path = dir.path().join("config.toml");
+
+        let saved_path =
+            ConfigFile::set_default_namespace_in_file(Some(&config_file_path), "production")
+                .unwrap();
+        assert_eq!(saved_path, config_file_path);
+
+        let reloaded = ConfigFile::load_from_path(&config_file_path).unwrap();
+        assert_eq!(reloaded.default_namespace.as_deref(), Some("production"));
     }
 }

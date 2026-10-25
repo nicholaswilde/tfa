@@ -9,12 +9,15 @@ mod backup;
 mod clipboard;
 mod config;
 mod import;
+mod namespace;
 mod qr;
 mod storage;
 mod totp;
 mod watch;
 
 use clipboard::{Clipboard, ClipboardProvider, DispatchingClipboard};
+use config::ConfigFile;
+use namespace::NamespaceStore;
 use storage::{AccountStore, AutoStore, FileStore, KeyringStore};
 use totp::TfaTotp;
 
@@ -47,6 +50,14 @@ pub struct Cli {
     /// Clipboard copy provider (system or osc52)
     #[arg(long, env = "TFA_CLIPBOARD", global = true)]
     pub clipboard: Option<ClipboardProvider>,
+
+    /// Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)
+    #[arg(long, env = "TFA_CLIP_COMMAND", global = true)]
+    pub clip_command: Option<String>,
+
+    /// Target namespace for account scoping (e.g. personal, work, home)
+    #[arg(short = 'n', long, env = "TFA_NAMESPACE", global = true)]
+    pub namespace: Option<String>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -169,6 +180,43 @@ pub enum Commands {
     },
     /// Generate UNIX roff man page
     Man,
+    /// Manage and isolate accounts across multi-tenant namespaces
+    #[command(alias = "ns")]
+    Namespace {
+        #[command(subcommand)]
+        command: NamespaceCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NamespaceCommands {
+    /// List all namespaces and indicate the active/default one
+    List,
+    /// Create a new namespace
+    Create {
+        /// Name of the new namespace
+        name: String,
+    },
+    /// Rename an existing namespace, safely migrating all contained accounts
+    Rename {
+        /// Current namespace name
+        old_name: String,
+        /// New namespace name
+        new_name: String,
+    },
+    /// Delete a namespace and its contained accounts
+    Delete {
+        /// Name of the namespace to delete
+        name: String,
+        /// Force deletion without interactive confirmation
+        #[arg(short, long)]
+        force: bool,
+    },
+    /// Switch and persist default active namespace in configuration file
+    SetDefault {
+        /// Name of the namespace to set as default
+        name: String,
+    },
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -293,8 +341,89 @@ pub fn run_app(
     clipboard: &dyn Clipboard,
     out_writer: &mut dyn Write,
 ) -> anyhow::Result<()> {
-    let (resolved_cfg, _) =
-        config::resolve_configuration(cli.config.as_deref(), cli.storage, cli.clipboard)?;
+    let (resolved_cfg, _) = config::resolve_configuration(
+        cli.config.as_deref(),
+        cli.storage,
+        cli.clipboard,
+        cli.clip_command,
+        cli.namespace,
+    )?;
+
+    // If the subcommand is Namespace management, operate on the root store directly
+    if let Some(Commands::Namespace {
+        command: ref ns_cmd,
+    }) = cli.command
+    {
+        match ns_cmd {
+            NamespaceCommands::List => {
+                let mut namespaces = NamespaceStore::list_all_namespaces(store)?;
+                // Ensure default namespace exists in list
+                if !namespaces.contains(&resolved_cfg.namespace) {
+                    namespaces.push(resolved_cfg.namespace.clone());
+                    namespaces.sort();
+                }
+                writeln!(out_writer, "{:<20} STATUS", "NAMESPACE")?;
+                for ns in namespaces {
+                    let is_active = ns == resolved_cfg.namespace;
+                    let status = if is_active { "(active)" } else { "" };
+                    writeln!(out_writer, "{:<20} {}", ns, status)?;
+                }
+                return Ok(());
+            }
+            NamespaceCommands::Create { name } => {
+                let norm = namespace::normalize_namespace(name);
+                writeln!(out_writer, "Namespace '{norm}' created.")?;
+                return Ok(());
+            }
+            NamespaceCommands::Rename { old_name, new_name } => {
+                let migrated = NamespaceStore::rename_namespace(store, old_name, new_name)?;
+                writeln!(
+                    out_writer,
+                    "Renamed namespace '{old_name}' to '{new_name}' ({migrated} accounts migrated)."
+                )?;
+                return Ok(());
+            }
+            NamespaceCommands::Delete { name, force } => {
+                let norm = namespace::normalize_namespace(name);
+                if !force {
+                    // Check if non-interactive environment
+                    if !io::stdin().is_terminal() {
+                        anyhow::bail!(
+                            "Cannot delete namespace without --force in non-interactive mode"
+                        );
+                    }
+                    eprint!("Are you sure you want to delete namespace '{norm}' and all its accounts? (y/N): ");
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input)?;
+                    if !input.trim().eq_ignore_ascii_case("y") {
+                        writeln!(out_writer, "Namespace deletion cancelled.")?;
+                        return Ok(());
+                    }
+                }
+                let deleted = NamespaceStore::delete_namespace(store, &norm)?;
+                writeln!(
+                    out_writer,
+                    "Namespace '{norm}' deleted ({deleted} accounts removed)."
+                )?;
+                return Ok(());
+            }
+            NamespaceCommands::SetDefault { name } => {
+                let norm = namespace::normalize_namespace(name);
+                let config_path =
+                    ConfigFile::set_default_namespace_in_file(cli.config.as_deref(), &norm)?;
+                writeln!(
+                    out_writer,
+                    "Default namespace set to '{norm}' in '{}'.",
+                    config_path.display()
+                )?;
+                return Ok(());
+            }
+        }
+    }
+
+    // For all other commands, scope store access to the active namespace
+    let scoped_store = NamespaceStore::new(store, &resolved_cfg.namespace);
+    let store = &scoped_store;
 
     match cli.command {
         Some(Commands::Generate {
@@ -660,6 +789,7 @@ pub fn run_app(
                 )?;
             }
         }
+        Some(Commands::Namespace { .. }) => unreachable!("Handled above"),
         None => {
             writeln!(out_writer, "Use --help for usage instructions.")?;
         }
@@ -693,10 +823,16 @@ fn get_passphrase(password: Option<String>, confirm: bool) -> anyhow::Result<Str
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let (resolved_cfg, _) =
-        config::resolve_configuration(cli.config.as_deref(), cli.storage, cli.clipboard)?;
+    let (resolved_cfg, _) = config::resolve_configuration(
+        cli.config.as_deref(),
+        cli.storage,
+        cli.clipboard,
+        cli.clip_command.clone(),
+        cli.namespace.clone(),
+    )?;
 
-    let clipboard = DispatchingClipboard::new(resolved_cfg.clipboard);
+    let clipboard =
+        DispatchingClipboard::new(resolved_cfg.clipboard, resolved_cfg.clip_command.clone());
 
     let store: Box<dyn AccountStore> = match resolved_cfg.storage {
         StorageBackend::Auto => Box::new(AutoStore::default_auto()?),
@@ -1748,5 +1884,98 @@ light: true
         let mut qr_out = Vec::new();
         assert!(run_app(qr_cli, &store, &cb, &mut qr_out).is_ok());
         assert!(!qr_out.is_empty());
+    }
+
+    #[test]
+    fn test_cli_parse_clip_command_flag() {
+        let cli = Cli::try_parse_from(["tfa", "--clip-command", "wl-copy", "generate", "github"])
+            .unwrap();
+        assert_eq!(cli.clip_command.as_deref(), Some("wl-copy"));
+    }
+
+    #[test]
+    fn test_cli_parse_namespace_flag_and_alias() {
+        let cli = Cli::try_parse_from(["tfa", "-n", "work", "list"]).unwrap();
+        assert_eq!(cli.namespace.as_deref(), Some("work"));
+
+        let cli_ns = Cli::try_parse_from(["tfa", "ns", "list"]).unwrap();
+        match cli_ns.command {
+            Some(Commands::Namespace {
+                command: NamespaceCommands::List,
+            }) => {}
+            _ => panic!("Expected ns alias to map to Namespace command"),
+        }
+    }
+
+    #[test]
+    fn test_run_app_namespace_management_and_isolation() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // 1. Add account in default namespace
+        let add_def = Cli::try_parse_from(["tfa", "add", "github", "JBSWY3DPEHPK3PXP"]).unwrap();
+        let mut out = Vec::new();
+        assert!(run_app(add_def, &store, &cb, &mut out).is_ok());
+
+        // 2. Add account in work namespace
+        let add_work = Cli::try_parse_from([
+            "tfa",
+            "-n",
+            "work",
+            "add",
+            "aws",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        ])
+        .unwrap();
+        let mut out_work = Vec::new();
+        assert!(run_app(add_work, &store, &cb, &mut out_work).is_ok());
+
+        // 3. List in default namespace only shows github
+        let list_def = Cli::try_parse_from(["tfa", "list"]).unwrap();
+        let mut list_def_out = Vec::new();
+        assert!(run_app(list_def, &store, &cb, &mut list_def_out).is_ok());
+        let list_str = String::from_utf8(list_def_out).unwrap();
+        assert!(list_str.contains("github"));
+        assert!(!list_str.contains("aws"));
+
+        // 4. List in work namespace only shows aws
+        let list_work = Cli::try_parse_from(["tfa", "-n", "work", "list"]).unwrap();
+        let mut list_work_out = Vec::new();
+        assert!(run_app(list_work, &store, &cb, &mut list_work_out).is_ok());
+        let work_str = String::from_utf8(list_work_out).unwrap();
+        assert!(work_str.contains("aws"));
+        assert!(!work_str.contains("github"));
+
+        // 5. Namespace list shows default and work
+        let ns_list_cli = Cli::try_parse_from(["tfa", "ns", "list"]).unwrap();
+        let mut ns_out = Vec::new();
+        assert!(run_app(ns_list_cli, &store, &cb, &mut ns_out).is_ok());
+        let ns_str = String::from_utf8(ns_out).unwrap();
+        assert!(ns_str.contains("default"));
+        assert!(ns_str.contains("work"));
+
+        // 6. Namespace rename work -> office
+        let ns_rename =
+            Cli::try_parse_from(["tfa", "namespace", "rename", "work", "office"]).unwrap();
+        let mut rename_out = Vec::new();
+        assert!(run_app(ns_rename, &store, &cb, &mut rename_out).is_ok());
+
+        // Now office has aws, work is empty
+        let office_list = Cli::try_parse_from(["tfa", "-n", "office", "list"]).unwrap();
+        let mut office_out = Vec::new();
+        assert!(run_app(office_list, &store, &cb, &mut office_out).is_ok());
+        assert!(String::from_utf8(office_out).unwrap().contains("aws"));
+
+        // 7. Delete office namespace with --force
+        let ns_del = Cli::try_parse_from(["tfa", "ns", "delete", "office", "--force"]).unwrap();
+        let mut del_out = Vec::new();
+        assert!(run_app(ns_del, &store, &cb, &mut del_out).is_ok());
+
+        let office_list_after = Cli::try_parse_from(["tfa", "-n", "office", "list"]).unwrap();
+        let mut office_after_out = Vec::new();
+        assert!(run_app(office_list_after, &store, &cb, &mut office_after_out).is_ok());
+        assert!(String::from_utf8(office_after_out)
+            .unwrap()
+            .contains("No accounts configured."));
     }
 }

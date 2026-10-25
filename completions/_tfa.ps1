@@ -25,6 +25,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
@@ -41,6 +44,7 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import accounts from a backup file, migration URI, or JSON payload')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell autocompletions script')
             [CompletionResult]::new('man', 'man', [CompletionResultType]::ParameterValue, 'Generate UNIX roff man page')
+            [CompletionResult]::new('namespace', 'namespace', [CompletionResultType]::ParameterValue, 'Manage and isolate accounts across multi-tenant namespaces')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -52,6 +56,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-w', '-w', [CompletionResultType]::ParameterName, 'Watch and continuously refresh code with progress bar')
             [CompletionResult]::new('--watch', '--watch', [CompletionResultType]::ParameterName, 'Watch and continuously refresh code with progress bar')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -65,6 +72,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -83,6 +93,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -93,6 +106,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -102,6 +118,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-c', '-c', [CompletionResultType]::ParameterName, 'Include live TOTP codes and remaining time-to-live')
             [CompletionResult]::new('--codes', '--codes', [CompletionResultType]::ParameterName, 'Include live TOTP codes and remaining time-to-live')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Output overview in JSON format')
@@ -114,6 +133,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Output overview in JSON format')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -124,6 +146,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -133,6 +158,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Print only the raw secret or URI')
             [CompletionResult]::new('--raw', '--raw', [CompletionResultType]::ParameterName, 'Print only the raw secret or URI')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -145,6 +173,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('--unencrypted', '--unencrypted', [CompletionResultType]::ParameterName, 'Export without encryption (plain JSON)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -156,6 +187,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Preview accounts to import without saving them')
             [CompletionResult]::new('--overwrite', '--overwrite', [CompletionResultType]::ParameterName, 'Overwrite existing accounts if conflicts occur')
             [CompletionResult]::new('--skip', '--skip', [CompletionResultType]::ParameterName, 'Skip existing accounts if conflicts occur (default)')
@@ -168,6 +202,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -177,8 +214,118 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
             [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'tfa;namespace' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List all namespaces and indicate the active/default one')
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Create a new namespace')
+            [CompletionResult]::new('rename', 'rename', [CompletionResultType]::ParameterValue, 'Rename an existing namespace, safely migrating all contained accounts')
+            [CompletionResult]::new('delete', 'delete', [CompletionResultType]::ParameterValue, 'Delete a namespace and its contained accounts')
+            [CompletionResult]::new('set-default', 'set-default', [CompletionResultType]::ParameterValue, 'Switch and persist default active namespace in configuration file')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'tfa;namespace;list' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'tfa;namespace;create' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'tfa;namespace;rename' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'tfa;namespace;delete' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('-f', '-f', [CompletionResultType]::ParameterName, 'Force deletion without interactive confirmation')
+            [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Force deletion without interactive confirmation')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'tfa;namespace;set-default' {
+            [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
+            [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')
+            [CompletionResult]::new('--clipboard', '--clipboard', [CompletionResultType]::ParameterName, 'Clipboard copy provider (system or osc52)')
+            [CompletionResult]::new('--clip-command', '--clip-command', [CompletionResultType]::ParameterName, 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)')
+            [CompletionResult]::new('-n', '-n', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'tfa;namespace;help' {
+            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List all namespaces and indicate the active/default one')
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Create a new namespace')
+            [CompletionResult]::new('rename', 'rename', [CompletionResultType]::ParameterValue, 'Rename an existing namespace, safely migrating all contained accounts')
+            [CompletionResult]::new('delete', 'delete', [CompletionResultType]::ParameterValue, 'Delete a namespace and its contained accounts')
+            [CompletionResult]::new('set-default', 'set-default', [CompletionResultType]::ParameterValue, 'Switch and persist default active namespace in configuration file')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'tfa;namespace;help;list' {
+            break
+        }
+        'tfa;namespace;help;create' {
+            break
+        }
+        'tfa;namespace;help;rename' {
+            break
+        }
+        'tfa;namespace;help;delete' {
+            break
+        }
+        'tfa;namespace;help;set-default' {
+            break
+        }
+        'tfa;namespace;help;help' {
             break
         }
         'tfa;help' {
@@ -194,6 +341,7 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import accounts from a backup file, migration URI, or JSON payload')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell autocompletions script')
             [CompletionResult]::new('man', 'man', [CompletionResultType]::ParameterValue, 'Generate UNIX roff man page')
+            [CompletionResult]::new('namespace', 'namespace', [CompletionResultType]::ParameterValue, 'Manage and isolate accounts across multi-tenant namespaces')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -231,6 +379,29 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             break
         }
         'tfa;help;man' {
+            break
+        }
+        'tfa;help;namespace' {
+            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List all namespaces and indicate the active/default one')
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Create a new namespace')
+            [CompletionResult]::new('rename', 'rename', [CompletionResultType]::ParameterValue, 'Rename an existing namespace, safely migrating all contained accounts')
+            [CompletionResult]::new('delete', 'delete', [CompletionResultType]::ParameterValue, 'Delete a namespace and its contained accounts')
+            [CompletionResult]::new('set-default', 'set-default', [CompletionResultType]::ParameterValue, 'Switch and persist default active namespace in configuration file')
+            break
+        }
+        'tfa;help;namespace;list' {
+            break
+        }
+        'tfa;help;namespace;create' {
+            break
+        }
+        'tfa;help;namespace;rename' {
+            break
+        }
+        'tfa;help;namespace;delete' {
+            break
+        }
+        'tfa;help;namespace;set-default' {
             break
         }
         'tfa;help;help' {

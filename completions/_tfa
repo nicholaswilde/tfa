@@ -22,6 +22,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
@@ -47,6 +50,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-w[Watch and continuously refresh code with progress bar]' \
 '--watch[Watch and continuously refresh code with progress bar]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -65,6 +71,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '::account -- Name of the account (interactively prompted via fuzzy search if omitted):_default' \
@@ -88,6 +97,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '::account -- Name of the account:_default' \
@@ -104,6 +116,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 ':account -- Name of the account:_default' \
@@ -118,6 +133,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-c[Include live TOTP codes and remaining time-to-live]' \
 '--codes[Include live TOTP codes and remaining time-to-live]' \
 '--json[Output overview in JSON format]' \
@@ -134,6 +152,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '--json[Output overview in JSON format]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
@@ -148,6 +169,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '::account -- Name of the account (interactively prompted via fuzzy search if omitted):_default' \
@@ -162,6 +186,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-r[Print only the raw secret or URI]' \
 '--raw[Print only the raw secret or URI]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -179,6 +206,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '--unencrypted[Export without encryption (plain JSON)]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
@@ -195,6 +225,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '--dry-run[Preview accounts to import without saving them]' \
 '(--skip)--overwrite[Overwrite existing accounts if conflicts occur]' \
 '(--overwrite)--skip[Skip existing accounts if conflicts occur (default)]' \
@@ -212,6 +245,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 ':shell -- Shell to generate completions for:(bash elvish fish powershell zsh)' \
@@ -226,9 +262,167 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
+;;
+(namespace)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+":: :_tfa__subcmd__namespace_commands" \
+"*::: :->namespace" \
+&& ret=0
+
+    case $state in
+    (namespace)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-namespace-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':name -- Name of the new namespace:_default' \
+&& ret=0
+;;
+(rename)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':old_name -- Current namespace name:_default' \
+':new_name -- New namespace name:_default' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-f[Force deletion without interactive confirmation]' \
+'--force[Force deletion without interactive confirmation]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':name -- Name of the namespace to delete:_default' \
+&& ret=0
+;;
+(set-default)
+_arguments "${_arguments_options[@]}" : \
+'-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
+'--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
+keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+'--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
+osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
+'--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
+'-n+[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':name -- Name of the namespace to set as default:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_tfa__subcmd__namespace__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-namespace-help-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(rename)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set-default)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
 ;;
 (help)
 _arguments "${_arguments_options[@]}" : \
@@ -290,6 +484,42 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(namespace)
+_arguments "${_arguments_options[@]}" : \
+":: :_tfa__subcmd__help__subcmd__namespace_commands" \
+"*::: :->namespace" \
+&& ret=0
+
+    case $state in
+    (namespace)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:tfa-help-namespace-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(rename)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set-default)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -318,6 +548,7 @@ _tfa_commands() {
 'import:Import accounts from a backup file, migration URI, or JSON payload' \
 'completions:Generate shell autocompletions script' \
 'man:Generate UNIX roff man page' \
+'namespace:Manage and isolate accounts across multi-tenant namespaces' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'tfa commands' commands "$@"
@@ -362,6 +593,7 @@ _tfa__subcmd__help_commands() {
 'import:Import accounts from a backup file, migration URI, or JSON payload' \
 'completions:Generate shell autocompletions script' \
 'man:Generate UNIX roff man page' \
+'namespace:Manage and isolate accounts across multi-tenant namespaces' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'tfa help commands' commands "$@"
@@ -411,6 +643,42 @@ _tfa__subcmd__help__subcmd__man_commands() {
     local commands; commands=()
     _describe -t commands 'tfa help man commands' commands "$@"
 }
+(( $+functions[_tfa__subcmd__help__subcmd__namespace_commands] )) ||
+_tfa__subcmd__help__subcmd__namespace_commands() {
+    local commands; commands=(
+'list:List all namespaces and indicate the active/default one' \
+'create:Create a new namespace' \
+'rename:Rename an existing namespace, safely migrating all contained accounts' \
+'delete:Delete a namespace and its contained accounts' \
+'set-default:Switch and persist default active namespace in configuration file' \
+    )
+    _describe -t commands 'tfa help namespace commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__namespace__subcmd__create_commands] )) ||
+_tfa__subcmd__help__subcmd__namespace__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help namespace create commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__namespace__subcmd__delete_commands] )) ||
+_tfa__subcmd__help__subcmd__namespace__subcmd__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help namespace delete commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__namespace__subcmd__list_commands] )) ||
+_tfa__subcmd__help__subcmd__namespace__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help namespace list commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__namespace__subcmd__rename_commands] )) ||
+_tfa__subcmd__help__subcmd__namespace__subcmd__rename_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help namespace rename commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__help__subcmd__namespace__subcmd__set-default_commands] )) ||
+_tfa__subcmd__help__subcmd__namespace__subcmd__set-default_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa help namespace set-default commands' commands "$@"
+}
 (( $+functions[_tfa__subcmd__help__subcmd__qr_commands] )) ||
 _tfa__subcmd__help__subcmd__qr_commands() {
     local commands; commands=()
@@ -445,6 +713,85 @@ _tfa__subcmd__list_commands() {
 _tfa__subcmd__man_commands() {
     local commands; commands=()
     _describe -t commands 'tfa man commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace_commands] )) ||
+_tfa__subcmd__namespace_commands() {
+    local commands; commands=(
+'list:List all namespaces and indicate the active/default one' \
+'create:Create a new namespace' \
+'rename:Rename an existing namespace, safely migrating all contained accounts' \
+'delete:Delete a namespace and its contained accounts' \
+'set-default:Switch and persist default active namespace in configuration file' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'tfa namespace commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__create_commands] )) ||
+_tfa__subcmd__namespace__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace create commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__delete_commands] )) ||
+_tfa__subcmd__namespace__subcmd__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace delete commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__help_commands] )) ||
+_tfa__subcmd__namespace__subcmd__help_commands() {
+    local commands; commands=(
+'list:List all namespaces and indicate the active/default one' \
+'create:Create a new namespace' \
+'rename:Rename an existing namespace, safely migrating all contained accounts' \
+'delete:Delete a namespace and its contained accounts' \
+'set-default:Switch and persist default active namespace in configuration file' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'tfa namespace help commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__help__subcmd__create_commands] )) ||
+_tfa__subcmd__namespace__subcmd__help__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace help create commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__help__subcmd__delete_commands] )) ||
+_tfa__subcmd__namespace__subcmd__help__subcmd__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace help delete commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__help__subcmd__help_commands] )) ||
+_tfa__subcmd__namespace__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace help help commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__help__subcmd__list_commands] )) ||
+_tfa__subcmd__namespace__subcmd__help__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace help list commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__help__subcmd__rename_commands] )) ||
+_tfa__subcmd__namespace__subcmd__help__subcmd__rename_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace help rename commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__help__subcmd__set-default_commands] )) ||
+_tfa__subcmd__namespace__subcmd__help__subcmd__set-default_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace help set-default commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__list_commands] )) ||
+_tfa__subcmd__namespace__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace list commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__rename_commands] )) ||
+_tfa__subcmd__namespace__subcmd__rename_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace rename commands' commands "$@"
+}
+(( $+functions[_tfa__subcmd__namespace__subcmd__set-default_commands] )) ||
+_tfa__subcmd__namespace__subcmd__set-default_commands() {
+    local commands; commands=()
+    _describe -t commands 'tfa namespace set-default commands' commands "$@"
 }
 (( $+functions[_tfa__subcmd__qr_commands] )) ||
 _tfa__subcmd__qr_commands() {

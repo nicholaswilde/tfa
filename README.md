@@ -61,6 +61,7 @@ tfa [COMMAND]
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `delete` | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
+| `namespace` (`ns`) | Multi-tenant namespace management (`list`, `create`, `rename`, `delete`, `set-default`) | `tfa ns list` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
 | `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
 
@@ -231,28 +232,32 @@ Pre-generated completion scripts are also available in the [`completions/`](comp
 
 ### Hierarchical Precedence
 Settings resolve in strict hierarchical precedence order (highest to lowest):
-1. **Command Line Arguments** (e.g. `--storage`, `--clipboard`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
-2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_CLIPBOARD`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
+1. **Command Line Arguments** (e.g. `--storage`, `--clipboard`, `--clip-command`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
+2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
 3. **Configuration File** (`-C <path>` / `--config <path>`, or default locations: `~/.config/tfa/config.{toml,yaml,yml,json}`)
-4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
+4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, namespace: `default`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
 
 ### Example Configuration Files
 
 #### TOML (`~/.config/tfa/config.toml`)
 ```toml
-storage = "keyring"   # auto, keyring, or file
-clipboard = "osc52"   # system or osc52 (works over remote SSH / tmux / screen)
-digits = 6            # 6 or 8
-period = 30           # 30 or 60
-algorithm = "sha1"    # sha1, sha256, sha512, or steam
-auto_copy = true      # automatically copy generated tokens
-light = false         # terminal QR light theme
+storage = "keyring"           # auto, keyring, or file
+clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
+clip_command = "wl-copy"      # optional custom command receiving token via stdin
+default_namespace = "personal"# active default namespace (default: "default")
+digits = 6                    # 6 or 8
+period = 30                   # 30 or 60
+algorithm = "sha1"            # sha1, sha256, sha512, or steam
+auto_copy = true              # automatically copy generated tokens
+light = false                 # terminal QR light theme
 ```
 
 #### YAML (`~/.config/tfa/config.yaml`)
 ```yaml
 storage: auto
-clipboard: osc52
+clipboard: system
+clip_command: "xclip -selection clipboard"
+default_namespace: personal
 digits: 6
 period: 30
 algorithm: sha1
@@ -264,13 +269,41 @@ light: false
 ```json
 {
   "storage": "auto",
-  "clipboard": "osc52",
+  "clipboard": "system",
+  "clip_command": "wl-copy",
+  "default_namespace": "personal",
   "digits": 6,
   "period": 30,
   "algorithm": "sha1",
   "auto_copy": true,
   "light": false
 }
+```
+
+---
+
+## :card_index_dividers: Multi-Namespace Support
+
+Organize personal, home, and work 2FA tokens into completely segregated namespaces:
+
+```bash
+# Scope any command to a namespace with -n / --namespace
+tfa -n work add aws JBSWY3DPEHPK3PXP
+tfa -n work list
+tfa -n work generate aws
+
+# List all namespaces
+tfa ns list
+
+# Create or rename namespaces
+tfa ns create dev
+tfa ns rename work office
+
+# Switch active default namespace across sessions (persists to config file)
+tfa ns set-default work
+
+# Delete a namespace and its contained accounts
+tfa ns delete office --force
 ```
 
 ---
