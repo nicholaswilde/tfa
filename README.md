@@ -28,6 +28,21 @@ A high-performance, single-binary CLI Two-Factor Authentication (2FA / TOTP) app
 
 ## :rocket: Installation & Build
 
+### Homebrew
+
+Install `tfa` via [Homebrew](https://brew.sh/) using the [nicholaswilde/homebrew-tap](https://github.com/nicholaswilde/homebrew-tap):
+
+```bash
+brew install nicholaswilde/homebrew-tap/tfa
+```
+
+Or tap the repository first:
+
+```bash
+brew tap nicholaswilde/homebrew-tap
+brew install tfa
+```
+
 ### Prerequisites
 - [Rust toolchain](https://rustup.rs/) (1.88+)
 - [Task](https://taskfile.dev/) (optional, recommended)
