@@ -145,6 +145,12 @@ Select account to generate token |
 $ tfa generate github -c
 482910 (24s remaining) [copied]
 
+# Preview upcoming token for next time step (with warning indicator when expiring soon):
+$ tfa generate github --next
+482910 (24s remaining) (next: 192837)
+# When expiring within 5s:
+# 482910 (3s remaining) [expiring soon] (next: 192837)
+
 # HOTP token generation (increments stored counter automatically):
 $ tfa generate hotp_account
 755224 (counter: 0)
