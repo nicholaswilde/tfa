@@ -19,7 +19,9 @@ _tfa() {
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -54,7 +56,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -86,7 +90,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -109,7 +115,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -138,7 +146,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -191,7 +201,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -210,7 +222,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -227,7 +241,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -246,7 +262,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -263,7 +281,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -280,7 +300,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -300,7 +322,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -317,7 +341,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -338,7 +364,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -357,7 +385,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -377,7 +407,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -394,7 +426,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -410,7 +444,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -434,7 +470,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -450,7 +488,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -467,7 +507,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -485,7 +527,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -504,7 +548,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -565,7 +611,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -592,7 +640,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -609,7 +659,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -627,7 +679,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -644,7 +698,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -660,7 +716,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -720,7 +778,9 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"
 keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Manager)"
-file\:"Use local file storage (~/.local/share/tfa/credentials.json)"))' \
+file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
+age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
+'--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \

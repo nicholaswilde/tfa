@@ -15,7 +15,7 @@ A high-performance, single-binary CLI Two-Factor Authentication (2FA / TOTP) app
 ## :sparkles: Features
 
 - **Security First:** Credentials and secret seeds reside securely in your OS keychain/keyring (`secret-service`/D-Bus on Linux, Keychain on macOS, Windows Credential Manager).
-- **Headless Fallback:** Automatically falls back to secure user-only file storage (`0600` permissions at `~/.local/share/tfa/credentials.json`) when headless or without active Secret Service daemon. Configurable via `--storage <auto|keyring|file>` or `TFA_STORAGE`.
+- **Headless Fallback:** Automatically falls back to secure user-only file storage (`0600` permissions at `~/.local/share/tfa/credentials.json`) when headless or without active Secret Service daemon. Configurable via `--storage <auto|keyring|file|age>` or `TFA_STORAGE`.
 - **RFC 6238 Compliant:** Standard time-based one-time passwords (TOTP) powered by [`totp-rs`](https://github.com/constantoine/totp-rs).
 - **Live Watch & Countdown:** Watch an individual token or all accounts in a namespace in real-time with continuous progress bars (`tfa watch`, `tfa watch all`).
 - **QR Code Support:** Render terminal-native ANSI/Unicode block QR codes for mobile authenticator scanning (`tfa qr`), and scan QR code images (`tfa add --qr`) to import accounts automatically.
@@ -344,14 +344,14 @@ Pre-generated completion scripts are also available in the [`completions/`](comp
 
 ### Hierarchical Precedence
 Settings resolve in strict hierarchical precedence order (highest to lowest):
-1. **Command Line Arguments** (e.g. `--storage`, `--clipboard`, `--clip-command`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
-2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
+1. **Command Line Arguments** (e.g. `--storage`, `--age-key`, `--clipboard`, `--clip-command`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
+2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
 3. **Configuration File** (`-C <path>` / `--config <path>`, or default locations: `~/.config/tfa/config.{toml,yaml,yml,json}`)
 4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, namespace: `default`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
 
 ### Storage Backends & Headless Environments
 
-`tfa` supports three storage options via `storage` in config, `--storage`, or `TFA_STORAGE`:
+`tfa` supports four storage options via `storage` in config, `--storage`, or `TFA_STORAGE`:
 
 - **`auto` (default):** Attempts the OS system keyring first (Secret Service on Linux, Keychain on macOS, Credential Manager on Windows). If the keyring daemon is unreachable, locked, or running in a headless/SSH session (`SS error`), `tfa` displays a notice and automatically falls back to local user file storage (`0600` permissions at `~/.local/share/tfa/credentials.json`).
   ```
@@ -359,12 +359,22 @@ Settings resolve in strict hierarchical precedence order (highest to lowest):
   ```
 - **`file`:** Directly reads and writes to `~/.local/share/tfa/credentials.json` without querying DBus or system keyring, silencing fallback notices in headless, SSH, or server environments.
 - **`keyring`:** Strictly requires the OS system keyring and returns a hard error if unavailable.
+- **`age`:** Identity-based encrypted file storage (`~/.local/share/tfa/credentials.age`) using [`age`](https://github.com/FiloSottile/age). Encrypts credentials with age public keys, SSH keys (`~/.ssh/id_ed25519.pub`, `~/.ssh/id_rsa.pub`), or a passphrase.
+
+#### Age Storage Key Resolution
+When using `--storage age`, `tfa` resolves decryption identities and encryption recipients in the following order:
+1. Explicit key argument or environment variable: `--age-key`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `AGE_KEY_FILE`, or `SOPS_AGE_KEY_FILE`.
+2. SOPS age key fallback: `~/.config/sops/age/keys.txt`.
+3. Default age key fallback: `~/.config/age/keys.txt` (or `$XDG_CONFIG_HOME/age/keys.txt`).
+4. SSH keys: `~/.ssh/id_ed25519` and `~/.ssh/id_rsa` (recipients `~/.ssh/id_ed25519.pub`, `~/.ssh/id_rsa.pub`).
+5. Passphrase fallback: `TFA_AGE_PASSPHRASE` environment variable, or interactive prompt if no identity files exist.
 
 ### Example Configuration Files
 
 #### TOML (`~/.config/tfa/config.toml`)
 ```toml
-storage = "keyring"           # auto, keyring, or file
+storage = "keyring"           # auto, keyring, file, or age
+age_key = "~/.config/sops/age/keys.txt" # optional age key file or secret key
 clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
 clip_command = "wl-copy"      # optional custom command receiving token via stdin
 default_namespace = "personal"# active default namespace (default: "default")
@@ -380,6 +390,7 @@ password_timeout = 300        # unlock cache TTL in seconds (default: 300)
 #### YAML (`~/.config/tfa/config.yaml`)
 ```yaml
 storage: auto
+age_key: ~/.config/sops/age/keys.txt
 clipboard: system
 clip_command: "xclip -selection clipboard"
 default_namespace: personal
@@ -396,6 +407,7 @@ password_timeout: 300
 ```json
 {
   "storage": "auto",
+  "age_key": "~/.config/sops/age/keys.txt",
   "clipboard": "system",
   "clip_command": "wl-copy",
   "default_namespace": "personal",

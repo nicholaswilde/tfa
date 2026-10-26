@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_tfa_global_optspecs
-    string join \n C/config= storage= clipboard= clip-command= n/namespace= h/help V/version
+    string join \n C/config= storage= age-key= clipboard= clip-command= n/namespace= h/help V/version
 end
 
 function __fish_tfa_needs_command
@@ -27,7 +27,9 @@ end
 complete -c tfa -n "__fish_tfa_needs_command" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_needs_command" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_needs_command" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_needs_command" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_needs_command" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -63,7 +65,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand generate" -s a -l algorithm -d '
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand generate" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -83,7 +87,9 @@ false\t''"
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand instant" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -96,7 +102,9 @@ false\t''"
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -109,7 +117,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcomman
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcommand_from all" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcommand_from all" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcommand_from all" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcommand_from all" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcommand_from all" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -125,7 +135,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand add" -s c -l counter -d 'Initial
 complete -c tfa -n "__fish_tfa_using_subcommand add" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand add" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand add" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand add" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand add" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -136,7 +148,9 @@ false\t''"
 complete -c tfa -n "__fish_tfa_using_subcommand qr" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand qr" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand qr" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand qr" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand qr" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -145,7 +159,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand qr" -s h -l help -d 'Print help 
 complete -c tfa -n "__fish_tfa_using_subcommand list" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand list" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand list" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand list" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand list" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -156,7 +172,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand list" -s h -l help -d 'Print hel
 complete -c tfa -n "__fish_tfa_using_subcommand status" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand status" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand status" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand status" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand status" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -166,7 +184,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand status" -s h -l help -d 'Print h
 complete -c tfa -n "__fish_tfa_using_subcommand delete" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand delete" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand delete" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand delete" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand delete" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -175,7 +195,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand delete" -s h -l help -d 'Print h
 complete -c tfa -n "__fish_tfa_using_subcommand rename" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand rename" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand rename" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand rename" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand rename" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -185,7 +207,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand move" -s t -l to -d 'Destination
 complete -c tfa -n "__fish_tfa_using_subcommand move" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand move" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand move" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand move" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand move" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -194,7 +218,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand move" -s h -l help -d 'Print hel
 complete -c tfa -n "__fish_tfa_using_subcommand show" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand show" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand show" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand show" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand show" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -206,7 +232,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand export" -l password -d 'Master p
 complete -c tfa -n "__fish_tfa_using_subcommand export" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand export" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand export" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand export" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand export" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -217,7 +245,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand import" -l password -d 'Master p
 complete -c tfa -n "__fish_tfa_using_subcommand import" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand import" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand import" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand import" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand import" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -229,7 +259,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand import" -s h -l help -d 'Print h
 complete -c tfa -n "__fish_tfa_using_subcommand completions" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand completions" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand completions" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand completions" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand completions" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -238,7 +270,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand completions" -s h -l help -d 'Pr
 complete -c tfa -n "__fish_tfa_using_subcommand man" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand man" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand man" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand man" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand man" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -247,7 +281,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand man" -s h -l help -d 'Print help
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and not __fish_seen_subcommand_from list create rename delete set-default help" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and not __fish_seen_subcommand_from list create rename delete set-default help" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand namespace; and not __fish_seen_subcommand_from list create rename delete set-default help" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and not __fish_seen_subcommand_from list create rename delete set-default help" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and not __fish_seen_subcommand_from list create rename delete set-default help" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -262,7 +298,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand namespace; and not __fish_seen_s
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from list" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from list" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from list" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from list" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from list" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -271,7 +309,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subco
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from create" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from create" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from create" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from create" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from create" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -280,7 +320,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subco
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from rename" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from rename" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from rename" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from rename" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from rename" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -289,7 +331,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subco
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from delete" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from delete" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from delete" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from delete" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from delete" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -299,7 +343,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subco
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from set-default" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from set-default" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from set-default" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from set-default" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subcommand_from set-default" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -314,7 +360,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand namespace; and __fish_seen_subco
 complete -c tfa -n "__fish_tfa_using_subcommand password; and not __fish_seen_subcommand_from add remove lock unlock status help" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and not __fish_seen_subcommand_from add remove lock unlock status help" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand password; and not __fish_seen_subcommand_from add remove lock unlock status help" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and not __fish_seen_subcommand_from add remove lock unlock status help" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand password; and not __fish_seen_subcommand_from add remove lock unlock status help" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -331,7 +379,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcom
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from add" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from add" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from add" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from add" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from add" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -341,7 +391,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcom
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from remove" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from remove" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from remove" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from remove" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from remove" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -351,7 +403,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcom
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from lock" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from lock" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from lock" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from lock" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from lock" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -361,7 +415,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcom
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from unlock" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from unlock" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from unlock" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from unlock" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from unlock" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -370,7 +426,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcom
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from status" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from status" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from status" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from status" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcommand_from status" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
@@ -385,7 +443,9 @@ complete -c tfa -n "__fish_tfa_using_subcommand password; and __fish_seen_subcom
 complete -c tfa -n "__fish_tfa_using_subcommand audit" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand audit" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'
-file\t'Use local file storage (~/.local/share/tfa/credentials.json)'"
+file\t'Use local file storage (~/.local/share/tfa/credentials.json)'
+age\t'Use age-encrypted file storage (~/.local/share/tfa/credentials.age)'"
+complete -c tfa -n "__fish_tfa_using_subcommand audit" -l age-key -d 'Path to age key file for age-encrypted storage' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand audit" -l clipboard -d 'Clipboard copy provider (system or osc52)' -r -f -a "system\t'Native system clipboard (arboard with Wayland/X11/macOS/Windows)'
 osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)'"
 complete -c tfa -n "__fish_tfa_using_subcommand audit" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r

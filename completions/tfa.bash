@@ -254,7 +254,7 @@ _tfa() {
 
     case "${cmd}" in
         tfa)
-            opts="-C -n -h -V --config --storage --clipboard --clip-command --namespace --help --version generate instant watch add qr list status delete rename move show export import completions man namespace password audit help"
+            opts="-C -n -h -V --config --storage --age-key --clipboard --clip-command --namespace --help --version generate instant watch add qr list status delete rename move show export import completions man namespace password audit help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -269,7 +269,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -296,7 +300,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__add)
-            opts="-d -p -a -c -C -n -h --qr --digits --period --algorithm --counter --config --storage --clipboard --clip-command --namespace --help"
+            opts="-d -p -a -c -C -n -h --qr --digits --period --algorithm --counter --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -347,7 +351,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -374,7 +382,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__audit)
-            opts="-C -n -h --json --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --json --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -389,7 +397,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -416,7 +428,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__completions)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help bash elvish fish powershell zsh"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help bash elvish fish powershell zsh"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -431,7 +443,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -458,7 +474,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__delete)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -473,7 +489,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -500,7 +520,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__export)
-            opts="-C -n -h --unencrypted --password --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --unencrypted --password --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -519,7 +539,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -546,7 +570,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__generate)
-            opts="-c -w -d -p -a -C -n -h --secret --copy --watch --counter --digits --period --algorithm --next --json --config --storage --clipboard --clip-command --namespace --help"
+            opts="-c -w -d -p -a -C -n -h --secret --copy --watch --counter --digits --period --algorithm --next --json --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -601,7 +625,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1062,7 +1090,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__import)
-            opts="-C -n -h --dry-run --overwrite --skip --password --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --dry-run --overwrite --skip --password --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1081,7 +1109,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1108,7 +1140,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__instant)
-            opts="-d -p -a -c -w -C -n -h --secret --qr --digits --period --algorithm --counter --copy --watch --config --storage --clipboard --clip-command --namespace --help"
+            opts="-d -p -a -c -w -C -n -h --secret --qr --digits --period --algorithm --counter --copy --watch --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1167,7 +1199,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1194,7 +1230,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__list)
-            opts="-c -C -n -h --codes --json --config --storage --clipboard --clip-command --namespace --help"
+            opts="-c -C -n -h --codes --json --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1209,7 +1245,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1236,7 +1276,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__man)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1251,7 +1291,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1278,7 +1322,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__move)
-            opts="-t -C -n -h --to --config --storage --clipboard --clip-command --namespace --help"
+            opts="-t -C -n -h --to --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1301,7 +1345,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1328,7 +1376,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__namespace)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help list create rename delete set-default help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help list create rename delete set-default help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1343,7 +1391,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1370,7 +1422,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__namespace__subcmd__create)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1385,7 +1437,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1412,7 +1468,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__namespace__subcmd__delete)
-            opts="-f -C -n -h --force --config --storage --clipboard --clip-command --namespace --help"
+            opts="-f -C -n -h --force --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1427,7 +1483,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1552,7 +1612,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__namespace__subcmd__list)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1567,7 +1627,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1594,7 +1658,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__namespace__subcmd__rename)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1609,7 +1673,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1636,7 +1704,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__namespace__subcmd__set__subcmd__default)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1651,7 +1719,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1678,7 +1750,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__password)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help add remove lock unlock status help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help add remove lock unlock status help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1693,7 +1765,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1720,7 +1796,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__password__subcmd__add)
-            opts="-t -C -n -h --timeout --password --config --storage --clipboard --clip-command --namespace --help"
+            opts="-t -C -n -h --timeout --password --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1747,7 +1823,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1872,7 +1952,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__password__subcmd__lock)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1887,7 +1967,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1914,7 +1998,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__password__subcmd__remove)
-            opts="-f -C -n -h --password --force --config --storage --clipboard --clip-command --namespace --help"
+            opts="-f -C -n -h --password --force --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1933,7 +2017,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -1960,7 +2048,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__password__subcmd__status)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1975,7 +2063,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -2002,7 +2094,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__password__subcmd__unlock)
-            opts="-C -n -h --password --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --password --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2021,7 +2113,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -2048,7 +2144,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__qr)
-            opts="-C -n -h --light --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --light --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2067,7 +2163,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -2094,7 +2194,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__rename)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2109,7 +2209,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -2136,7 +2240,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__show)
-            opts="-r -C -n -h --raw --json --config --storage --clipboard --clip-command --namespace --help"
+            opts="-r -C -n -h --raw --json --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2151,7 +2255,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -2178,7 +2286,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__status)
-            opts="-C -n -h --json --config --storage --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --json --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2193,7 +2301,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -2220,7 +2332,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__watch)
-            opts="-a -f -c -C -n -h --all --filter --copy --config --storage --clipboard --clip-command --namespace --help all help"
+            opts="-a -f -c -C -n -h --all --filter --copy --config --storage --age-key --clipboard --clip-command --namespace --help all help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2251,7 +2363,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)
@@ -2278,7 +2394,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__watch__subcmd__all)
-            opts="-f -C -n -h --filter --config --storage --clipboard --clip-command --namespace --help"
+            opts="-f -C -n -h --filter --config --storage --age-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2301,7 +2417,11 @@ _tfa() {
                     return 0
                     ;;
                 --storage)
-                    COMPREPLY=($(compgen -W "auto keyring file" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto keyring file age" -- "${cur}"))
+                    return 0
+                    ;;
+                --age-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --clipboard)

@@ -55,6 +55,8 @@ pub struct ConfigFile {
     #[serde(alias = "password_enabled")]
     pub password: Option<PasswordConfig>,
     pub password_timeout: Option<u64>,
+    #[serde(alias = "age_key_file")]
+    pub age_key: Option<PathBuf>,
 }
 
 impl ConfigFile {
@@ -341,6 +343,7 @@ pub fn resolve_configuration(
             "auto" => StorageBackend::Auto,
             "keyring" => StorageBackend::Keyring,
             "file" => StorageBackend::File,
+            "age" => StorageBackend::Age,
             other => anyhow::bail!("Invalid storage backend '{other}' from TFA_STORAGE"),
         }
     } else if let Some(s) = config_file.as_ref().and_then(|c| c.storage) {

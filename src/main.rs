@@ -20,7 +20,7 @@ mod watch;
 use clipboard::{Clipboard, ClipboardProvider, DispatchingClipboard};
 use config::ConfigFile;
 use namespace::NamespaceStore;
-use storage::{AccountStore, AutoStore, FileStore, KeyringStore};
+use storage::{AccountStore, AgeStore, AutoStore, FileStore, KeyringStore};
 use totp::TfaTotp;
 
 #[derive(
@@ -35,6 +35,8 @@ pub enum StorageBackend {
     Keyring,
     /// Use local file storage (~/.local/share/tfa/credentials.json)
     File,
+    /// Use age-encrypted file storage (~/.local/share/tfa/credentials.age)
+    Age,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -48,6 +50,10 @@ pub struct Cli {
     /// Credential storage backend
     #[arg(long, env = "TFA_STORAGE", global = true)]
     pub storage: Option<StorageBackend>,
+
+    /// Path to age key file for age-encrypted storage
+    #[arg(long, env = "TFA_AGE_KEY_FILE", global = true)]
+    pub age_key: Option<PathBuf>,
 
     /// Clipboard copy provider (system or osc52)
     #[arg(long, env = "TFA_CLIPBOARD", global = true)]
@@ -1599,7 +1605,7 @@ fn get_passphrase(password: Option<String>, confirm: bool) -> anyhow::Result<Str
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let (resolved_cfg, _) = config::resolve_configuration(
+    let (resolved_cfg, loaded_cfg) = config::resolve_configuration(
         cli.config.as_deref(),
         cli.storage,
         cli.clipboard,
@@ -1614,6 +1620,13 @@ fn main() -> anyhow::Result<()> {
         StorageBackend::Auto => Box::new(AutoStore::default_auto()?),
         StorageBackend::Keyring => Box::new(KeyringStore::default()),
         StorageBackend::File => Box::new(FileStore::new(FileStore::default_path()?)),
+        StorageBackend::Age => {
+            let age_key = cli
+                .age_key
+                .clone()
+                .or_else(|| loaded_cfg.and_then(|c| c.age_key));
+            Box::new(AgeStore::new(AgeStore::default_path()?, age_key))
+        }
     };
 
     run_app(cli, store.as_ref(), &clipboard, &mut io::stdout())
@@ -1652,6 +1665,18 @@ mod tests {
 
         let cli_keyring = Cli::try_parse_from(["tfa", "--storage", "keyring", "list"]).unwrap();
         assert_eq!(cli_keyring.storage, Some(StorageBackend::Keyring));
+
+        let cli_age = Cli::try_parse_from([
+            "tfa",
+            "--storage",
+            "age",
+            "--age-key",
+            "/path/to/key.txt",
+            "list",
+        ])
+        .unwrap();
+        assert_eq!(cli_age.storage, Some(StorageBackend::Age));
+        assert_eq!(cli_age.age_key, Some(PathBuf::from("/path/to/key.txt")));
     }
 
     #[test]
