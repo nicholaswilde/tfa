@@ -83,6 +83,8 @@ tfa [COMMAND]
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `delete` | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
+| `rename` | Rename an account within the active namespace | `tfa rename <old_name> <new_name>` |
+| `move` (`mv`) | Relocate an account to a different namespace | `tfa move <account> --to <target_ns>` |
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
 | `namespace` (`ns`) | Multi-tenant namespace management (`list`, `create`, `rename`, `delete`, `set-default`) | `tfa ns list` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
@@ -406,6 +408,13 @@ tfa ns list
 # Create or rename namespaces
 tfa ns create dev
 tfa ns rename work office
+
+# Rename an account within current namespace
+tfa rename github gh
+
+# Move an account to another namespace
+tfa move aws --to work
+tfa mv personal_email -t home
 
 # Switch active default namespace across sessions (persists to config file)
 tfa ns set-default work
