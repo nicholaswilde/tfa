@@ -70,6 +70,7 @@ complete -c tfa -n "__fish_tfa_using_subcommand generate" -l clip-command -d 'Cu
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s n -l namespace -d 'Target namespace for account scoping (e.g. personal, work, home)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s w -l watch -d 'Watch and continuously refresh code with progress bar'
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -l next -d 'Preview upcoming token for next time step'
+complete -c tfa -n "__fish_tfa_using_subcommand generate" -l json -d 'Output generated token details as JSON'
 complete -c tfa -n "__fish_tfa_using_subcommand generate" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -l secret -d 'Explicit secret key or otpauth:// URI flag' -r
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -l qr -d 'Decode secret and parameters from a QR code image' -r -F
@@ -199,6 +200,7 @@ osc52\t'Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 complete -c tfa -n "__fish_tfa_using_subcommand show" -l clip-command -d 'Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand show" -s n -l namespace -d 'Target namespace for account scoping (e.g. personal, work, home)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand show" -s r -l raw -d 'Print only the raw secret or URI'
+complete -c tfa -n "__fish_tfa_using_subcommand show" -l json -d 'Output account details and metadata as JSON'
 complete -c tfa -n "__fish_tfa_using_subcommand show" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_using_subcommand export" -l password -d 'Master passphrase for encryption (prompted securely if omitted)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand export" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F

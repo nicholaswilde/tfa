@@ -74,6 +74,7 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('-w', '-w', [CompletionResultType]::ParameterName, 'Watch and continuously refresh code with progress bar')
             [CompletionResult]::new('--watch', '--watch', [CompletionResultType]::ParameterName, 'Watch and continuously refresh code with progress bar')
             [CompletionResult]::new('--next', '--next', [CompletionResultType]::ParameterName, 'Preview upcoming token for next time step')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Output generated token details as JSON')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -258,6 +259,7 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             [CompletionResult]::new('--namespace', '--namespace', [CompletionResultType]::ParameterName, 'Target namespace for account scoping (e.g. personal, work, home)')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Print only the raw secret or URI')
             [CompletionResult]::new('--raw', '--raw', [CompletionResultType]::ParameterName, 'Print only the raw secret or URI')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Output account details and metadata as JSON')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break

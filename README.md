@@ -69,7 +69,7 @@ tfa [COMMAND]
 
 | Command | Description | Example |
 | :--- | :--- | :--- |
-| `generate` (`gen`) | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account]` |
+| `generate` (`gen`) | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account] [--json]` |
 | `generate -c` | Generate token and copy to clipboard | `tfa generate [account] -c` |
 | `generate -w` | Watch token countdown with progress bar | `tfa generate [account] -w` |
 | `instant` (`ins`) | Generate token instantly from secret, URI, or stdin without storage | `tfa instant [secret_or_uri]` |
@@ -79,7 +79,7 @@ tfa [COMMAND]
 | `qr` | Render account as terminal QR code | `tfa qr github [--light]` |
 | `list` | List all configured accounts | `tfa list [--codes] [--json]` |
 | `status` | Live overview of all accounts and tokens | `tfa status [--json]` |
-| `show` | Display account parameters and stored secret | `tfa show github [-r]` |
+| `show` | Display account parameters and stored secret | `tfa show github [-r] [--json]` |
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `delete` | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
@@ -150,6 +150,16 @@ $ tfa generate github --next
 482910 (24s remaining) (next: 192837)
 # When expiring within 5s:
 # 482910 (3s remaining) [expiring soon] (next: 192837)
+
+# Programmatic JSON token output:
+$ tfa generate github --json
+{
+  "account": "github",
+  "token": "482910",
+  "ttl": 24,
+  "period": 30,
+  "algorithm": "SHA1"
+}
 
 # HOTP token generation (increments stored counter automatically):
 $ tfa generate hotp_account

@@ -96,6 +96,9 @@ pub enum Commands {
         /// Preview upcoming token for next time step
         #[arg(long, conflicts_with = "watch", conflicts_with = "counter")]
         next: bool,
+        /// Output generated token details as JSON
+        #[arg(long)]
+        json: bool,
     },
     /// Generate a 2FA token instantly from raw secret, URI, or stdin without storage
     #[command(alias = "ins")]
@@ -216,6 +219,9 @@ pub enum Commands {
         /// Print only the raw secret or URI
         #[arg(short, long)]
         raw: bool,
+        /// Output account details and metadata as JSON
+        #[arg(long, conflicts_with = "raw")]
+        json: bool,
     },
     /// Export accounts to an encrypted backup file or stdout
     Export {
@@ -347,11 +353,41 @@ pub enum NamespaceCommands {
     },
 }
 
-#[derive(serde::Serialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct AccountStatus {
     pub account: String,
     pub token: String,
     pub ttl: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct GenerateResult {
+    pub account: String,
+    pub token: String,
+    pub ttl: u64,
+    pub period: u64,
+    pub algorithm: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub counter: Option<u64>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct AccountDetails {
+    pub account: String,
+    #[serde(rename = "type")]
+    pub account_type: String,
+    pub digits: u8,
+    pub algorithm: String,
+    pub secret: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub period: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub counter: Option<u64>,
+    pub live_code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl: Option<u64>,
 }
 
 pub fn display_accounts_overview(
@@ -570,42 +606,75 @@ pub fn format_totp_output(code: &str, ttl: u64, next_code: Option<&str>, copied:
     line
 }
 
-fn emit_instant_token(
-    engine: &TfaTotp,
+#[derive(Default, Clone, Copy)]
+struct EmitOptions {
     counter: Option<u64>,
     next: bool,
+    json: bool,
     should_copy: bool,
+}
+
+fn emit_instant_token(
+    account_name: &str,
+    engine: &TfaTotp,
+    opts: EmitOptions,
     clipboard: &dyn Clipboard,
     out_writer: &mut dyn Write,
 ) -> anyhow::Result<()> {
     if engine.is_hotp() {
-        if next {
+        if opts.next {
             anyhow::bail!("--next is only supported for time-based (TOTP) accounts");
         }
-        let c = counter.or_else(|| engine.counter()).unwrap_or(0);
+        let c = opts.counter.or_else(|| engine.counter()).unwrap_or(0);
         let code = engine.generate_at_counter(c)?;
-        if should_copy {
+        if opts.should_copy {
             clipboard.set_text(&code)?;
+        }
+        if opts.json {
+            let res = GenerateResult {
+                account: account_name.to_string(),
+                token: code,
+                ttl: 0,
+                period: 0,
+                algorithm: engine.algorithm().to_string(),
+                next_token: None,
+                counter: Some(c),
+            };
+            writeln!(out_writer, "{}", serde_json::to_string_pretty(&res)?)?;
+        } else if opts.should_copy {
             writeln!(out_writer, "{code} (counter: {c}) [copied]")?;
         } else {
             writeln!(out_writer, "{code} (counter: {c})")?;
         }
     } else {
-        if counter.is_some() {
+        if opts.counter.is_some() {
             anyhow::bail!("--counter can only be used with HOTP accounts");
         }
         let code = engine.generate_current();
         let ttl = engine.ttl();
-        let next_code = if next {
+        let next_code = if opts.next {
             Some(engine.generate_next()?)
         } else {
             None
         };
-        let line = format_totp_output(&code, ttl, next_code.as_deref(), should_copy);
-        if should_copy {
+        if opts.should_copy {
             clipboard.set_text(&code)?;
         }
-        writeln!(out_writer, "{line}")?;
+        if opts.json {
+            let res = GenerateResult {
+                account: account_name.to_string(),
+                token: code,
+                ttl,
+                period: engine.step(),
+                algorithm: engine.algorithm().to_string(),
+                next_token: next_code,
+                counter: None,
+            };
+            writeln!(out_writer, "{}", serde_json::to_string_pretty(&res)?)?;
+        } else {
+            let line = format_totp_output(&code, ttl, next_code.as_deref(), opts.should_copy);
+            writeln!(out_writer, "{line}")?;
+        }
     }
     Ok(())
 }
@@ -887,6 +956,7 @@ pub fn run_app(
             period,
             algorithm,
             next,
+            json,
         }) => {
             if let Some(sec) = secret {
                 let resolved_digits = digits.or(resolved_cfg.digits);
@@ -895,9 +965,10 @@ pub fn run_app(
                 let secret_val = resolve_instant_secret(Some(sec), None)?;
                 let c_val = counter.flatten();
                 let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
+                let acct_name = account.as_deref().unwrap_or("instant");
 
                 let engine = TfaTotp::build(
-                    account.as_deref().unwrap_or("instant"),
+                    acct_name,
                     &secret_val,
                     resolved_digits,
                     resolved_period,
@@ -912,7 +983,7 @@ pub fn run_app(
                         );
                     }
                     watch::watch_engine(
-                        account.as_deref().unwrap_or("instant"),
+                        acct_name,
                         &engine,
                         clipboard,
                         should_copy,
@@ -920,7 +991,18 @@ pub fn run_app(
                         None,
                     )?;
                 } else {
-                    emit_instant_token(&engine, c_val, next, should_copy, clipboard, out_writer)?;
+                    emit_instant_token(
+                        acct_name,
+                        &engine,
+                        EmitOptions {
+                            counter: c_val,
+                            next,
+                            json,
+                            should_copy,
+                        },
+                        clipboard,
+                        out_writer,
+                    )?;
                 }
                 return Ok(());
             }
@@ -954,6 +1036,19 @@ pub fn run_app(
 
                     if should_copy {
                         clipboard.set_text(&code)?;
+                    }
+                    if json {
+                        let res = GenerateResult {
+                            account: acct.clone(),
+                            token: code,
+                            ttl: 0,
+                            period: 0,
+                            algorithm: engine.algorithm().to_string(),
+                            next_token: None,
+                            counter: Some(current_c),
+                        };
+                        writeln!(out_writer, "{}", serde_json::to_string_pretty(&res)?)?;
+                    } else if should_copy {
                         writeln!(out_writer, "{code} (counter: {current_c}) [copied]")?;
                     } else {
                         writeln!(out_writer, "{code} (counter: {current_c})")?;
@@ -969,11 +1064,25 @@ pub fn run_app(
                     } else {
                         None
                     };
-                    let line = format_totp_output(&code, ttl, next_code.as_deref(), should_copy);
                     if should_copy {
                         clipboard.set_text(&code)?;
                     }
-                    writeln!(out_writer, "{line}")?;
+                    if json {
+                        let res = GenerateResult {
+                            account: acct.clone(),
+                            token: code,
+                            ttl,
+                            period: engine.step(),
+                            algorithm: engine.algorithm().to_string(),
+                            next_token: next_code,
+                            counter: None,
+                        };
+                        writeln!(out_writer, "{}", serde_json::to_string_pretty(&res)?)?;
+                    } else {
+                        let line =
+                            format_totp_output(&code, ttl, next_code.as_deref(), should_copy);
+                        writeln!(out_writer, "{line}")?;
+                    }
                 }
             }
         }
@@ -1009,7 +1118,18 @@ pub fn run_app(
                 }
                 watch::watch_engine("instant", &engine, clipboard, should_copy, out_writer, None)?;
             } else {
-                emit_instant_token(&engine, counter, false, should_copy, clipboard, out_writer)?;
+                emit_instant_token(
+                    "instant",
+                    &engine,
+                    EmitOptions {
+                        counter,
+                        next: false,
+                        json: false,
+                        should_copy,
+                    },
+                    clipboard,
+                    out_writer,
+                )?;
             }
         }
         Some(Commands::Watch {
@@ -1176,10 +1296,29 @@ pub fn run_app(
                 "Account '{account}' moved to namespace '{target_ns}'."
             )?;
         }
-        Some(Commands::Show { account, raw }) => {
+        Some(Commands::Show { account, raw, json }) => {
             let secret = store.get_secret(&account)?;
             if raw {
                 writeln!(out_writer, "{secret}")?;
+            } else if json {
+                let engine = TfaTotp::from_input(&account, &secret)?;
+                let is_hotp = engine.is_hotp();
+                let details = AccountDetails {
+                    account: account.clone(),
+                    account_type: engine.account_type().to_string(),
+                    digits: engine.digits(),
+                    algorithm: engine.algorithm().to_string(),
+                    secret,
+                    period: if is_hotp { None } else { Some(engine.step()) },
+                    counter: if is_hotp {
+                        Some(engine.counter().unwrap_or(0))
+                    } else {
+                        None
+                    },
+                    live_code: engine.generate_current(),
+                    ttl: if is_hotp { None } else { Some(engine.ttl()) },
+                };
+                writeln!(out_writer, "{}", serde_json::to_string_pretty(&details)?)?;
             } else {
                 let engine = TfaTotp::from_input(&account, &secret)?;
                 writeln!(out_writer, "Account:   {account}")?;
@@ -1708,6 +1847,31 @@ mod tests {
         assert_eq!(code.len(), 6);
         assert!(code.chars().all(|c| c.is_ascii_digit()));
         assert_eq!(copy_str.split_whitespace().next().unwrap(), code);
+
+        // Generate with --json
+        let mut json_out = Vec::new();
+        let json_cli = Cli::try_parse_from(["tfa", "generate", "test_acc", "--json"]).unwrap();
+        assert!(run_app(json_cli, &store, &cb, &mut json_out).is_ok());
+        let json_str = String::from_utf8(json_out).unwrap();
+        let res: GenerateResult = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(res.account, "test_acc");
+        assert_eq!(res.token.len(), 6);
+        assert!(res.ttl > 0 && res.ttl <= 30);
+        assert_eq!(res.period, 30);
+        assert_eq!(res.algorithm, "SHA1");
+        assert!(res.next_token.is_none());
+        assert!(res.counter.is_none());
+
+        // Generate with --json and --next
+        let mut json_next_out = Vec::new();
+        let json_next_cli =
+            Cli::try_parse_from(["tfa", "generate", "test_acc", "--json", "--next"]).unwrap();
+        assert!(run_app(json_next_cli, &store, &cb, &mut json_next_out).is_ok());
+        let json_next_str = String::from_utf8(json_next_out).unwrap();
+        let res_next: GenerateResult = serde_json::from_str(&json_next_str).unwrap();
+        assert_eq!(res_next.account, "test_acc");
+        assert!(res_next.next_token.is_some());
+        assert_eq!(res_next.next_token.as_ref().unwrap().len(), 6);
     }
 
     #[test]
@@ -2129,21 +2293,36 @@ mod tests {
     fn test_cli_parse_show() {
         let cli = Cli::try_parse_from(["tfa", "show", "github"]).unwrap();
         match cli.command {
-            Some(Commands::Show { account, raw }) => {
+            Some(Commands::Show { account, raw, json }) => {
                 assert_eq!(account, "github");
                 assert!(!raw);
+                assert!(!json);
             }
             _ => panic!("Expected show subcommand"),
         }
 
         let cli_raw = Cli::try_parse_from(["tfa", "show", "github", "-r"]).unwrap();
         match cli_raw.command {
-            Some(Commands::Show { account, raw }) => {
+            Some(Commands::Show { account, raw, json }) => {
                 assert_eq!(account, "github");
                 assert!(raw);
+                assert!(!json);
             }
             _ => panic!("Expected show subcommand"),
         }
+
+        let cli_json = Cli::try_parse_from(["tfa", "show", "github", "--json"]).unwrap();
+        match cli_json.command {
+            Some(Commands::Show { account, raw, json }) => {
+                assert_eq!(account, "github");
+                assert!(!raw);
+                assert!(json);
+            }
+            _ => panic!("Expected show subcommand"),
+        }
+
+        // Conflicts with --raw
+        assert!(Cli::try_parse_from(["tfa", "show", "github", "-r", "--json"]).is_err());
     }
 
     #[test]
@@ -2172,6 +2351,22 @@ mod tests {
         assert!(run_app(show_raw, &store, &cb, &mut raw_out).is_ok());
         let raw_str = String::from_utf8(raw_out).unwrap();
         assert_eq!(raw_str.trim(), "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+
+        // JSON show
+        let mut json_out = Vec::new();
+        let show_json = Cli::try_parse_from(["tfa", "show", "my_acc", "--json"]).unwrap();
+        assert!(run_app(show_json, &store, &cb, &mut json_out).is_ok());
+        let json_str = String::from_utf8(json_out).unwrap();
+        let details: AccountDetails = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(details.account, "my_acc");
+        assert_eq!(details.account_type, "TOTP");
+        assert_eq!(details.digits, 6);
+        assert_eq!(details.period, Some(30));
+        assert_eq!(details.algorithm, "SHA1");
+        assert_eq!(details.secret, "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+        assert_eq!(details.live_code.len(), 6);
+        assert!(details.ttl.is_some());
+        assert_eq!(details.counter, None);
 
         // Missing account fails
         let mut err_out = Vec::new();
@@ -3327,6 +3522,30 @@ light: true
         assert!(s1.contains("Type:      HOTP"));
         assert!(s1.contains("Counter:   0"));
         assert!(s1.contains("Live Code:"));
+
+        // HOTP show with --json
+        let cli_show_json = Cli::try_parse_from(["tfa", "show", "my_hotp", "--json"]).unwrap();
+        let mut out_json = Vec::new();
+        assert!(run_app(cli_show_json, &store, &cb, &mut out_json).is_ok());
+        let s_json = String::from_utf8(out_json).unwrap();
+        let details: AccountDetails = serde_json::from_str(&s_json).unwrap();
+        assert_eq!(details.account, "my_hotp");
+        assert_eq!(details.account_type, "HOTP");
+        assert_eq!(details.counter, Some(0));
+        assert!(details.period.is_none());
+        assert!(details.ttl.is_none());
+        assert_eq!(details.live_code.len(), 6);
+
+        // HOTP generate with --json
+        let cli_gen_json = Cli::try_parse_from(["tfa", "generate", "my_hotp", "--json"]).unwrap();
+        let mut out_gen_json = Vec::new();
+        assert!(run_app(cli_gen_json, &store, &cb, &mut out_gen_json).is_ok());
+        let s_gen_json = String::from_utf8(out_gen_json).unwrap();
+        let gen_res: GenerateResult = serde_json::from_str(&s_gen_json).unwrap();
+        assert_eq!(gen_res.account, "my_hotp");
+        assert_eq!(gen_res.counter, Some(0));
+        assert_eq!(gen_res.ttl, 0);
+        assert_eq!(gen_res.period, 0);
 
         let cli_man = Cli::try_parse_from(["tfa", "man"]).unwrap();
         let mut out2 = Vec::new();

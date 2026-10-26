@@ -546,7 +546,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__generate)
-            opts="-c -w -d -p -a -C -n -h --secret --copy --watch --counter --digits --period --algorithm --next --config --storage --clipboard --clip-command --namespace --help"
+            opts="-c -w -d -p -a -C -n -h --secret --copy --watch --counter --digits --period --algorithm --next --json --config --storage --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2136,7 +2136,7 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__show)
-            opts="-r -C -n -h --raw --config --storage --clipboard --clip-command --namespace --help"
+            opts="-r -C -n -h --raw --json --config --storage --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

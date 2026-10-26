@@ -63,6 +63,7 @@ osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 '-w[Watch and continuously refresh code with progress bar]' \
 '--watch[Watch and continuously refresh code with progress bar]' \
 '(-w --watch --counter)--next[Preview upcoming token for next time step]' \
+'--json[Output generated token details as JSON]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '::account -- Name of the account (interactively prompted via fuzzy search if omitted and --secret not supplied):_default' \
@@ -324,6 +325,7 @@ osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 '--namespace=[Target namespace for account scoping (e.g. personal, work, home)]:NAMESPACE:_default' \
 '-r[Print only the raw secret or URI]' \
 '--raw[Print only the raw secret or URI]' \
+'(-r --raw)--json[Output account details and metadata as JSON]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 ':account -- Name of the account:_default' \
