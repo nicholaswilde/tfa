@@ -9,6 +9,8 @@ use std::sync::Mutex;
 
 use age::secrecy::SecretString;
 use age::{Identity, Recipient};
+use base64ct::{Base64, Encoding};
+use sha2::{Digest, Sha256};
 
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
@@ -328,11 +330,158 @@ impl AccountStore for AutoStore {
 pub struct AgeStore {
     path: PathBuf,
     key_file: Option<PathBuf>,
+    ssh_fingerprint: Option<String>,
+}
+
+/// Parses raw wire-format bytes and optional comment from an OpenSSH public key line.
+fn parse_ssh_pubkey_info(line: &str) -> Option<(Vec<u8>, Option<String>)> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    if parts.len() >= 2 {
+        if let Ok(raw_bytes) = Base64::decode_vec(parts[1]) {
+            let comment = if parts.len() > 2 {
+                Some(parts[2..].join(" "))
+            } else {
+                None
+            };
+            return Some((raw_bytes, comment));
+        }
+    }
+    None
+}
+
+/// Matches a candidate SSH key against an expected fingerprint, comment, or identifier.
+fn ssh_fingerprint_matches(
+    expected: &str,
+    raw_pubkey: &[u8],
+    comment: Option<&str>,
+    key_path: Option<&Path>,
+) -> bool {
+    let expected = expected.trim();
+    if expected.is_empty() {
+        return true;
+    }
+
+    if let Some(c) = comment {
+        if c.trim().eq_ignore_ascii_case(expected) {
+            return true;
+        }
+    }
+
+    if let Some(p) = key_path {
+        if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+            if name.eq_ignore_ascii_case(expected)
+                || name.trim_end_matches(".pub").eq_ignore_ascii_case(expected)
+            {
+                return true;
+            }
+        }
+    }
+
+    let digest = Sha256::digest(raw_pubkey);
+    let b64_padded = Base64::encode_string(&digest);
+    let b64_unpadded = b64_padded.trim_end_matches('=');
+    let openssh_fp = format!("SHA256:{b64_unpadded}");
+    let openssh_fp_padded = format!("SHA256:{b64_padded}");
+    let hex_fp = digest
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    let hex_colon_fp = digest
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(":");
+
+    if expected.eq_ignore_ascii_case(&openssh_fp)
+        || expected.eq_ignore_ascii_case(&openssh_fp_padded)
+        || expected.eq_ignore_ascii_case(b64_unpadded)
+        || expected.eq_ignore_ascii_case(&b64_padded)
+        || expected.eq_ignore_ascii_case(&hex_fp)
+        || expected.eq_ignore_ascii_case(&hex_colon_fp)
+    {
+        return true;
+    }
+
+    if let Some(stripped) = expected
+        .strip_prefix("SHA256:")
+        .or_else(|| expected.strip_prefix("sha256:"))
+    {
+        if stripped.eq_ignore_ascii_case(b64_unpadded)
+            || stripped.eq_ignore_ascii_case(&b64_padded)
+            || stripped.eq_ignore_ascii_case(&hex_fp)
+            || stripped.eq_ignore_ascii_case(&hex_colon_fp)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Checks if a file path (public key, companion .pub, or private key) matches an expected SSH fingerprint.
+fn check_ssh_key_matches(path: &Path, expected_fp: &str) -> bool {
+    let pub_candidates = [
+        PathBuf::from(format!("{}.pub", path.display())),
+        path.with_extension("pub"),
+    ];
+    for pub_p in &pub_candidates {
+        if pub_p.is_file() {
+            if let Ok(content) = std::fs::read_to_string(pub_p) {
+                for line in content.lines() {
+                    let line = line.trim();
+                    if let Some((raw_bytes, comment)) = parse_ssh_pubkey_info(line) {
+                        if ssh_fingerprint_matches(
+                            expected_fp,
+                            &raw_bytes,
+                            comment.as_deref(),
+                            Some(path),
+                        ) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(content) = std::fs::read_to_string(path) {
+        for line in content.lines() {
+            let line = line.trim();
+            if let Some((raw_bytes, comment)) = parse_ssh_pubkey_info(line) {
+                if ssh_fingerprint_matches(expected_fp, &raw_bytes, comment.as_deref(), Some(path))
+                {
+                    return true;
+                }
+            }
+        }
+
+        if let Ok(ssh_id) = age::ssh::Identity::from_buffer(std::io::Cursor::new(&content), None) {
+            if let Ok(rec) = age::ssh::Recipient::try_from(ssh_id) {
+                let pub_line = rec.to_string();
+                if let Some((raw_bytes, comment)) = parse_ssh_pubkey_info(&pub_line) {
+                    if ssh_fingerprint_matches(
+                        expected_fp,
+                        &raw_bytes,
+                        comment.as_deref(),
+                        Some(path),
+                    ) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 impl AgeStore {
-    pub fn new(path: PathBuf, key_file: Option<PathBuf>) -> Self {
-        Self { path, key_file }
+    pub fn new(path: PathBuf, key_file: Option<PathBuf>, ssh_fingerprint: Option<String>) -> Self {
+        Self {
+            path,
+            key_file,
+            ssh_fingerprint,
+        }
     }
 
     /// Default storage location for age-encrypted credentials (`~/.local/share/tfa/credentials.age`)
@@ -381,6 +530,30 @@ impl AgeStore {
                 candidates.push(h.join(".config").join("sops").join("age").join("keys.txt"));
                 candidates.push(h.join(".ssh").join("id_ed25519"));
                 candidates.push(h.join(".ssh").join("id_rsa"));
+
+                // Scan ~/.ssh for any additional key files
+                let ssh_dir = h.join(".ssh");
+                if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.is_file() {
+                            let filename = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                            if filename.ends_with(".pub") {
+                                let priv_p = p.with_extension("");
+                                if priv_p.is_file() && !candidates.contains(&priv_p) {
+                                    candidates.push(priv_p);
+                                }
+                            } else if !filename.starts_with("known_hosts")
+                                && !filename.starts_with("config")
+                                && !filename.starts_with("authorized_keys")
+                                && !filename.starts_with('.')
+                                && !candidates.contains(&p)
+                            {
+                                candidates.push(p);
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -389,7 +562,34 @@ impl AgeStore {
 
     /// Load age identities from raw string, files, or environment
     pub fn resolve_identities(&self) -> Result<Vec<Box<dyn Identity>>> {
+        let effective_fp = self
+            .ssh_fingerprint
+            .clone()
+            .or_else(|| std::env::var("TFA_SSH_FINGERPRINT").ok())
+            .or_else(|| std::env::var("TFA_AGE_SSH_FINGERPRINT").ok());
+
         let mut identities: Vec<Box<dyn Identity>> = Vec::new();
+
+        if let Some(ref fp) = effective_fp {
+            let mut candidates = Vec::new();
+            if let Some(ref path) = self.key_file {
+                candidates.push(path.clone());
+            }
+            candidates.extend(Self::candidate_key_paths());
+
+            for candidate in candidates {
+                if candidate.is_file() && check_ssh_key_matches(&candidate, fp) {
+                    if let Ok(loaded) = Self::load_identities_from_path(&candidate) {
+                        if !loaded.is_empty() {
+                            identities.extend(loaded);
+                            return Ok(identities);
+                        }
+                    }
+                }
+            }
+
+            bail!("No SSH key matching fingerprint '{fp}' found");
+        }
 
         // 1. Direct key content in TFA_AGE_KEY environment variable
         if let Ok(raw_key) = std::env::var("TFA_AGE_KEY") {
@@ -486,7 +686,100 @@ impl AgeStore {
 
     /// Resolve recipients for encrypting the credentials store
     pub fn resolve_recipients(&self) -> Result<Vec<Box<dyn Recipient + Send>>> {
+        let effective_fp = self
+            .ssh_fingerprint
+            .clone()
+            .or_else(|| std::env::var("TFA_SSH_FINGERPRINT").ok())
+            .or_else(|| std::env::var("TFA_AGE_SSH_FINGERPRINT").ok());
+
         let mut recipients: Vec<Box<dyn Recipient + Send>> = Vec::new();
+
+        if let Some(ref fp) = effective_fp {
+            // 1. Explicit recipient string or SSH pubkey in TFA_AGE_RECIPIENTS
+            if let Ok(recs) = std::env::var("TFA_AGE_RECIPIENTS") {
+                for token in recs.split([',', '\n']) {
+                    let token = token.trim();
+                    if token.is_empty() {
+                        continue;
+                    }
+                    if let Some((raw_bytes, comment)) = parse_ssh_pubkey_info(token) {
+                        if ssh_fingerprint_matches(fp, &raw_bytes, comment.as_deref(), None) {
+                            if let Ok(ssh_rec) = age::ssh::Recipient::from_str(token) {
+                                recipients.push(Box::new(ssh_rec));
+                                return Ok(recipients);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Candidate files & ~/.ssh
+            let mut pub_candidates = Vec::new();
+            if let Some(ref p) = self.key_file {
+                pub_candidates.push(PathBuf::from(format!("{}.pub", p.display())));
+                pub_candidates.push(p.with_extension("pub"));
+                pub_candidates.push(p.clone());
+            }
+
+            if let Ok(home) = std::env::var("HOME") {
+                if !home.is_empty() {
+                    let h = PathBuf::from(home);
+                    let ssh_dir = h.join(".ssh");
+                    if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
+                        for entry in entries.flatten() {
+                            let p = entry.path();
+                            if p.is_file() {
+                                pub_candidates.push(p);
+                            }
+                        }
+                    }
+                }
+            }
+
+            for candidate in pub_candidates {
+                if !candidate.is_file() {
+                    continue;
+                }
+                if let Ok(content) = std::fs::read_to_string(&candidate) {
+                    for line in content.lines() {
+                        let line = line.trim();
+                        if let Some((raw_bytes, comment)) = parse_ssh_pubkey_info(line) {
+                            if ssh_fingerprint_matches(
+                                fp,
+                                &raw_bytes,
+                                comment.as_deref(),
+                                Some(&candidate),
+                            ) {
+                                if let Ok(ssh_rec) = age::ssh::Recipient::from_str(line) {
+                                    recipients.push(Box::new(ssh_rec));
+                                    return Ok(recipients);
+                                }
+                            }
+                        }
+                    }
+                    if let Ok(ssh_id) =
+                        age::ssh::Identity::from_buffer(std::io::Cursor::new(&content), None)
+                    {
+                        if let Ok(rec) = age::ssh::Recipient::try_from(ssh_id) {
+                            let pub_line = rec.to_string();
+                            if let Some((raw_bytes, comment)) = parse_ssh_pubkey_info(&pub_line) {
+                                if ssh_fingerprint_matches(
+                                    fp,
+                                    &raw_bytes,
+                                    comment.as_deref(),
+                                    Some(&candidate),
+                                ) {
+                                    recipients.push(Box::new(rec));
+                                    return Ok(recipients);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            bail!("No SSH key matching fingerprint '{fp}' found to use as recipient");
+        }
 
         // 1. Explicit recipient string or SSH pubkey in TFA_AGE_RECIPIENTS
         if let Ok(recs) = std::env::var("TFA_AGE_RECIPIENTS") {
@@ -845,7 +1138,7 @@ mod tests {
         let file_content = format!("# public key: {}\n{}\n", pubkey, secret_str.expose_secret());
         std::fs::write(&key_path, file_content).unwrap();
 
-        let store = AgeStore::new(store_path.clone(), Some(key_path.clone()));
+        let store = AgeStore::new(store_path.clone(), Some(key_path.clone()), None);
 
         // 1. Initially empty
         assert_eq!(store.list_accounts().unwrap(), Vec::<String>::new());
@@ -878,7 +1171,7 @@ mod tests {
     fn test_age_store_lifecycle_with_passphrase() {
         let dir = tempdir().unwrap();
         let store_path = dir.path().join("credentials.age");
-        let store = AgeStore::new(store_path.clone(), None);
+        let store = AgeStore::new(store_path.clone(), None, None);
 
         std::env::set_var("TFA_AGE_PASSPHRASE", "masterpassword123");
         store.set_secret("my_service", "MY_SUPER_SECRET").unwrap();
@@ -902,10 +1195,107 @@ mod tests {
         let dir = tempdir().unwrap();
         let store_path = dir.path().join("credentials.age");
         let non_existent_key = dir.path().join("no_such_key.txt");
-        let store = AgeStore::new(store_path, Some(non_existent_key));
+        let store = AgeStore::new(store_path, Some(non_existent_key), None);
 
         let res = store.set_secret("test", "secret");
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_ssh_fingerprint_matching_rules() {
+        let pub_line = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6w/YFqTgbUomXdD+zvriKZZ+sktq3Xezt87YX5OVdp test-key@tfa";
+        let (raw, comment) = parse_ssh_pubkey_info(pub_line).unwrap();
+        let key_path = Path::new("/home/user/.ssh/id_ed25519");
+
+        // Full OpenSSH format
+        assert!(ssh_fingerprint_matches(
+            "SHA256:C3gvs/vraQNFgDiWP3hTbxLSRm5+0cXiUNibNEBdN5s",
+            &raw,
+            comment.as_deref(),
+            Some(key_path)
+        ));
+
+        // Lowercase prefix
+        assert!(ssh_fingerprint_matches(
+            "sha256:C3gvs/vraQNFgDiWP3hTbxLSRm5+0cXiUNibNEBdN5s",
+            &raw,
+            comment.as_deref(),
+            Some(key_path)
+        ));
+
+        // Raw base64 unpadded
+        assert!(ssh_fingerprint_matches(
+            "C3gvs/vraQNFgDiWP3hTbxLSRm5+0cXiUNibNEBdN5s",
+            &raw,
+            comment.as_deref(),
+            Some(key_path)
+        ));
+
+        // Comment match
+        assert!(ssh_fingerprint_matches(
+            "test-key@tfa",
+            &raw,
+            comment.as_deref(),
+            Some(key_path)
+        ));
+
+        // Filename match
+        assert!(ssh_fingerprint_matches(
+            "id_ed25519",
+            &raw,
+            comment.as_deref(),
+            Some(key_path)
+        ));
+
+        // Mismatch
+        assert!(!ssh_fingerprint_matches(
+            "SHA256:differentfingerprint1234567890abcdef",
+            &raw,
+            comment.as_deref(),
+            Some(key_path)
+        ));
+    }
+
+    #[test]
+    fn test_age_store_with_ssh_fingerprint_matching() {
+        let dir = tempdir().unwrap();
+        let store_path = dir.path().join("credentials.age");
+        let ssh_priv = dir.path().join("id_ed25519");
+        let ssh_pub = dir.path().join("id_ed25519.pub");
+
+        let priv_content = concat!(
+            "-----BEGIN OPENSSH PRIVATE KEY-----\n",
+            "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n",
+            "QyNTUxOQAAACCOsP2Bak4G1KJl3Q/s764imWfrJLat13s7fO2F+TlXaQAAAJDaUiqR2lIq\n",
+            "kQAAAAtzc2gtZWQyNTUxOQAAACCOsP2Bak4G1KJl3Q/s764imWfrJLat13s7fO2F+TlXaQ\n",
+            "AAAED2N+OslOMTYGAbV4xHiMZ3Olx8ZRxRw2RbyUTif3QtHY6w/YFqTgbUomXdD+zvriKZ\n",
+            "Z+sktq3Xezt87YX5OVdpAAAADHRlc3Qta2V5QHRmYQE=\n",
+            "-----END OPENSSH PRIVATE KEY-----\n"
+        );
+        let pub_content = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6w/YFqTgbUomXdD+zvriKZZ+sktq3Xezt87YX5OVdp test-key@tfa\n";
+
+        std::fs::write(&ssh_priv, priv_content).unwrap();
+        std::fs::write(&ssh_pub, pub_content).unwrap();
+
+        let fp = "SHA256:C3gvs/vraQNFgDiWP3hTbxLSRm5+0cXiUNibNEBdN5s";
+        let store = AgeStore::new(
+            store_path.clone(),
+            Some(ssh_priv.clone()),
+            Some(fp.to_string()),
+        );
+
+        // Set and get secret using the matching SSH fingerprint
+        store.set_secret("ssh_service", "SSH_SECRET_987").unwrap();
+        assert_eq!(store.get_secret("ssh_service").unwrap(), "SSH_SECRET_987");
+        assert_eq!(store.list_accounts().unwrap(), vec!["ssh_service"]);
+
+        // Non-matching fingerprint fails
+        let wrong_store = AgeStore::new(
+            store_path,
+            Some(ssh_priv),
+            Some("SHA256:wrongfingerprint1234567890abcdef".to_string()),
+        );
+        assert!(wrong_store.get_secret("ssh_service").is_err());
     }
 }

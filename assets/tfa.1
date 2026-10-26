@@ -1,10 +1,10 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH tfa 1  "tfa v0.1.1" 
+.TH tfa 1  "tfa v0.1.2-1-g6d7de62" 
 .SH NAME
 tfa \- CLI Two\-Factor Authentication (2FA) tool
 .SH SYNOPSIS
-\fBtfa\fR [\fB\-C\fR|\fB\-\-config\fR] [\fB\-\-storage\fR] [\fB\-\-clipboard\fR] [\fB\-\-clip\-command\fR] [\fB\-n\fR|\fB\-\-namespace\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+\fBtfa\fR [\fB\-C\fR|\fB\-\-config\fR] [\fB\-\-storage\fR] [\fB\-\-age\-key\fR] [\fB\-\-ssh\-fingerprint\fR] [\fB\-\-clipboard\fR] [\fB\-\-clip\-command\fR] [\fB\-n\fR|\fB\-\-namespace\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 CLI Two\-Factor Authentication (2FA) tool
 .SH OPTIONS
@@ -25,7 +25,15 @@ auto: Attempt OS keyring first; fallback to local file store if unavailable
 keyring: Strictly use system keyring (Secret Service, Keychain, Credential Manager)
 .IP \(bu 2
 file: Use local file storage (~/.local/share/tfa/credentials.json)
+.IP \(bu 2
+age: Use age\-encrypted file storage (~/.local/share/tfa/credentials.age)
 .RE
+.TP
+\fB\-\-age\-key\fR \fI<AGE_KEY>\fR
+Path to age key file for age\-encrypted storage
+.TP
+\fB\-\-ssh\-fingerprint\fR \fI<SSH_FINGERPRINT>\fR
+SSH key fingerprint, comment, or identifier for age\-encrypted storage
 .TP
 \fB\-\-clipboard\fR \fI<CLIPBOARD>\fR
 Clipboard copy provider (system or osc52)
@@ -110,6 +118,6 @@ Scan stored accounts and credentials file for security vulnerabilities
 tfa\-help(1)
 Print this message or the help of the given subcommand(s)
 .SH VERSION
-vv0.1.1
+vv0.1.2\-1\-g6d7de62
 .SH AUTHORS
 Nicholas Wilde

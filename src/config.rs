@@ -57,6 +57,8 @@ pub struct ConfigFile {
     pub password_timeout: Option<u64>,
     #[serde(alias = "age_key_file")]
     pub age_key: Option<PathBuf>,
+    #[serde(alias = "age_ssh_fingerprint", alias = "ssh_key_fingerprint")]
+    pub ssh_fingerprint: Option<String>,
 }
 
 impl ConfigFile {
@@ -529,6 +531,7 @@ period = 60
 algorithm = "sha256"
 auto_copy = true
 light = true
+ssh_fingerprint = "SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8"
 "#;
         let cfg = ConfigFile::parse(content, ConfigFormat::Toml).unwrap();
         assert_eq!(cfg.storage, Some(StorageBackend::File));
@@ -537,6 +540,10 @@ light = true
         assert_eq!(cfg.algorithm.as_deref(), Some("sha256"));
         assert_eq!(cfg.auto_copy, Some(true));
         assert_eq!(cfg.light, Some(true));
+        assert_eq!(
+            cfg.ssh_fingerprint.as_deref(),
+            Some("SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8")
+        );
     }
 
     #[test]
@@ -579,6 +586,8 @@ light: false
 
     #[test]
     fn test_resolve_precedence_cli_over_env_over_file() {
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        std::env::remove_var("TFA_STORAGE");
         let dir = tempfile::tempdir().unwrap();
         let config_file_path = dir.path().join("config.toml");
         fs::write(

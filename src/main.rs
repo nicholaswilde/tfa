@@ -55,6 +55,15 @@ pub struct Cli {
     #[arg(long, env = "TFA_AGE_KEY_FILE", global = true)]
     pub age_key: Option<PathBuf>,
 
+    /// SSH key fingerprint, comment, or identifier for age-encrypted storage
+    #[arg(
+        long,
+        env = "TFA_SSH_FINGERPRINT",
+        visible_alias = "age-ssh-fingerprint",
+        global = true
+    )]
+    pub ssh_fingerprint: Option<String>,
+
     /// Clipboard copy provider (system or osc52)
     #[arg(long, env = "TFA_CLIPBOARD", global = true)]
     pub clipboard: Option<ClipboardProvider>,
@@ -1624,8 +1633,17 @@ fn main() -> anyhow::Result<()> {
             let age_key = cli
                 .age_key
                 .clone()
-                .or_else(|| loaded_cfg.and_then(|c| c.age_key));
-            Box::new(AgeStore::new(AgeStore::default_path()?, age_key))
+                .or_else(|| loaded_cfg.as_ref().and_then(|c| c.age_key.clone()));
+            let ssh_fingerprint = cli
+                .ssh_fingerprint
+                .clone()
+                .or_else(|| std::env::var("TFA_AGE_SSH_FINGERPRINT").ok())
+                .or_else(|| loaded_cfg.as_ref().and_then(|c| c.ssh_fingerprint.clone()));
+            Box::new(AgeStore::new(
+                AgeStore::default_path()?,
+                age_key,
+                ssh_fingerprint,
+            ))
         }
     };
 
@@ -1672,11 +1690,24 @@ mod tests {
             "age",
             "--age-key",
             "/path/to/key.txt",
+            "--ssh-fingerprint",
+            "SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8",
             "list",
         ])
         .unwrap();
         assert_eq!(cli_age.storage, Some(StorageBackend::Age));
         assert_eq!(cli_age.age_key, Some(PathBuf::from("/path/to/key.txt")));
+        assert_eq!(
+            cli_age.ssh_fingerprint.as_deref(),
+            Some("SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8")
+        );
+
+        let cli_age_alias =
+            Cli::try_parse_from(["tfa", "--age-ssh-fingerprint", "homelab-pull", "list"]).unwrap();
+        assert_eq!(
+            cli_age_alias.ssh_fingerprint.as_deref(),
+            Some("homelab-pull")
+        );
     }
 
     #[test]

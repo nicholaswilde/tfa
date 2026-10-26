@@ -344,8 +344,8 @@ Pre-generated completion scripts are also available in the [`completions/`](comp
 
 ### Hierarchical Precedence
 Settings resolve in strict hierarchical precedence order (highest to lowest):
-1. **Command Line Arguments** (e.g. `--storage`, `--age-key`, `--clipboard`, `--clip-command`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
-2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
+1. **Command Line Arguments** (e.g. `--storage`, `--age-key`, `--ssh-fingerprint`, `--clipboard`, `--clip-command`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
+2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_SSH_FINGERPRINT`, `TFA_AGE_SSH_FINGERPRINT`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
 3. **Configuration File** (`-C <path>` / `--config <path>`, or default locations: `~/.config/tfa/config.{toml,yaml,yml,json}`)
 4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, namespace: `default`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
 
@@ -361,13 +361,19 @@ Settings resolve in strict hierarchical precedence order (highest to lowest):
 - **`keyring`:** Strictly requires the OS system keyring and returns a hard error if unavailable.
 - **`age`:** Identity-based encrypted file storage (`~/.local/share/tfa/credentials.age`) using [`age`](https://github.com/FiloSottile/age). Encrypts credentials with age public keys, SSH keys (`~/.ssh/id_ed25519.pub`, `~/.ssh/id_rsa.pub`), or a passphrase.
 
-#### Age Storage Key Resolution
+#### Age Storage Key Resolution & SSH Fingerprinting
 When using `--storage age`, `tfa` resolves decryption identities and encryption recipients in the following order:
 1. Explicit key argument or environment variable: `--age-key`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `AGE_KEY_FILE`, or `SOPS_AGE_KEY_FILE`.
 2. SOPS age key fallback: `~/.config/sops/age/keys.txt`.
 3. Default age key fallback: `~/.config/age/keys.txt` (or `$XDG_CONFIG_HOME/age/keys.txt`).
-4. SSH keys: `~/.ssh/id_ed25519` and `~/.ssh/id_rsa` (recipients `~/.ssh/id_ed25519.pub`, `~/.ssh/id_rsa.pub`).
+4. SSH keys: `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, or any valid key pair in `~/.ssh/`.
 5. Passphrase fallback: `TFA_AGE_PASSPHRASE` environment variable, or interactive prompt if no identity files exist.
+
+When multiple SSH keys exist or a specific identity is required, specify the SSH key fingerprint, comment, or filename via `--ssh-fingerprint` (`--age-ssh-fingerprint`), `TFA_SSH_FINGERPRINT` (`TFA_AGE_SSH_FINGERPRINT`), or `ssh_fingerprint` in configuration. `tfa` accepts:
+- Standard OpenSSH SHA256 fingerprints (e.g. `SHA256:C3gvs/vraQNFgDiWP3hTbxLSRm5+0cXiUNibNEBdN5s`)
+- Raw base64 (padded or unpadded) or SHA256 hex digests
+- SSH key comments (e.g. `homelab-pull`, `user@host`)
+- SSH key filenames (e.g. `id_ed25519`, `id_rsa`)
 
 ### Example Configuration Files
 
@@ -375,6 +381,7 @@ When using `--storage age`, `tfa` resolves decryption identities and encryption 
 ```toml
 storage = "keyring"           # auto, keyring, file, or age
 age_key = "~/.config/sops/age/keys.txt" # optional age key file or secret key
+ssh_fingerprint = "SHA256:C3gvs/vraQNFgDiWP3hTbxLSRm5+0cXiUNibNEBdN5s" # optional SSH key identity
 clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
 clip_command = "wl-copy"      # optional custom command receiving token via stdin
 default_namespace = "personal"# active default namespace (default: "default")
@@ -391,6 +398,7 @@ password_timeout = 300        # unlock cache TTL in seconds (default: 300)
 ```yaml
 storage: auto
 age_key: ~/.config/sops/age/keys.txt
+ssh_fingerprint: "SHA256:C3gvs/vraQNFgDiWP3hTbxLSRm5+0cXiUNibNEBdN5s"
 clipboard: system
 clip_command: "xclip -selection clipboard"
 default_namespace: personal
@@ -408,6 +416,7 @@ password_timeout: 300
 {
   "storage": "auto",
   "age_key": "~/.config/sops/age/keys.txt",
+  "ssh_fingerprint": "SHA256:C3gvs/vraQNFgDiWP3hTbxLSRm5+0cXiUNibNEBdN5s",
   "clipboard": "system",
   "clip_command": "wl-copy",
   "default_namespace": "personal",
