@@ -136,6 +136,9 @@ pub enum Commands {
         /// Watch all accounts in the active namespace
         #[arg(short, long)]
         all: bool,
+        /// Filter accounts by substring or glob pattern (used with watch all)
+        #[arg(short, long)]
+        filter: Option<String>,
         /// Copy token to clipboard on every cycle (single account only)
         #[arg(short, long, num_args = 0..=1, default_missing_value = "true")]
         copy: Option<bool>,
@@ -306,7 +309,11 @@ pub enum PasswordCommands {
 #[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
 pub enum WatchCommands {
     /// Watch all accounts in the active namespace
-    All,
+    All {
+        /// Filter accounts by substring or glob pattern
+        #[arg(short, long)]
+        filter: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -1009,14 +1016,17 @@ pub fn run_app(
             command,
             account,
             all,
+            filter,
             copy,
         }) => {
-            let is_all = all
-                || matches!(command, Some(WatchCommands::All))
-                || account.as_deref() == Some("all");
+            let (is_all, cmd_filter) = match &command {
+                Some(WatchCommands::All { filter: f }) => (true, f.as_deref()),
+                None => (all || account.as_deref() == Some("all"), None),
+            };
 
             if is_all {
-                watch::watch_all(store, out_writer, None)?;
+                let resolved_filter = cmd_filter.or(filter.as_deref());
+                watch::watch_all(store, out_writer, resolved_filter, None)?;
             } else {
                 let acct = match account {
                     Some(a) => a,
@@ -1587,6 +1597,7 @@ mod tests {
                 copy,
                 command,
                 all,
+                ..
             }) => {
                 assert_eq!(account, Some("github".to_string()));
                 assert_eq!(copy, Some(true));
@@ -1755,24 +1766,39 @@ mod tests {
                 all,
                 ..
             }) => {
-                assert_eq!(command, Some(WatchCommands::All));
+                assert_eq!(command, Some(WatchCommands::All { filter: None }));
                 assert_eq!(account, None);
                 assert!(!all);
             }
             _ => panic!("Expected watch all subcommand"),
         }
 
-        let cli2 = Cli::try_parse_from(["tfa", "watch", "--all"]).unwrap();
+        let cli1_filter = Cli::try_parse_from(["tfa", "watch", "all", "--filter", "git*"]).unwrap();
+        match cli1_filter.command {
+            Some(Commands::Watch { command, .. }) => {
+                assert_eq!(
+                    command,
+                    Some(WatchCommands::All {
+                        filter: Some("git*".to_string())
+                    })
+                );
+            }
+            _ => panic!("Expected watch all with filter"),
+        }
+
+        let cli2 = Cli::try_parse_from(["tfa", "watch", "--all", "-f", "aws"]).unwrap();
         match cli2.command {
             Some(Commands::Watch {
                 command,
                 account,
                 all,
+                filter,
                 ..
             }) => {
                 assert_eq!(command, None);
                 assert_eq!(account, None);
                 assert!(all);
+                assert_eq!(filter, Some("aws".to_string()));
             }
             _ => panic!("Expected watch --all"),
         }
@@ -2501,12 +2527,20 @@ mod tests {
 
         // 3. Directly test watch_all with max_ticks
         let mut out_watch = Vec::new();
-        let res_watch = watch::watch_all(&store, &mut out_watch, Some(2));
+        let res_watch = watch::watch_all(&store, &mut out_watch, None, Some(2));
         if res_watch.is_ok() {
             let out_str = String::from_utf8(out_watch).unwrap();
             assert!(out_str.contains("ACCOUNT"));
             assert!(out_str.contains("TOKEN"));
             assert!(out_str.contains("PROGRESS"));
+            assert!(out_str.contains("personal"));
+        }
+
+        // 4. Test watch_all with filter
+        let mut out_filter = Vec::new();
+        let res_filter = watch::watch_all(&store, &mut out_filter, Some("person*"), Some(2));
+        if res_filter.is_ok() {
+            let out_str = String::from_utf8(out_filter).unwrap();
             assert!(out_str.contains("personal"));
         }
     }

@@ -104,6 +104,8 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             break
         }
         'tfa;watch' {
+            [CompletionResult]::new('-f', '-f', [CompletionResultType]::ParameterName, 'Filter accounts by substring or glob pattern (used with watch all)')
+            [CompletionResult]::new('--filter', '--filter', [CompletionResultType]::ParameterName, 'Filter accounts by substring or glob pattern (used with watch all)')
             [CompletionResult]::new('-c', '-c', [CompletionResultType]::ParameterName, 'Copy token to clipboard on every cycle (single account only)')
             [CompletionResult]::new('--copy', '--copy', [CompletionResultType]::ParameterName, 'Copy token to clipboard on every cycle (single account only)')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
@@ -122,6 +124,8 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
             break
         }
         'tfa;watch;all' {
+            [CompletionResult]::new('-f', '-f', [CompletionResultType]::ParameterName, 'Filter accounts by substring or glob pattern')
+            [CompletionResult]::new('--filter', '--filter', [CompletionResultType]::ParameterName, 'Filter accounts by substring or glob pattern')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')

@@ -2220,12 +2220,20 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__watch)
-            opts="-a -c -C -n -h --all --copy --config --storage --clipboard --clip-command --namespace --help all help"
+            opts="-a -f -c -C -n -h --all --filter --copy --config --storage --clipboard --clip-command --namespace --help all help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --filter)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -f)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --copy)
                     COMPREPLY=($(compgen -W "true false" -- "${cur}"))
                     return 0
@@ -2270,12 +2278,20 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__watch__subcmd__all)
-            opts="-C -n -h --config --storage --clipboard --clip-command --namespace --help"
+            opts="-f -C -n -h --filter --config --storage --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --filter)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -f)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

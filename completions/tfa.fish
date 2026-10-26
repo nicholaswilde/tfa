@@ -89,6 +89,7 @@ complete -c tfa -n "__fish_tfa_using_subcommand instant" -l clip-command -d 'Cus
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -s n -l namespace -d 'Target namespace for account scoping (e.g. personal, work, home)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -s w -l watch -d 'Watch and continuously refresh code with progress bar'
 complete -c tfa -n "__fish_tfa_using_subcommand instant" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -s f -l filter -d 'Filter accounts by substring or glob pattern (used with watch all)' -r
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -s c -l copy -d 'Copy token to clipboard on every cycle (single account only)' -r -f -a "true\t''
 false\t''"
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
@@ -103,6 +104,7 @@ complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subco
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -a "all" -d 'Watch all accounts in the active namespace'
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and not __fish_seen_subcommand_from all help" -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcommand_from all" -s f -l filter -d 'Filter accounts by substring or glob pattern' -r
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcommand_from all" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand watch; and __fish_seen_subcommand_from all" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'

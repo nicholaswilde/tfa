@@ -100,6 +100,8 @@ osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 ;;
 (watch)
 _arguments "${_arguments_options[@]}" : \
+'-f+[Filter accounts by substring or glob pattern (used with watch all)]:FILTER:_default' \
+'--filter=[Filter accounts by substring or glob pattern (used with watch all)]:FILTER:_default' \
 '-c+[Copy token to clipboard on every cycle (single account only)]::COPY:(true false)' \
 '--copy=[Copy token to clipboard on every cycle (single account only)]::COPY:(true false)' \
 '-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
@@ -129,6 +131,8 @@ osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
         case $line[2] in
             (all)
 _arguments "${_arguments_options[@]}" : \
+'-f+[Filter accounts by substring or glob pattern]:FILTER:_default' \
+'--filter=[Filter accounts by substring or glob pattern]:FILTER:_default' \
 '-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"

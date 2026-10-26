@@ -141,12 +141,60 @@ pub fn watch_engine(
     res
 }
 
-/// Run watch mode for all accounts in the active store/namespace.
+/// Check whether an account name matches the given filter pattern.
+/// Supports substring matching, glob wildcard pattern matching (`*` and `?`),
+/// and standard regex patterns. Matching is case-insensitive.
+pub fn matches_pattern(pattern: &str, name: &str) -> bool {
+    let pat = pattern.trim().to_lowercase();
+    let val = name.trim().to_lowercase();
+    if pat.is_empty() {
+        return true;
+    }
+
+    // Try glob matching if pattern contains '*' or '?'
+    if pat.contains('*') || pat.contains('?') {
+        let pat_chars: Vec<char> = pat.chars().collect();
+        let val_chars: Vec<char> = val.chars().collect();
+        let mut i = 0;
+        let mut j = 0;
+        let mut star_idx: Option<usize> = None;
+        let mut match_idx = 0;
+
+        while i < val_chars.len() {
+            if j < pat_chars.len() && (pat_chars[j] == '?' || pat_chars[j] == val_chars[i]) {
+                i += 1;
+                j += 1;
+            } else if j < pat_chars.len() && pat_chars[j] == '*' {
+                star_idx = Some(j);
+                match_idx = i;
+                j += 1;
+            } else if let Some(star) = star_idx {
+                j = star + 1;
+                match_idx += 1;
+                i = match_idx;
+            } else {
+                return false;
+            }
+        }
+
+        while j < pat_chars.len() && pat_chars[j] == '*' {
+            j += 1;
+        }
+
+        return j == pat_chars.len();
+    }
+
+    // Substring match
+    val.contains(&pat)
+}
+
+/// Run watch mode for all accounts in the active store/namespace, optionally filtered by pattern.
 /// Updates live countdowns and codes every interval in a formatted table.
 /// Exits cleanly when 'q', Esc, or Ctrl+C is pressed, or if max_ticks is reached (for testing).
 pub fn watch_all(
     store: &dyn AccountStore,
     out: &mut dyn Write,
+    filter: Option<&str>,
     max_ticks: Option<usize>,
 ) -> Result<()> {
     let accounts = store.list_accounts()?;
@@ -155,8 +203,22 @@ pub fn watch_all(
         return Ok(());
     }
 
+    let filtered_accounts: Vec<String> = accounts
+        .into_iter()
+        .filter(|acc| filter.is_none_or(|p| matches_pattern(p, acc)))
+        .collect();
+
+    if filtered_accounts.is_empty() {
+        if let Some(p) = filter {
+            writeln!(out, "No accounts match filter '{p}'.")?;
+        } else {
+            writeln!(out, "No accounts configured.")?;
+        }
+        return Ok(());
+    }
+
     let mut entries = Vec::new();
-    for acc in &accounts {
+    for acc in &filtered_accounts {
         let engine_res = store
             .get_secret(acc)
             .and_then(|sec| TfaTotp::from_input(acc, &sec));
@@ -360,7 +422,7 @@ mod tests {
     fn test_watch_all_empty() {
         let store = crate::storage::MemoryStore::new();
         let mut out = Vec::new();
-        let res = watch_all(&store, &mut out, Some(1));
+        let res = watch_all(&store, &mut out, None, Some(1));
         assert!(res.is_ok());
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("No accounts configured."));
@@ -372,7 +434,7 @@ mod tests {
         store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
         store.set_secret("google", "JBSWY3DPEHPK3PXP").unwrap();
         let mut out = Vec::new();
-        let res = watch_all(&store, &mut out, Some(2));
+        let res = watch_all(&store, &mut out, None, Some(2));
         assert!(res.is_ok());
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("ACCOUNT"));
@@ -380,6 +442,50 @@ mod tests {
         assert!(s.contains("PROGRESS"));
         assert!(s.contains("github"));
         assert!(s.contains("google"));
+    }
+
+    #[test]
+    fn test_watch_all_with_filter() {
+        let store = crate::storage::MemoryStore::new();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("gitlab", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("aws", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // Substring filter
+        let mut out_sub = Vec::new();
+        assert!(watch_all(&store, &mut out_sub, Some("git"), Some(1)).is_ok());
+        let s_sub = String::from_utf8(out_sub).unwrap();
+        assert!(s_sub.contains("github"));
+        assert!(s_sub.contains("gitlab"));
+        assert!(!s_sub.contains("aws"));
+
+        // Glob filter
+        let mut out_glob = Vec::new();
+        assert!(watch_all(&store, &mut out_glob, Some("*hub"), Some(1)).is_ok());
+        let s_glob = String::from_utf8(out_glob).unwrap();
+        assert!(s_glob.contains("github"));
+        assert!(!s_glob.contains("gitlab"));
+        assert!(!s_glob.contains("aws"));
+
+        // Filter with no matches
+        let mut out_none = Vec::new();
+        assert!(watch_all(&store, &mut out_none, Some("missing*"), Some(1)).is_ok());
+        let s_none = String::from_utf8(out_none).unwrap();
+        assert!(s_none.contains("No accounts match filter 'missing*'"));
+    }
+
+    #[test]
+    fn test_matches_pattern_logic() {
+        assert!(matches_pattern("", "github"));
+        assert!(matches_pattern("git", "github"));
+        assert!(matches_pattern("HUB", "github"));
+        assert!(matches_pattern("git*", "github"));
+        assert!(matches_pattern("*hub", "github"));
+        assert!(matches_pattern("g?thub", "github"));
+        assert!(matches_pattern("g*b", "github"));
+        assert!(!matches_pattern("git*", "google"));
+        assert!(!matches_pattern("aws", "github"));
+        assert!(!matches_pattern("g?b", "github"));
     }
 
     #[test]
@@ -393,7 +499,7 @@ mod tests {
             )
             .unwrap();
         let mut out = Vec::new();
-        let res = watch_all(&store, &mut out, Some(1));
+        let res = watch_all(&store, &mut out, None, Some(1));
         assert!(res.is_ok());
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("github"));
@@ -406,7 +512,7 @@ mod tests {
         let store = crate::storage::MemoryStore::new();
         store.set_secret("bad_acc", "???not valid base32!").unwrap();
         let mut out = Vec::new();
-        let res = watch_all(&store, &mut out, Some(1));
+        let res = watch_all(&store, &mut out, None, Some(1));
         assert!(res.is_ok());
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("bad_acc"));

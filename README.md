@@ -170,6 +170,10 @@ aws       789012    [████░░░░░░░░] 10s
 github    482910    [████████░░░░] 18s
 google    654321    [████████████] 30s
 
+# Filter accounts in watch all using substring or glob patterns:
+$ tfa watch all --filter "git*"
+$ tfa watch --all -f "*dev*"
+
 # Or via --all flag:
 $ tfa watch --all
 
