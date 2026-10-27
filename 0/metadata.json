@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.12.2",
+  "checkpoint_id": "01M5ZEFCPBPHH8A5EW6PPW5VFC",
+  "session_id": "1c52b071-ce50-4ad3-82a9-2ceea3b76853",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-27T19:47:58.359530387Z",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "save_step_count": 3,
+  "files_touched": [
+    "README.md",
+    "assets/tfa.1",
+    "completions/_tfa",
+    "completions/_tfa.ps1",
+    "completions/tfa.bash",
+    "completions/tfa.fish",
+    "src/backup.rs",
+    "src/config.rs",
+    "src/main.rs",
+    "src/storage.rs"
+  ],
+  "agent": "Antigravity",
+  "model": "",
+  "turn_id": "61dcf3b28fe4",
+  "redaction": {
+    "replacements": 99,
+    "layers": {
+      "betterleaks": 36,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 1,
+      "credentialed_uri": 0,
+      "entropy": 115,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 3
+  }
+}

@@ -1,0 +1,17 @@
+implement issue 22
+
+---
+
+this repo was flagged by gitguardian for having secrets or private keys in it. Is this true or is it just for tests?
+
+---
+
+which do you recommend
+
+---
+
+yes
+
+---
+
+create git commit and push
