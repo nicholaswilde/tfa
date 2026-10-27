@@ -4,7 +4,7 @@
 .SH NAME
 tfa \- CLI Two\-Factor Authentication (2FA) tool
 .SH SYNOPSIS
-\fBtfa\fR [\fB\-C\fR|\fB\-\-config\fR] [\fB\-\-storage\fR] [\fB\-\-age\-key\fR] [\fB\-\-ssh\-fingerprint\fR] [\fB\-\-clipboard\fR] [\fB\-\-clip\-command\fR] [\fB\-n\fR|\fB\-\-namespace\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+\fBtfa\fR [\fB\-C\fR|\fB\-\-config\fR] [\fB\-\-storage\fR] [\fB\-\-age\-key\fR] [\fB\-\-ssh\-key\fR] [\fB\-\-clipboard\fR] [\fB\-\-clip\-command\fR] [\fB\-n\fR|\fB\-\-namespace\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 CLI Two\-Factor Authentication (2FA) tool
 .SH OPTIONS
@@ -32,8 +32,8 @@ age: Use age\-encrypted file storage (~/.local/share/tfa/credentials.age)
 \fB\-\-age\-key\fR \fI<AGE_KEY>\fR
 Path to age key file for age\-encrypted storage
 .TP
-\fB\-\-ssh\-fingerprint\fR \fI<SSH_FINGERPRINT>\fR
-SSH key fingerprint, comment, or identifier for age\-encrypted storage
+\fB\-\-ssh\-key\fR \fI<SSH_KEY>\fR
+Path to SSH key file for age\-encrypted storage
 .TP
 \fB\-\-clipboard\fR \fI<CLIPBOARD>\fR
 Clipboard copy provider (system or osc52)

@@ -55,14 +55,15 @@ pub struct Cli {
     #[arg(long, env = "TFA_AGE_KEY_FILE", global = true)]
     pub age_key: Option<PathBuf>,
 
-    /// SSH key fingerprint, comment, or identifier for age-encrypted storage
+    /// Path to SSH key file for age-encrypted storage
     #[arg(
         long,
-        env = "TFA_SSH_FINGERPRINT",
-        visible_alias = "age-ssh-fingerprint",
+        env = "TFA_SSH_KEY_FILE",
+        visible_alias = "age-ssh-key",
+        visible_alias = "ssh-key-file",
         global = true
     )]
-    pub ssh_fingerprint: Option<String>,
+    pub ssh_key: Option<PathBuf>,
 
     /// Clipboard copy provider (system or osc52)
     #[arg(long, env = "TFA_CLIPBOARD", global = true)]
@@ -1634,16 +1635,13 @@ fn main() -> anyhow::Result<()> {
                 .age_key
                 .clone()
                 .or_else(|| loaded_cfg.as_ref().and_then(|c| c.age_key.clone()));
-            let ssh_fingerprint = cli
-                .ssh_fingerprint
+            let ssh_key = cli
+                .ssh_key
                 .clone()
-                .or_else(|| std::env::var("TFA_AGE_SSH_FINGERPRINT").ok())
-                .or_else(|| loaded_cfg.as_ref().and_then(|c| c.ssh_fingerprint.clone()));
-            Box::new(AgeStore::new(
-                AgeStore::default_path()?,
-                age_key,
-                ssh_fingerprint,
-            ))
+                .or_else(|| std::env::var("TFA_SSH_KEY").ok().map(PathBuf::from))
+                .or_else(|| std::env::var("TFA_AGE_SSH_KEY").ok().map(PathBuf::from))
+                .or_else(|| loaded_cfg.as_ref().and_then(|c| c.ssh_key.clone()));
+            Box::new(AgeStore::new(AgeStore::default_path()?, age_key, ssh_key))
         }
     };
 
@@ -1690,23 +1688,20 @@ mod tests {
             "age",
             "--age-key",
             "/path/to/key.txt",
-            "--ssh-fingerprint",
-            "SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8",
+            "--ssh-key",
+            "/path/to/id_ed25519",
             "list",
         ])
         .unwrap();
         assert_eq!(cli_age.storage, Some(StorageBackend::Age));
         assert_eq!(cli_age.age_key, Some(PathBuf::from("/path/to/key.txt")));
-        assert_eq!(
-            cli_age.ssh_fingerprint.as_deref(),
-            Some("SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8")
-        );
+        assert_eq!(cli_age.ssh_key, Some(PathBuf::from("/path/to/id_ed25519")));
 
         let cli_age_alias =
-            Cli::try_parse_from(["tfa", "--age-ssh-fingerprint", "homelab-pull", "list"]).unwrap();
+            Cli::try_parse_from(["tfa", "--age-ssh-key", "/path/to/id_rsa", "list"]).unwrap();
         assert_eq!(
-            cli_age_alias.ssh_fingerprint.as_deref(),
-            Some("homelab-pull")
+            cli_age_alias.ssh_key,
+            Some(PathBuf::from("/path/to/id_rsa"))
         );
     }
 

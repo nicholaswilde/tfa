@@ -57,8 +57,8 @@ pub struct ConfigFile {
     pub password_timeout: Option<u64>,
     #[serde(alias = "age_key_file")]
     pub age_key: Option<PathBuf>,
-    #[serde(alias = "age_ssh_fingerprint", alias = "ssh_key_fingerprint")]
-    pub ssh_fingerprint: Option<String>,
+    #[serde(alias = "ssh_key_file", alias = "age_ssh_key")]
+    pub ssh_key: Option<PathBuf>,
 }
 
 impl ConfigFile {
@@ -545,7 +545,7 @@ period = 60
 algorithm = "sha256"
 auto_copy = true
 light = true
-ssh_fingerprint = "SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8"
+ssh_key = "/home/user/.ssh/id_ed25519"
 "#;
         let cfg = ConfigFile::parse(content, ConfigFormat::Toml).unwrap();
         assert_eq!(cfg.storage, Some(StorageBackend::File));
@@ -555,8 +555,8 @@ ssh_fingerprint = "SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8"
         assert_eq!(cfg.auto_copy, Some(true));
         assert_eq!(cfg.light, Some(true));
         assert_eq!(
-            cfg.ssh_fingerprint.as_deref(),
-            Some("SHA256:9j+181p8w3YNfse8roWqfdQnOwB9wMYGPO9ACytaTe8")
+            cfg.ssh_key,
+            Some(PathBuf::from("/home/user/.ssh/id_ed25519"))
         );
     }
 

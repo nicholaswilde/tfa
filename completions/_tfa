@@ -22,8 +22,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -61,8 +62,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -97,8 +99,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -124,8 +127,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -157,8 +161,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -214,8 +219,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -237,8 +243,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -258,8 +265,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -281,8 +289,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -302,8 +311,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -323,8 +333,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -347,8 +358,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -368,8 +380,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -393,8 +406,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -416,8 +430,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -440,8 +455,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -461,8 +477,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -481,8 +498,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -509,8 +527,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -529,8 +548,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -550,8 +570,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -572,8 +593,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -595,8 +617,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -660,8 +683,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -691,8 +715,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -712,8 +737,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -734,8 +760,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -755,8 +782,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -775,8 +803,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
@@ -839,8 +868,9 @@ keyring\:"Strictly use system keyring (Secret Service, Keychain, Credential Mana
 file\:"Use local file storage (~/.local/share/tfa/credentials.json)"
 age\:"Use age-encrypted file storage (~/.local/share/tfa/credentials.age)"))' \
 '--age-key=[Path to age key file for age-encrypted storage]:AGE_KEY:_files' \
-'--ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
-'--age-ssh-fingerprint=[SSH key fingerprint, comment, or identifier for age-encrypted storage]:SSH_FINGERPRINT:_default' \
+'--ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--age-ssh-key=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
+'--ssh-key-file=[Path to SSH key file for age-encrypted storage]:SSH_KEY:_files' \
 '--clipboard=[Clipboard copy provider (system or osc52)]:CLIPBOARD:((system\:"Native system clipboard (arboard with Wayland/X11/macOS/Windows)"
 osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen)"))' \
 '--clip-command=[Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)]:CLIP_COMMAND:_default' \
