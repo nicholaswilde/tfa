@@ -80,7 +80,7 @@ fi
 git add Cargo.toml Cargo.lock
 git commit -m "chore(release): bump version to $NEW_TAG"
 
-if [ -n "$(git status --porcelain)" ]; then
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     echo "Error: Working directory not clean after bumping version."
     exit 1
 fi
