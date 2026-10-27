@@ -37,7 +37,7 @@ def format_special_thanks(thanks, reason=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate release summary")
-    parser.add_argument("range", nargs="?", default=None, help="Git commit or tag range (e.g. v0.1.0..v0.1.1)")
+    parser.add_argument("range", nargs="*", default=None, help="Git commit or tag range (e.g. v0.1.0..v0.1.1 or 'v0.1.0 to v0.1.1')")
     parser.add_argument("--thanks", "--special-thanks", dest="thanks", default=None, help="Person to thank or full thanks message")
     parser.add_argument("--for", "--reason", dest="thanks_reason", default=None, help="Reason or contribution to thank the person for")
     parser.add_argument("--dry-run", action="store_true", help="Print summary without updating GitHub release")
@@ -45,8 +45,13 @@ def main():
 
     repo_slug = get_repo_slug()
 
-    if args.range:
-        git_range = args.range
+    raw_range = " ".join(args.range).strip() if args.range else None
+    if raw_range:
+        if " to " in raw_range:
+            parts = raw_range.split(" to ")
+            git_range = f"{parts[0].strip()}..{parts[1].strip()}"
+        else:
+            git_range = raw_range.replace("...", "..")
         tags = git_range.split("..")
         if len(tags) == 2:
             latest = tags[1]
@@ -145,7 +150,13 @@ def main():
         url = run_cmd(f"gh release edit {latest} --draft -F /tmp/release_notes.md")
         print(f"Draft release updated: {url}")
     except Exception as e:
-        print(f"Failed to update release: {e}")
+        print(f"Failed to edit release ({e}), attempting to create draft release...")
+        try:
+            title = latest.lstrip("v")
+            url = run_cmd(f"gh release create {latest} --draft --title {title} -F /tmp/release_notes.md")
+            print(f"Draft release created: {url}")
+        except Exception as e_create:
+            print(f"Failed to create release: {e_create}")
     finally:
         if os.path.exists('/tmp/release_notes.md'):
             os.remove('/tmp/release_notes.md')
