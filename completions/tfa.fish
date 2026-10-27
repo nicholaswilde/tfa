@@ -242,6 +242,7 @@ complete -c tfa -n "__fish_tfa_using_subcommand show" -s r -l raw -d 'Print only
 complete -c tfa -n "__fish_tfa_using_subcommand show" -l json -d 'Output account details and metadata as JSON'
 complete -c tfa -n "__fish_tfa_using_subcommand show" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c tfa -n "__fish_tfa_using_subcommand export" -l password -d 'Master passphrase for encryption (prompted securely if omitted)' -r
+complete -c tfa -n "__fish_tfa_using_subcommand export" -l gpg -l gpg-recipient -l gpg-key -d 'Encrypt backup using GPG with optional recipient key fingerprint, ID, or email' -r
 complete -c tfa -n "__fish_tfa_using_subcommand export" -s C -l config -d 'Path to configuration file (TOML, YAML, or JSON)' -r -F
 complete -c tfa -n "__fish_tfa_using_subcommand export" -l storage -d 'Credential storage backend' -r -f -a "auto\t'Attempt OS keyring first; fallback to local file store if unavailable'
 keyring\t'Strictly use system keyring (Secret Service, Keychain, Credential Manager)'

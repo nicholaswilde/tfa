@@ -580,13 +580,25 @@ _tfa() {
             return 0
             ;;
         tfa__subcmd__export)
-            opts="-C -n -h --unencrypted --password --config --storage --age-key --age-ssh-key --ssh-key-file --ssh-key --clipboard --clip-command --namespace --help"
+            opts="-C -n -h --unencrypted --password --gpg-recipient --gpg-key --gpg --config --storage --age-key --age-ssh-key --ssh-key-file --ssh-key --clipboard --clip-command --namespace --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --password)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --gpg)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --gpg-recipient)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --gpg-key)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

@@ -318,6 +318,9 @@ Register-ArgumentCompleter -Native -CommandName 'tfa' -ScriptBlock {
         }
         'tfa;export' {
             [CompletionResult]::new('--password', '--password', [CompletionResultType]::ParameterName, 'Master passphrase for encryption (prompted securely if omitted)')
+            [CompletionResult]::new('--gpg', '--gpg', [CompletionResultType]::ParameterName, 'Encrypt backup using GPG with optional recipient key fingerprint, ID, or email')
+            [CompletionResult]::new('--gpg-recipient', '--gpg-recipient', [CompletionResultType]::ParameterName, 'Encrypt backup using GPG with optional recipient key fingerprint, ID, or email')
+            [CompletionResult]::new('--gpg-key', '--gpg-key', [CompletionResultType]::ParameterName, 'Encrypt backup using GPG with optional recipient key fingerprint, ID, or email')
             [CompletionResult]::new('-C', '-C ', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to configuration file (TOML, YAML, or JSON)')
             [CompletionResult]::new('--storage', '--storage', [CompletionResultType]::ParameterName, 'Credential storage backend')

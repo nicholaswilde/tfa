@@ -399,6 +399,9 @@ osc52\:"Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, scree
 (export)
 _arguments "${_arguments_options[@]}" : \
 '--password=[Master passphrase for encryption (prompted securely if omitted)]:PASSWORD:_default' \
+'(--unencrypted)--gpg=[Encrypt backup using GPG with optional recipient key fingerprint, ID, or email]::FINGERPRINT:_default' \
+'(--unencrypted)--gpg-recipient=[Encrypt backup using GPG with optional recipient key fingerprint, ID, or email]::FINGERPRINT:_default' \
+'(--unencrypted)--gpg-key=[Encrypt backup using GPG with optional recipient key fingerprint, ID, or email]::FINGERPRINT:_default' \
 '-C+[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--config=[Path to configuration file (TOML, YAML, or JSON)]:CONFIG:_files' \
 '--storage=[Credential storage backend]:STORAGE:((auto\:"Attempt OS keyring first; fallback to local file store if unavailable"

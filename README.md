@@ -254,12 +254,18 @@ $ tfa status --json
 
 ### Backup, Export & Import
 
-`tfa` provides secure backup and restore with Argon2id + AES-256-GCM encryption, as well as seamless migration from other 2FA applications.
+`tfa` provides secure backup and restore with Argon2id + AES-256-GCM symmetric encryption or GPG / OpenPGP public-key encryption, as well as seamless migration from other 2FA applications.
 
 #### Exporting Accounts
 ```bash
 # Export encrypted backup (prompts for master passphrase):
 tfa export backup.enc
+
+# Export encrypted with a GPG key fingerprint, key ID, or email:
+tfa export backup.gpg --gpg 0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3
+
+# Export using default GPG key fingerprint from config or TFA_GPG_FINGERPRINT:
+tfa export backup.gpg --gpg
 
 # Export unencrypted JSON to stdout or file:
 tfa export backup.json --unencrypted
@@ -267,8 +273,9 @@ tfa export backup.json --unencrypted
 
 #### Importing Accounts
 ```bash
-# Restore from an encrypted backup file:
+# Restore from an encrypted backup file (auto-detects Argon2id/AES-GCM or GPG):
 tfa import backup.enc
+tfa import backup.gpg
 
 # Import directly from Google Authenticator QR migration link:
 tfa import "otpauth-migration://offline?data=..."
@@ -348,8 +355,8 @@ Pre-generated completion scripts are also available in the [`completions/`](comp
 
 ### Hierarchical Precedence
 Settings resolve in strict hierarchical precedence order (highest to lowest):
-1. **Command Line Arguments** (e.g. `--storage`, `--age-key`, `--ssh-key`, `--clipboard`, `--clip-command`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
-2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_SSH_KEY`, `TFA_SSH_KEY_FILE`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
+1. **Command Line Arguments** (e.g. `--storage`, `--age-key`, `--ssh-key`, `--gpg`, `--clipboard`, `--clip-command`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
+2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_SSH_KEY`, `TFA_SSH_KEY_FILE`, `TFA_GPG_FINGERPRINT`, `TFA_GPG_RECIPIENT`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
 3. **Configuration File** (`-C <path>` / `--config <path>`, or default locations: `~/.config/tfa/config.{toml,yaml,yml,json}`)
 4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, namespace: `default`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
 
@@ -381,6 +388,7 @@ When using `--storage age`, `tfa` resolves decryption identities and encryption 
 storage = "keyring"           # auto, keyring, file, or age
 age_key = "~/.config/sops/age/keys.txt" # optional age key file or secret key
 ssh_key = "~/.ssh/id_ed25519" # optional SSH private key file
+gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3" # optional default GPG recipient key
 clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
 clip_command = "wl-copy"      # optional custom command receiving token via stdin
 default_namespace = "personal"# active default namespace (default: "default")
@@ -398,6 +406,7 @@ password_timeout = 300        # unlock cache TTL in seconds (default: 300)
 storage: auto
 age_key: ~/.config/sops/age/keys.txt
 ssh_key: ~/.ssh/id_ed25519
+gpg_fingerprint: "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
 clipboard: system
 clip_command: "xclip -selection clipboard"
 default_namespace: personal
@@ -416,6 +425,7 @@ password_timeout: 300
   "storage": "auto",
   "age_key": "~/.config/sops/age/keys.txt",
   "ssh_key": "~/.ssh/id_ed25519",
+  "gpg_fingerprint": "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3",
   "clipboard": "system",
   "clip_command": "wl-copy",
   "default_namespace": "personal",

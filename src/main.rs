@@ -250,6 +250,16 @@ pub enum Commands {
         /// Master passphrase for encryption (prompted securely if omitted)
         #[arg(long, env = "TFA_PASSWORD")]
         password: Option<String>,
+        /// Encrypt backup using GPG with optional recipient key fingerprint, ID, or email
+        #[arg(
+            long,
+            visible_alias = "gpg-recipient",
+            visible_alias = "gpg-key",
+            value_name = "FINGERPRINT",
+            num_args = 0..=1,
+            conflicts_with = "unencrypted"
+        )]
+        gpg: Option<Option<String>>,
     },
     /// Import accounts from a backup file, migration URI, or JSON payload
     Import {
@@ -1375,6 +1385,7 @@ pub fn run_app(
             file,
             unencrypted,
             password,
+            gpg,
         }) => {
             let accounts = store.list_accounts()?;
             let mut map = BTreeMap::new();
@@ -1386,6 +1397,31 @@ pub fn run_app(
             let json_str = serde_json::to_string_pretty(&map)?;
             let output_str = if unencrypted {
                 json_str
+            } else if let Some(gpg_opt) = gpg {
+                let recipient = match gpg_opt {
+                    Some(fp) => {
+                        let trimmed = fp.trim();
+                        if trimmed.is_empty() {
+                            anyhow::bail!("GPG key fingerprint cannot be empty");
+                        }
+                        trimmed.to_string()
+                    }
+                    None => resolved_cfg.gpg_fingerprint.clone().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "GPG key fingerprint is required (specify via --gpg <FINGERPRINT>, TFA_GPG_FINGERPRINT, or gpg_fingerprint in config)"
+                        )
+                    })?,
+                };
+                backup::encrypt_backup_gpg(json_str.as_bytes(), &recipient)?
+            } else if password.is_none()
+                && std::env::var("TFA_PASSWORD")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .is_none()
+                && resolved_cfg.gpg_fingerprint.is_some()
+            {
+                let recipient = resolved_cfg.gpg_fingerprint.as_deref().unwrap();
+                backup::encrypt_backup_gpg(json_str.as_bytes(), recipient)?
             } else {
                 let pass = get_passphrase(password, true)?;
                 backup::encrypt_backup(json_str.as_bytes(), &pass)?
@@ -1437,6 +1473,9 @@ pub fn run_app(
                     || file_or_payload.ends_with(".enc")
                     || file_or_payload.ends_with(".bak")
                     || file_or_payload.ends_with(".2fas")
+                    || file_or_payload.ends_with(".gpg")
+                    || file_or_payload.ends_with(".asc")
+                    || file_or_payload.ends_with(".pgp")
                     || file_or_payload.contains(std::path::MAIN_SEPARATOR))
             {
                 anyhow::bail!("File not found: '{}'", file_or_payload);
@@ -1451,6 +1490,9 @@ pub fn run_app(
             } else if twofas::is_encrypted_2fas_backup(&content) {
                 let pass = get_passphrase(password, false)?;
                 twofas::decrypt_2fas_backup(&content, &pass)?
+            } else if backup::is_gpg_backup(&content) {
+                let decrypted = backup::decrypt_backup_gpg(&content)?;
+                String::from_utf8(decrypted).context("Decrypted GPG backup is not valid UTF-8")?
             } else {
                 content
             };
@@ -2438,10 +2480,12 @@ mod tests {
                 file,
                 unencrypted,
                 password,
+                gpg,
             }) => {
                 assert!(file.is_none());
                 assert!(!unencrypted);
                 assert!(password.is_none());
+                assert!(gpg.is_none());
             }
             _ => panic!("Expected export subcommand"),
         }
@@ -2460,10 +2504,42 @@ mod tests {
                 file,
                 unencrypted,
                 password,
+                gpg,
             }) => {
                 assert_eq!(file, Some(PathBuf::from("backup.enc")));
                 assert!(unencrypted);
                 assert_eq!(password, Some("pass123".to_string()));
+                assert!(gpg.is_none());
+            }
+            _ => panic!("Expected export subcommand"),
+        }
+
+        let cli_gpg =
+            Cli::try_parse_from(["tfa", "export", "backup.gpg", "--gpg", "ABCD1234"]).unwrap();
+        match cli_gpg.command {
+            Some(Commands::Export { file, gpg, .. }) => {
+                assert_eq!(file, Some(PathBuf::from("backup.gpg")));
+                assert_eq!(gpg, Some(Some("ABCD1234".to_string())));
+            }
+            _ => panic!("Expected export subcommand"),
+        }
+
+        let cli_gpg_alias =
+            Cli::try_parse_from(["tfa", "export", "--gpg-recipient", "user@example.com"]).unwrap();
+        match cli_gpg_alias.command {
+            Some(Commands::Export { file, gpg, .. }) => {
+                assert!(file.is_none());
+                assert_eq!(gpg, Some(Some("user@example.com".to_string())));
+            }
+            _ => panic!("Expected export subcommand"),
+        }
+
+        let cli_gpg_default =
+            Cli::try_parse_from(["tfa", "export", "backup.gpg", "--gpg"]).unwrap();
+        match cli_gpg_default.command {
+            Some(Commands::Export { file, gpg, .. }) => {
+                assert_eq!(file, Some(PathBuf::from("backup.gpg")));
+                assert_eq!(gpg, Some(None));
             }
             _ => panic!("Expected export subcommand"),
         }
@@ -2577,6 +2653,119 @@ mod tests {
         assert_eq!(accounts.len(), 2);
         assert!(store2.get_secret("acc1").is_ok());
         assert!(store2.get_secret("acc2").is_ok());
+    }
+
+    #[test]
+    fn test_run_app_export_and_import_gpg_flow() {
+        let _guard = backup::GPG_TEST_MUTEX.lock().unwrap();
+        let store1 = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store1
+            .set_secret("acc1", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+            .unwrap();
+        store1.set_secret("acc2", "JBSWY3DPEHPK3PXP").unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let gpg_dir = temp_dir.path().join("gnupg");
+        std::fs::create_dir_all(&gpg_dir).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&gpg_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        std::env::set_var("GNUPGHOME", &gpg_dir);
+
+        // Generate a temporary GPG key in isolated GNUPGHOME
+        let status = std::process::Command::new("gpg")
+            .args([
+                "--batch",
+                "--passphrase",
+                "",
+                "--quick-generate-key",
+                "CLI Test <cli-test@example.com>",
+                "default",
+                "default",
+                "never",
+            ])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let list_out = std::process::Command::new("gpg")
+            .args(["--list-keys", "--with-colons"])
+            .output()
+            .unwrap();
+        let list_str = String::from_utf8_lossy(&list_out.stdout);
+        let fpr = list_str
+            .lines()
+            .find(|l| l.starts_with("fpr:"))
+            .and_then(|l| l.split(':').nth(9))
+            .expect("Expected fingerprint in gpg --list-keys output")
+            .to_string();
+
+        // 1. Export with --gpg <FINGERPRINT>
+        let backup_file = temp_dir.path().join("backup.gpg");
+        let mut out = Vec::new();
+        let export_cli = Cli::try_parse_from([
+            "tfa",
+            "export",
+            backup_file.to_str().unwrap(),
+            "--gpg",
+            &fpr,
+        ])
+        .unwrap();
+        assert!(run_app(export_cli, &store1, &cb, &mut out).is_ok());
+
+        let file_contents = std::fs::read_to_string(&backup_file).unwrap();
+        assert!(backup::is_gpg_backup(&file_contents));
+
+        // 2. Import GPG-encrypted backup (auto-detected without flags)
+        let store2 = MemoryStore::new();
+        let mut import_out = Vec::new();
+        let import_cli =
+            Cli::try_parse_from(["tfa", "import", backup_file.to_str().unwrap()]).unwrap();
+        assert!(run_app(import_cli, &store2, &cb, &mut import_out).is_ok());
+        let import_str = String::from_utf8(import_out).unwrap();
+        assert!(import_str.contains("Summary: 2 imported, 0 updated, 0 skipped."));
+        assert_eq!(store2.list_accounts().unwrap().len(), 2);
+
+        // 3. Export using default gpg_fingerprint from config file
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, format!("gpg_fingerprint = \"{fpr}\"\n")).unwrap();
+        let mut cfg_out = Vec::new();
+        let export_cfg_cli = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "export",
+            "--gpg",
+        ])
+        .unwrap();
+        assert!(run_app(export_cfg_cli, &store1, &cb, &mut cfg_out).is_ok());
+        let cfg_out_str = String::from_utf8(cfg_out).unwrap();
+        assert!(backup::is_gpg_backup(&cfg_out_str));
+
+        // 4. Error when --gpg is passed with empty or unconfigured key
+        let mut err_out = Vec::new();
+        let empty_gpg_cli = Cli::try_parse_from(["tfa", "export", "--gpg="]).unwrap();
+        assert!(run_app(empty_gpg_cli, &store1, &cb, &mut err_out).is_err());
+
+        let no_cfg_path = temp_dir.path().join("empty_config.toml");
+        std::fs::write(&no_cfg_path, "").unwrap();
+        let missing_cfg_gpg = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            no_cfg_path.to_str().unwrap(),
+            "export",
+            "--gpg",
+        ])
+        .unwrap();
+        assert!(run_app(missing_cfg_gpg, &store1, &cb, &mut err_out).is_err());
+
+        let _ = std::process::Command::new("gpgconf")
+            .args(["--homedir", gpg_dir.to_str().unwrap(), "--kill", "all"])
+            .status();
+        std::env::remove_var("GNUPGHOME");
     }
 
     #[test]

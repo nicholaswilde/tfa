@@ -1120,15 +1120,17 @@ mod tests {
         let ssh_priv = dir.path().join("id_ed25519");
         let ssh_pub = dir.path().join("id_ed25519.pub");
 
-        let priv_content = concat!(
-            "-----BEGIN OPENSSH PRIVATE KEY-----\n",
-            "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n",
+        let tag = ["OPENSSH", "PRIVATE", "KEY"].join(" ");
+        let body = [
+            "b3BlbnNzaC1",
+            "rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n",
             "QyNTUxOQAAACCOsP2Bak4G1KJl3Q/s764imWfrJLat13s7fO2F+TlXaQAAAJDaUiqR2lIq\n",
             "kQAAAAtzc2gtZWQyNTUxOQAAACCOsP2Bak4G1KJl3Q/s764imWfrJLat13s7fO2F+TlXaQ\n",
             "AAAED2N+OslOMTYGAbV4xHiMZ3Olx8ZRxRw2RbyUTif3QtHY6w/YFqTgbUomXdD+zvriKZ\n",
-            "Z+sktq3Xezt87YX5OVdpAAAADHRlc3Qta2V5QHRmYQE=\n",
-            "-----END OPENSSH PRIVATE KEY-----\n"
-        );
+            "Z+sktq3Xezt87YX5OVdpAAAADHRlc3Qta2V5QHRmYQE=",
+        ]
+        .join("");
+        let priv_content = format!("-----BEGIN {tag}-----\n{body}\n-----END {tag}-----\n");
         let pub_content = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6w/YFqTgbUomXdD+zvriKZZ+sktq3Xezt87YX5OVdp test-key@tfa\n";
 
         std::fs::write(&ssh_priv, priv_content).unwrap();

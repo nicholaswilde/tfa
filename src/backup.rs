@@ -6,6 +6,11 @@ use anyhow::{anyhow, bail, Context, Result};
 use argon2::Argon2;
 use base64ct::{Base64, Encoding};
 use serde::{Deserialize, Serialize};
+use std::io::{IsTerminal, Write};
+use std::process::{Command, Stdio};
+
+#[cfg(test)]
+pub(crate) static GPG_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncryptedBackup {
@@ -100,6 +105,110 @@ pub fn decrypt_backup(json_str: &str, passphrase: &str) -> Result<Vec<u8>> {
         .map_err(|_| anyhow!("Decryption failed: incorrect passphrase or corrupted data"))?;
 
     Ok(decrypted)
+}
+
+fn gpg_program() -> String {
+    std::env::var("TFA_GPG_BIN")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "gpg".to_string())
+}
+
+pub fn is_gpg_backup(input: &str) -> bool {
+    let trimmed = input.trim();
+    trimmed.starts_with("-----BEGIN PGP MESSAGE-----")
+        && trimmed.ends_with("-----END PGP MESSAGE-----")
+}
+
+pub fn encrypt_backup_gpg(data: &[u8], recipient: &str) -> Result<String> {
+    let recipient = recipient.trim();
+    if recipient.is_empty() {
+        bail!("GPG key fingerprint cannot be empty");
+    }
+    if recipient.starts_with('-') {
+        bail!("Invalid GPG key fingerprint '{recipient}'");
+    }
+
+    let mut child = Command::new(gpg_program())
+        .args([
+            "--batch",
+            "--yes",
+            "--armor",
+            "--trust-model",
+            "always",
+            "--recipient",
+            recipient,
+            "--encrypt",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| anyhow!("Failed to execute gpg for encryption: {e}"))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(data);
+    }
+
+    let output = child
+        .wait_with_output()
+        .context("Failed waiting for gpg encryption process")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail = stderr.trim();
+        if detail.contains("No public key")
+            || detail.contains("not found")
+            || detail.contains("skipped")
+        {
+            bail!("GPG key '{recipient}' not found in local keyring ({detail})");
+        }
+        bail!("GPG encryption failed for recipient '{recipient}': {detail}");
+    }
+
+    String::from_utf8(output.stdout).context("GPG encrypted output is not valid UTF-8")
+}
+
+pub fn decrypt_backup_gpg(armored: &str) -> Result<Vec<u8>> {
+    if !is_gpg_backup(armored) {
+        bail!("Invalid GPG backup format: missing PGP message header or footer");
+    }
+
+    let mut cmd = Command::new(gpg_program());
+    if !std::io::stdin().is_terminal()
+        || (cfg!(test) && std::env::var("TFA_TEST_INTERACTIVE").is_err())
+    {
+        cmd.arg("--batch");
+    }
+
+    let mut child = cmd
+        .args(["--yes", "--quiet", "--decrypt"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| anyhow!("Failed to execute gpg for decryption: {e}"))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(armored.as_bytes());
+    }
+
+    let output = child
+        .wait_with_output()
+        .context("Failed waiting for gpg decryption process")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail = stderr.trim();
+        if detail.contains("No secret key") {
+            bail!(
+                "GPG decryption failed: secret key not found in local keyring or GPG agent ({detail})"
+            );
+        }
+        bail!("GPG decryption failed: {detail}");
+    }
+
+    Ok(output.stdout)
 }
 
 #[cfg(test)]
@@ -236,5 +345,126 @@ mod tests {
         let b2: EncryptedBackup = serde_json::from_str(&bad_b64_cipher).unwrap();
         assert_eq!(b1, b2);
         assert!(!format!("{b1:?}").is_empty());
+    }
+
+    #[test]
+    fn test_is_gpg_backup_detection() {
+        let valid_gpg = "-----BEGIN PGP MESSAGE-----\n\nhF4D...\n-----END PGP MESSAGE-----\n";
+        assert!(is_gpg_backup(valid_gpg));
+        assert!(!is_gpg_backup("otpauth://totp/test?secret=ABC"));
+        assert!(!is_gpg_backup(r#"{"version": 1}"#));
+        assert!(!is_gpg_backup("-----BEGIN PGP PUBLIC KEY BLOCK-----"));
+    }
+
+    #[test]
+    fn test_encrypt_gpg_empty_or_invalid_recipient_fails() {
+        let err_empty = encrypt_backup_gpg(b"data", "   ");
+        assert!(err_empty.is_err());
+        assert!(err_empty
+            .unwrap_err()
+            .to_string()
+            .contains("cannot be empty"));
+
+        let err_flag = encrypt_backup_gpg(b"data", "--armor");
+        assert!(err_flag.is_err());
+        assert!(err_flag
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid GPG key fingerprint"));
+    }
+
+    #[test]
+    fn test_gpg_encrypt_decrypt_and_missing_key() {
+        let _guard = GPG_TEST_MUTEX.lock().unwrap();
+        let gpg_dir = tempfile::tempdir().unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(gpg_dir.path(), std::fs::Permissions::from_mode(0o700))
+                .unwrap();
+        }
+        std::env::set_var("GNUPGHOME", gpg_dir.path());
+
+        // 1. Missing key fingerprint should fail with clear "not found" error
+        let missing_err = encrypt_backup_gpg(b"secret", "NONEXISTENT_FINGERPRINT_9999");
+        assert!(missing_err.is_err());
+        let msg = missing_err.unwrap_err().to_string();
+        assert!(
+            msg.contains("not found"),
+            "Expected 'not found' in error message, got: {msg}"
+        );
+
+        // 2. Generate a temporary GPG key in isolated GNUPGHOME
+        let status = Command::new("gpg")
+            .args([
+                "--batch",
+                "--passphrase",
+                "",
+                "--quick-generate-key",
+                "TFA Test <tfa-test@example.com>",
+                "default",
+                "default",
+                "never",
+            ])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let list_out = Command::new("gpg")
+            .args(["--list-keys", "--with-colons"])
+            .output()
+            .unwrap();
+        let list_str = String::from_utf8_lossy(&list_out.stdout);
+        let fpr = list_str
+            .lines()
+            .find(|l| l.starts_with("fpr:"))
+            .and_then(|l| l.split(':').nth(9))
+            .expect("Expected fingerprint in gpg --list-keys output")
+            .to_string();
+
+        // 3. Encrypt using full key fingerprint and decrypt roundtrip
+        let payload = r#"{"github":"JBSWY3DPEHPK3PXP"}"#;
+        let armored = encrypt_backup_gpg(payload.as_bytes(), &fpr).unwrap();
+        assert!(is_gpg_backup(&armored));
+
+        let decrypted = decrypt_backup_gpg(&armored).unwrap();
+        assert_eq!(String::from_utf8(decrypted).unwrap(), payload);
+
+        // 4. Decrypt invalid format fails
+        assert!(decrypt_backup_gpg("not a pgp message").is_err());
+
+        // 5. Decrypt with missing secret key in another empty keyring fails clearly
+        let empty_gpg_dir = tempfile::tempdir().unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(empty_gpg_dir.path(), std::fs::Permissions::from_mode(0o700))
+                .unwrap();
+        }
+        std::env::set_var("GNUPGHOME", empty_gpg_dir.path());
+        let no_sec_err = decrypt_backup_gpg(&armored);
+        assert!(no_sec_err.is_err());
+        assert!(no_sec_err
+            .unwrap_err()
+            .to_string()
+            .contains("secret key not found"));
+
+        let _ = Command::new("gpgconf")
+            .args([
+                "--homedir",
+                gpg_dir.path().to_str().unwrap(),
+                "--kill",
+                "all",
+            ])
+            .status();
+        let _ = Command::new("gpgconf")
+            .args([
+                "--homedir",
+                empty_gpg_dir.path().to_str().unwrap(),
+                "--kill",
+                "all",
+            ])
+            .status();
+        std::env::remove_var("GNUPGHOME");
     }
 }

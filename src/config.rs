@@ -59,6 +59,12 @@ pub struct ConfigFile {
     pub age_key: Option<PathBuf>,
     #[serde(alias = "ssh_key_file", alias = "age_ssh_key")]
     pub ssh_key: Option<PathBuf>,
+    #[serde(
+        alias = "gpg_recipient",
+        alias = "gpg_key",
+        alias = "gpg_key_fingerprint"
+    )]
+    pub gpg_fingerprint: Option<String>,
 }
 
 impl ConfigFile {
@@ -278,6 +284,7 @@ pub struct ResolvedConfig {
     pub light: bool,
     pub password_enabled: bool,
     pub password_timeout: u64,
+    pub gpg_fingerprint: Option<String>,
 }
 
 impl Default for ResolvedConfig {
@@ -294,6 +301,7 @@ impl Default for ResolvedConfig {
             light: false,
             password_enabled: false,
             password_timeout: ConfigFile::DEFAULT_PASSWORD_TIMEOUT,
+            gpg_fingerprint: None,
         }
     }
 }
@@ -493,6 +501,21 @@ pub fn resolve_configuration(
             .unwrap_or(ConfigFile::DEFAULT_PASSWORD_TIMEOUT)
     };
 
+    // 9. GPG key fingerprint precedence: Env > Config File
+    let gpg_fingerprint = std::env::var("TFA_GPG_FINGERPRINT")
+        .or_else(|_| std::env::var("TFA_GPG_RECIPIENT"))
+        .or_else(|_| std::env::var("TFA_GPG_KEY"))
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            config_file
+                .as_ref()
+                .and_then(|c| c.gpg_fingerprint.as_ref())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        });
+
     Ok((
         ResolvedConfig {
             storage,
@@ -506,6 +529,7 @@ pub fn resolve_configuration(
             light,
             password_enabled,
             password_timeout,
+            gpg_fingerprint,
         },
         config_file,
     ))
@@ -546,6 +570,7 @@ algorithm = "sha256"
 auto_copy = true
 light = true
 ssh_key = "/home/user/.ssh/id_ed25519"
+gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
 "#;
         let cfg = ConfigFile::parse(content, ConfigFormat::Toml).unwrap();
         assert_eq!(cfg.storage, Some(StorageBackend::File));
@@ -557,6 +582,10 @@ ssh_key = "/home/user/.ssh/id_ed25519"
         assert_eq!(
             cfg.ssh_key,
             Some(PathBuf::from("/home/user/.ssh/id_ed25519"))
+        );
+        assert_eq!(
+            cfg.gpg_fingerprint.as_deref(),
+            Some("0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3")
         );
     }
 
@@ -659,7 +688,8 @@ auto_copy = false
                 "period": 30,
                 "algorithm": "sha1",
                 "auto_copy": false,
-                "light": false
+                "light": false,
+                "gpg_recipient": "FILE_GPG_KEY"
             }"#,
         )
         .unwrap();
@@ -676,6 +706,7 @@ auto_copy = false
         assert_eq!(res_file.algorithm, Some(totp_rs::Algorithm::SHA1));
         assert!(!res_file.auto_copy);
         assert!(!res_file.light);
+        assert_eq!(res_file.gpg_fingerprint.as_deref(), Some("FILE_GPG_KEY"));
 
         // Level 2: Environment variables override Config file
         std::env::set_var("TFA_STORAGE", "keyring");
@@ -687,6 +718,7 @@ auto_copy = false
         std::env::set_var("TFA_ALGORITHM", "sha256");
         std::env::set_var("TFA_AUTO_COPY", "true");
         std::env::set_var("TFA_LIGHT", "true");
+        std::env::set_var("TFA_GPG_FINGERPRINT", "ENV_GPG_KEY");
 
         let (res_env, _) =
             resolve_configuration(Some(&config_file_path), None, None, None, None).unwrap();
@@ -699,6 +731,7 @@ auto_copy = false
         assert_eq!(res_env.algorithm, Some(totp_rs::Algorithm::SHA256));
         assert!(res_env.auto_copy);
         assert!(res_env.light);
+        assert_eq!(res_env.gpg_fingerprint.as_deref(), Some("ENV_GPG_KEY"));
 
         // Level 1: CLI arguments override Environment variables
         let (res_cli, _) = resolve_configuration(
@@ -724,6 +757,7 @@ auto_copy = false
         std::env::remove_var("TFA_ALGORITHM");
         std::env::remove_var("TFA_AUTO_COPY");
         std::env::remove_var("TFA_LIGHT");
+        std::env::remove_var("TFA_GPG_FINGERPRINT");
     }
 
     #[test]
