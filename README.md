@@ -10,6 +10,9 @@ A high-performance, single-binary CLI Two-Factor Authentication (2FA / TOTP) app
 > [!WARNING]
 > This project is currently in a `v0.X.X` development stage. Features and configurations are subject to change, and breaking changes may be introduced at any time.
 
+> [!IMPORTANT]
+> It is strongly recommended to use a secondary 2FA application to hold your tokens and to regularly test both the encryption and decryption of your backups.
+
 ---
 
 ## :sparkles: Features
@@ -270,7 +273,8 @@ tfa import backup.enc
 # Import directly from Google Authenticator QR migration link:
 tfa import "otpauth-migration://offline?data=..."
 
-# Import from Bitwarden or Aegis JSON export:
+# Import from 2FAS (*.2fas), Bitwarden, or Aegis export:
+tfa import backup.2fas
 tfa import bitwarden_export.json
 
 # Preview changes with dry-run:

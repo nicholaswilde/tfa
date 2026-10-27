@@ -135,6 +135,14 @@ fn parse_json_export(json_str: &str) -> Result<Vec<ImportItem>> {
                 }
             }
 
+            // Check for 2FAS format: { "services": [ { "name": "...", "secret": "...", "otp": { ... } } ] }
+            if let Some(services) = map.get("services").and_then(|s| s.as_array()) {
+                let twofas_items = crate::twofas::parse_2fas_services_array(services);
+                if !twofas_items.is_empty() {
+                    return Ok(twofas_items);
+                }
+            }
+
             // Generic Key-Value map
             for (key, val) in map {
                 if let Some(secret_str) = val.as_str() {
@@ -147,6 +155,14 @@ fn parse_json_export(json_str: &str) -> Result<Vec<ImportItem>> {
         }
         // Array of items: [ { "name": "...", "secret": "..." } ]
         Value::Array(arr) => {
+            // Check for decrypted 2FAS services array
+            if crate::twofas::is_2fas_services(&Value::Array(arr.clone())) {
+                let twofas_items = crate::twofas::parse_2fas_services_array(&arr);
+                if !twofas_items.is_empty() {
+                    return Ok(twofas_items);
+                }
+            }
+
             for item in arr {
                 if let Some(obj) = item.as_object() {
                     let name = obj
@@ -319,5 +335,29 @@ mod tests {
             extract_account_from_otpauth("://invalid"),
             "imported_account"
         );
+    }
+
+    #[test]
+    fn test_import_2fas_unencrypted_json() {
+        let json = r#"{
+            "schemaVersion": 4,
+            "services": [
+                {
+                    "name": "GitHub",
+                    "secret": "JBSWY3DPEHPK3PXP",
+                    "otp": {
+                        "account": "alice@example.com",
+                        "digits": 6,
+                        "period": 30,
+                        "algorithm": "SHA1",
+                        "tokenType": "TOTP"
+                    }
+                }
+            ]
+        }"#;
+        let items = parse_import_payload(json).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].account, "GitHub:alice@example.com");
+        assert!(items[0].secret.contains("JBSWY3DPEHPK3PXP"));
     }
 }

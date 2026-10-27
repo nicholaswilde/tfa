@@ -15,6 +15,7 @@ mod namespace;
 mod qr;
 mod storage;
 mod totp;
+mod twofas;
 mod watch;
 
 use clipboard::{Clipboard, ClipboardProvider, DispatchingClipboard};
@@ -1435,6 +1436,7 @@ pub fn run_app(
                 && (file_or_payload.ends_with(".json")
                     || file_or_payload.ends_with(".enc")
                     || file_or_payload.ends_with(".bak")
+                    || file_or_payload.ends_with(".2fas")
                     || file_or_payload.contains(std::path::MAIN_SEPARATOR))
             {
                 anyhow::bail!("File not found: '{}'", file_or_payload);
@@ -1446,6 +1448,9 @@ pub fn run_app(
                 let pass = get_passphrase(password, false)?;
                 let decrypted = backup::decrypt_backup(&content, &pass)?;
                 String::from_utf8(decrypted).context("Decrypted backup is not valid UTF-8")?
+            } else if twofas::is_encrypted_2fas_backup(&content) {
+                let pass = get_passphrase(password, false)?;
+                twofas::decrypt_2fas_backup(&content, &pass)?
             } else {
                 content
             };
@@ -2633,6 +2638,133 @@ mod tests {
     }
 
     #[test]
+    fn test_run_app_import_2fas_unencrypted_file() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("backup.2fas");
+        let payload = r#"{
+            "schemaVersion": 4,
+            "services": [
+                {
+                    "name": "GitHub",
+                    "secret": "JBSWY3DPEHPK3PXP",
+                    "otp": {
+                        "account": "alice@example.com",
+                        "digits": 6,
+                        "period": 30,
+                        "algorithm": "SHA1",
+                        "tokenType": "TOTP"
+                    }
+                }
+            ]
+        }"#;
+        std::fs::write(&file_path, payload).unwrap();
+
+        let import_cli =
+            Cli::try_parse_from(["tfa", "import", file_path.to_str().unwrap()]).unwrap();
+        assert!(run_app(import_cli, &store, &cb, &mut out).is_ok());
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains("Imported account 'GitHub:alice@example.com'"));
+
+        let secret = store.get_secret("GitHub:alice@example.com").unwrap();
+        let engine = TfaTotp::from_input("GitHub:alice@example.com", &secret).unwrap();
+        assert_eq!(engine.generate_current().len(), 6);
+    }
+
+    #[test]
+    fn test_run_app_import_2fas_encrypted_file() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("encrypted.2fas");
+        let fixture = r#"{"services":[],"groups":[],"updatedAt":1708958781890,"schemaVersion":4,"appVersionCode":5000017,"appVersionName":"5.3.5","appOrigin":"android","servicesEncrypted":"HhVj7hNTJBdmidKVsCrgK0EafXu2aBshvz3KlBX0dIHHXA/GGCD5Ws8h3NE59DLXl3dgiPQgDYzCgTEYQIqgSXylmMh77odkAYQKDFWGL74etmdPulab480QbrJuUDfGOl6DtZynEn6WS/uyvJ5nrpEHp2UVAXCu6y7EIHuNgtwiY+O2UXEYX8zMKJWVqMeTZ4VyQCQvT9nTBbINJi8lyYIRmIup0cwPbh6JORpzV5yKWG0Jmbi/vdqXsFftYHjRmkwt/KsnjNmNWHTeztBOSZ4RlXpW24pEctUUqkiqz8HkMpOlOxkgR97MpxxoubN7gS/dqn8J6lAgBa0yWlf0QgqNVY5mqhSuMlfug2xTZDeG93jeiWQOqb2cs1bnEb5iUaUzpThw1P8XuzrmlByFQ3K7b71lXzyX6Rdqt05u4SIJMtc/I6CVqAta1fuQ1fcjufjcaIxglGOxKM5Fxy7gLp/Jwhl9Fin1RKC4JRd1h+siC87Lm9qA/WW7XmR81+wlhzlcXQ+xLxoccPl1CNhxibOswR0sQEhMPrOXLQk7Dy5KT9lxTIV0o67e9WgzbfOoIgQp2zxWeT3QjYrROivC2c6OsktUqgonFzzNTAxWxQtxOlUzS0BOmbn6t12KbJYE7Lv9fnv9wQJoKDU9QJai4fqFpcZeXnObN2VIt65QA7bumsr74PvgmS9Y+hu4xYhWEUkag0Q5YTpeLBiWCp71l0cx8uMrvoCw1JPphGnkjuFgVsBpcqKxHudsbi83fDVHBDv1HogO5cyMDDi4/h8N6Cdfz3xCsQg39X8RtvfFMf7kYSRmbWcNlqkmVHVWuIoxlXcsbAHw1LYRgYyodeCFDoR6NMmmP3I2mKAZfG+fXGnhHHb1+dwnNp/hyDFQ/RRFpSNMwAaU+/SUeYbE5yx2ux2dHNUJ2W7j19It1vdAE8xfQMl/qzxMODdq1L1D8lDyrzfwKT1S41wKDXjJBrx7EQAN/Eh5awBGEN+CWyce6l4wOOfvFfYx7iAmH7XDEzjcyRe3wsPlhqTZXr/VMsUKX//xONa2eSjunodKHekr/bI2xGV0qbisWtJmbEZBKkDhsrdUbPBSvADwSqJqlDIpqspljmm+xSpSNW2qPuRD5RIgXI4JkfjjBC9E2hgb+8otanTBI2y8i22GLkz+vr+JmqjDufLzLvvtO6Fj8SPf2B2pMgQNyRw8agUxXbdLlqhRpMPNlaxBKoU3lgitwGoQui7Va+r8kAtKdgZuC0EV/XOPKFY4KUDh+vXbjRsMQbf9xXHnwqkC5tkNk17r+4nVqoMeW4fTfXPNjn2v5euqa7bnUGKx3RhD6dleqH1mJLylyvla3g4EP+eI3sxW925sVK83j6AO8/zJz4zowqKAqDI1KiC1FnlU65TA2qMUU4t2YE1CwzGykWNtcHfjQDhGMOzpnhdhcIylcuJ/qdE2iVZ2ACA4R9VpHPxmoNuqlz4YbtGism6JSjOc43KxPblz+LOT+OXU1XYH1CuaB4Btrty0CG68OS10IXXKJ3UqiDubNfGZ0T0XH+yu87QJkIO0bpwoT45M+Sb9Zps8/zjE8dgVnsncf/7Y27wwemQJK5N4Ndju0/CCfixy4hNPpcGdqQsLRVdU44OLe+nblwA94wLv+SkJXrDYZqu8xbLVxd3Zbi/+nUs084oNSfMwsrq90qhjn3uKmtPTBMqi0IVxAqnmLhLHqEQcBCYFt+uxXJt6Btiehxs76LtMGnuT+t1N5kDpvnuXduXYqvm/lpR1W6rblaYyhnfTdT8S7zecM8BAQ5SN/Z284DkdMUVreYrInXUGc/uJHK8UswrpYfNonvtYpPP9Hc9qrkN/DtdsCmzUd4a1acexYjc31t0fBABl0cihW4yK4vwi77Z2mVyV+6eT2OVUaEGG/zFJtU0UIT/tN50gFXCP63pZu9RdYLD2isIDnlfluQO9gDgcp89KZcbkXB/2cafBypLq5r9RFKcacxY9zM8sEgZv5+p+WEEzP2v/Bk32d6zMJa8mcJcHdeUDsCqAzhsZ7yaJUwYpKqrWY1BUXszLBi2RbmqdVaqgdmYtj6sM9RaW+HHPbMTPwwe6N3MBcQpCFxMMXhY1ivmPzxoj5t/hMaDuDAT6HKT70KHr3ZCA9FqVi2VbEzg4bUBjMKXauZgzb6NZFGucSfV05wcB0Ao/MmBfmUhEb4QhLvhbPu3G4a10YVUsiNol0nypKlbnGsp93mvK7KW60EVOFiQbgsvicIeqFxgO2cZ/PJgbB5GJjPswGs6mMK07CEYJf5spaKBj0FK83NTW+8dg9D0C7ZKIB1huOtPa3rRUGC6RXl1p7BQy5ym9r6zpiTMNLoiJ5zkCUGrr4k88YjZnhcjr89T2T1hQo4qGoEIzKQfGzNobeHvBMj2wq63rTGfeX+uw6mqEPF0P3HG3JninzNQ+gVIWzei0VS1PM3X7dviehhHJm4QJLel5om/vOBtzqtOMf5MV79fmEDUx+FrxJSYiBu+glsB9R50eYaGjM0KDiwtPvDmXN8Haa0TAbegzx8fAFHd7NUoRrOR+p4dTY1Qs9Ut0/m3Ji3V5PxU6ra9GfJhsb6ABSHMauKR1d2jx6dl7hz+iVL2mtJwgERw+31jtktBZSPOcRK9Qsk6UvCHqPsMTcTFTOCxoZkFC5S4AVR/gMTxt+wG3DnYuGv3O2MIsOuVp3vk2vAeSRl8KEPHmwhNwmBPNcWVGNfIp/7rJfQwpwa5vjH5u7Hrr:xsCM/GAwNcyqrDcYodp58e6xxXl+cj0P+1Bh9mH4f7+UYKrQV4cpMAbQRPyNJz5CbsvSsFGYr+Ls1N+GyX6fp8LahIyovloySTRqQZzBI0VgKTKy1g7PlSSVjhedokyK5osUg6lUTimr29SGyvL4r/ornfkKygDZry8gHjyANX06mfxBK46+qomjsw5TErS0VlitPMJ1OWoh5/ZArEZBSczTGSOLjdQ3uMkQGOEUCJAd9wruBViN7td/0tmBAhzkG7EtrOJN7YNCGSLCiRoeLqS+unbaIOmUeKyn2AWd+jT/k4WcxIkHlYPRumy1DzS/REh6NUfagoO/1fPLMUYUug==:5UW4AuvcvsEi0jYe"}"#;
+        std::fs::write(&file_path, fixture).unwrap();
+
+        // 1. Dry run
+        let mut dry_out = Vec::new();
+        let dry_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "example.com",
+            "--dry-run",
+        ])
+        .unwrap();
+        assert!(run_app(dry_cli, &store, &cb, &mut dry_out).is_ok());
+        let dry_str = String::from_utf8(dry_out).unwrap();
+        assert!(dry_str.contains("[dry-run] Would import account 'Deno:Mason'"));
+        assert!(dry_str.contains("[dry-run] Summary: 5 to import, 0 to update, 0 to skip."));
+        assert!(store.get_secret("Deno:Mason").is_err());
+
+        // 2. Actual import
+        let mut import_out = Vec::new();
+        let import_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "example.com",
+        ])
+        .unwrap();
+        assert!(run_app(import_cli, &store, &cb, &mut import_out).is_ok());
+        let import_str = String::from_utf8(import_out).unwrap();
+        assert!(import_str.contains("Imported account 'Deno:Mason'"));
+        assert!(import_str.contains("Summary: 5 imported, 0 updated, 0 skipped."));
+
+        let accounts = store.list_accounts().unwrap();
+        assert_eq!(accounts.len(), 5);
+
+        // 3. Verify Steam token generation (Boeing:Sophia)
+        let boeing_sec = store.get_secret("Boeing:Sophia").unwrap();
+        let boeing = TfaTotp::from_input("Boeing:Sophia", &boeing_sec).unwrap();
+        assert_eq!(boeing.account_type(), "Steam");
+        assert_eq!(boeing.digits(), 5);
+        let steam_code = boeing.generate_current();
+        assert_eq!(steam_code.len(), 5);
+
+        // 4. Verify HOTP token generation (Air Canada:Benjamin)
+        let ac_sec = store.get_secret("Air Canada:Benjamin").unwrap();
+        let ac = TfaTotp::from_input("Air Canada:Benjamin", &ac_sec).unwrap();
+        assert!(ac.is_hotp());
+        assert_eq!(ac.digits(), 8);
+
+        // 5. Re-import without overwrite skips all 5
+        let mut skip_out = Vec::new();
+        let skip_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "example.com",
+            "--skip",
+        ])
+        .unwrap();
+        assert!(run_app(skip_cli, &store, &cb, &mut skip_out).is_ok());
+        let skip_str = String::from_utf8(skip_out).unwrap();
+        assert!(skip_str.contains("Summary: 0 imported, 0 updated, 5 skipped."));
+
+        // 6. Re-import with overwrite updates all 5
+        let mut ow_out = Vec::new();
+        let ow_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "example.com",
+            "--overwrite",
+        ])
+        .unwrap();
+        assert!(run_app(ow_cli, &store, &cb, &mut ow_out).is_ok());
+        let ow_str = String::from_utf8(ow_out).unwrap();
+        assert!(ow_str.contains("Summary: 0 imported, 5 updated, 0 skipped."));
+    }
+
+    #[test]
     fn test_run_app_import_file_not_found_fails() {
         let store = MemoryStore::new();
         let cb = MockClipboard::default();
@@ -3354,12 +3486,15 @@ light: true
 
     #[test]
     fn test_password_unlock_command_flow() {
-        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = auth::tests::TEST_AUTH_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let config_path = dir.path().join("config.toml");
         let auth_path = dir.path().join("auth.json");
         let session_path = dir.path().join("session.json");
 
+        std::env::remove_var("TFA_PASSWORD");
         std::env::set_var("TFA_AUTH_FILE", &auth_path);
         std::env::set_var("TFA_SESSION_FILE", &session_path);
 
@@ -3624,12 +3759,15 @@ light: true
 
     #[test]
     fn test_run_app_password_edge_flows() {
-        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = auth::tests::TEST_AUTH_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let config_path = dir.path().join("config.toml");
         let auth_path = dir.path().join("auth.json");
         let session_path = dir.path().join("session.json");
 
+        std::env::remove_var("TFA_PASSWORD");
         std::env::set_var("TFA_AUTH_FILE", &auth_path);
         std::env::set_var("TFA_SESSION_FILE", &session_path);
 
