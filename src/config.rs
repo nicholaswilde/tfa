@@ -600,7 +600,7 @@ light: false
 
     #[test]
     fn test_resolve_precedence_cli_over_env_over_file() {
-        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TFA_STORAGE");
         let dir = tempfile::tempdir().unwrap();
         let config_file_path = dir.path().join("config.toml");
@@ -643,7 +643,7 @@ auto_copy = false
 
     #[test]
     fn test_hierarchical_precedence_full_chain() {
-        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         // Test hierarchy: CLI > ENV > FILE > DEFAULT
         // We will isolate by temporary environment variables
         let dir = tempfile::tempdir().unwrap();
@@ -849,7 +849,7 @@ auto_copy = false
 
     #[test]
     fn test_resolve_configuration_env_edge_cases() {
-        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
 
         // 1. Invalid storage
@@ -915,7 +915,7 @@ auto_copy = false
 
     #[test]
     fn test_set_default_namespace_no_path_creates_default() {
-        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         std::env::set_var("XDG_CONFIG_HOME", dir.path().to_str().unwrap());
 
@@ -929,7 +929,7 @@ auto_copy = false
 
     #[test]
     fn test_set_password_config_no_path_creates_default() {
-        let _guard = TEST_CONFIG_MUTEX.lock().unwrap();
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         std::env::set_var("XDG_CONFIG_HOME", dir.path().to_str().unwrap());
 

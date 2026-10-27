@@ -3330,12 +3330,15 @@ light: true
 
     #[test]
     fn test_password_add_unlock_lock_flow() {
-        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = auth::tests::TEST_AUTH_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let config_path = dir.path().join("config.toml");
         let auth_path = dir.path().join("auth.json");
         let session_path = dir.path().join("session.json");
 
+        std::env::remove_var("TFA_PASSWORD");
         std::env::set_var("TFA_AUTH_FILE", &auth_path);
         std::env::set_var("TFA_SESSION_FILE", &session_path);
 
@@ -3422,19 +3425,22 @@ light: true
             }
         }
 
-        std::env::remove_var("TFA_PASSWORD");
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");
+        std::env::remove_var("TFA_PASSWORD");
     }
 
     #[test]
     fn test_password_remove_flow() {
-        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = auth::tests::TEST_AUTH_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let config_path = dir.path().join("config.toml");
         let auth_path = dir.path().join("auth.json");
         let session_path = dir.path().join("session.json");
 
+        std::env::remove_var("TFA_PASSWORD");
         std::env::set_var("TFA_AUTH_FILE", &auth_path);
         std::env::set_var("TFA_SESSION_FILE", &session_path);
 
@@ -3482,6 +3488,7 @@ light: true
 
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");
+        std::env::remove_var("TFA_PASSWORD");
     }
 
     #[test]
@@ -3566,16 +3573,20 @@ light: true
 
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");
+        std::env::remove_var("TFA_PASSWORD");
     }
 
     #[test]
     fn test_password_enabled_without_configured_password_fails() {
-        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = auth::tests::TEST_AUTH_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let config_path = dir.path().join("config.toml");
         let auth_path = dir.path().join("auth.json");
         let session_path = dir.path().join("session.json");
 
+        std::env::remove_var("TFA_PASSWORD");
         std::env::set_var("TFA_AUTH_FILE", &auth_path);
         std::env::set_var("TFA_SESSION_FILE", &session_path);
 
@@ -3595,6 +3606,7 @@ light: true
 
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");
+        std::env::remove_var("TFA_PASSWORD");
     }
 
     #[test]
@@ -3742,7 +3754,9 @@ light: true
 
     #[test]
     fn test_get_password_env_var_and_validation() {
-        let _guard = auth::tests::TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = auth::tests::TEST_AUTH_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
 
         // Empty password passed explicitly
         assert!(get_password(Some("".to_string()), false, "prompt").is_err());
@@ -3870,6 +3884,7 @@ light: true
 
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");
+        std::env::remove_var("TFA_PASSWORD");
     }
 
     #[test]
@@ -4203,6 +4218,9 @@ light: true
 
     #[test]
     fn test_run_app_instant_with_password_protection_does_not_block() {
+        let _guard = auth::tests::TEST_AUTH_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let store = MemoryStore::new();
         let cb = MockClipboard::default();
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -4210,6 +4228,7 @@ light: true
         let session_path = tmp_dir.path().join("session.json");
         let config_path = tmp_dir.path().join("config.toml");
 
+        std::env::remove_var("TFA_PASSWORD");
         std::env::set_var("TFA_AUTH_FILE", &auth_path);
         std::env::set_var("TFA_SESSION_FILE", &session_path);
 
@@ -4280,6 +4299,7 @@ light: true
 
         std::env::remove_var("TFA_AUTH_FILE");
         std::env::remove_var("TFA_SESSION_FILE");
+        std::env::remove_var("TFA_PASSWORD");
     }
 
     #[test]

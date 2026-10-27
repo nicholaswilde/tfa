@@ -417,7 +417,7 @@ pub mod tests {
 
     #[test]
     fn test_auth_and_session_file_paths() {
-        let _guard = TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = TEST_AUTH_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempdir().unwrap();
         let dir_str = dir.path().to_str().unwrap();
 
@@ -440,7 +440,7 @@ pub mod tests {
 
     #[test]
     fn test_auth_record_default_storage_fallback() {
-        let _guard = TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = TEST_AUTH_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempdir().unwrap();
         let dir_str = dir.path().to_str().unwrap();
 
@@ -462,7 +462,7 @@ pub mod tests {
 
     #[test]
     fn test_session_edge_cases() {
-        let _guard = TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = TEST_AUTH_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempdir().unwrap();
         let session_path = dir.path().join("edge_session.json");
         std::env::set_var("TFA_SESSION_FILE", &session_path);
@@ -512,7 +512,7 @@ pub mod tests {
 
     #[test]
     fn test_auth_record_file_storage() {
-        let _guard = TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = TEST_AUTH_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempdir().unwrap();
         let auth_path = dir.path().join("tfa_auth.json");
         std::env::set_var("TFA_AUTH_FILE", &auth_path);
@@ -531,7 +531,7 @@ pub mod tests {
 
     #[test]
     fn test_session_lifecycle_and_timeout() {
-        let _guard = TEST_AUTH_MUTEX.lock().unwrap();
+        let _guard = TEST_AUTH_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempdir().unwrap();
         let session_path = dir.path().join("tfa_session.json");
         std::env::set_var("TFA_SESSION_FILE", &session_path);
