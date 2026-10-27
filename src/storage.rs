@@ -475,6 +475,61 @@ fn check_ssh_key_matches(path: &Path, expected_fp: &str) -> bool {
     false
 }
 
+fn home_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.trim().is_empty() {
+            dirs.push(PathBuf::from(home.trim()));
+        }
+    }
+    if let Ok(userprofile) = std::env::var("USERPROFILE") {
+        if !userprofile.trim().is_empty() {
+            let p = PathBuf::from(userprofile.trim());
+            if !dirs.contains(&p) {
+                dirs.push(p);
+            }
+        }
+    }
+    dirs
+}
+
+fn add_home_candidates<F>(dir: &Path, add_candidate: &mut F)
+where
+    F: FnMut(PathBuf),
+{
+    add_candidate(dir.join(".config").join("age").join("keys.txt"));
+    add_candidate(
+        dir.join(".config")
+            .join("sops")
+            .join("age")
+            .join("keys.txt"),
+    );
+    add_candidate(dir.join(".ssh").join("id_ed25519"));
+    add_candidate(dir.join(".ssh").join("id_rsa"));
+
+    let ssh_dir = dir.join(".ssh");
+    if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() {
+                let filename = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if filename.ends_with(".pub") {
+                    let priv_p = p.with_extension("");
+                    if priv_p.is_file() {
+                        add_candidate(priv_p);
+                    }
+                } else if !filename.starts_with("known_hosts")
+                    && !filename.starts_with("config")
+                    && !filename.starts_with("authorized_keys")
+                    && !filename.starts_with('.')
+                {
+                    add_candidate(p);
+                }
+            }
+        }
+    }
+}
+
 impl AgeStore {
     pub fn new(path: PathBuf, key_file: Option<PathBuf>, ssh_fingerprint: Option<String>) -> Self {
         Self {
@@ -494,67 +549,46 @@ impl AgeStore {
     /// Candidate file paths to search for age identity keys
     pub fn candidate_key_paths() -> Vec<PathBuf> {
         let mut candidates = Vec::new();
+        let mut add_candidate = |p: PathBuf| {
+            if !candidates.contains(&p) {
+                candidates.push(p);
+            }
+        };
 
         if let Ok(path) = std::env::var("TFA_AGE_KEY_FILE") {
             if !path.trim().is_empty() {
-                candidates.push(PathBuf::from(path.trim()));
+                add_candidate(PathBuf::from(path.trim()));
             }
         }
         if let Ok(path) = std::env::var("AGE_KEY_FILE") {
             if !path.trim().is_empty() {
-                candidates.push(PathBuf::from(path.trim()));
+                add_candidate(PathBuf::from(path.trim()));
             }
         }
         if let Ok(path) = std::env::var("SOPS_AGE_KEY_FILE") {
             if !path.trim().is_empty() {
-                candidates.push(PathBuf::from(path.trim()));
+                add_candidate(PathBuf::from(path.trim()));
             }
         }
 
         if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
-            if !config_home.is_empty() {
-                candidates.push(PathBuf::from(&config_home).join("age").join("keys.txt"));
-                candidates.push(
-                    PathBuf::from(&config_home)
-                        .join("sops")
-                        .join("age")
-                        .join("keys.txt"),
-                );
+            if !config_home.trim().is_empty() {
+                let c = PathBuf::from(config_home.trim());
+                add_candidate(c.join("age").join("keys.txt"));
+                add_candidate(c.join("sops").join("age").join("keys.txt"));
             }
         }
 
-        if let Ok(home) = std::env::var("HOME") {
-            if !home.is_empty() {
-                let h = PathBuf::from(home);
-                candidates.push(h.join(".config").join("age").join("keys.txt"));
-                candidates.push(h.join(".config").join("sops").join("age").join("keys.txt"));
-                candidates.push(h.join(".ssh").join("id_ed25519"));
-                candidates.push(h.join(".ssh").join("id_rsa"));
-
-                // Scan ~/.ssh for any additional key files
-                let ssh_dir = h.join(".ssh");
-                if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
-                    for entry in entries.flatten() {
-                        let p = entry.path();
-                        if p.is_file() {
-                            let filename = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                            if filename.ends_with(".pub") {
-                                let priv_p = p.with_extension("");
-                                if priv_p.is_file() && !candidates.contains(&priv_p) {
-                                    candidates.push(priv_p);
-                                }
-                            } else if !filename.starts_with("known_hosts")
-                                && !filename.starts_with("config")
-                                && !filename.starts_with("authorized_keys")
-                                && !filename.starts_with('.')
-                                && !candidates.contains(&p)
-                            {
-                                candidates.push(p);
-                            }
-                        }
-                    }
-                }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            if !appdata.trim().is_empty() {
+                let a = PathBuf::from(appdata.trim());
+                add_candidate(a.join("age").join("keys.txt"));
+                add_candidate(a.join("sops").join("age").join("keys.txt"));
             }
+        }
+
+        for h in home_dirs() {
+            add_home_candidates(&h, &mut add_candidate);
         }
 
         candidates
@@ -721,16 +755,13 @@ impl AgeStore {
                 pub_candidates.push(p.clone());
             }
 
-            if let Ok(home) = std::env::var("HOME") {
-                if !home.is_empty() {
-                    let h = PathBuf::from(home);
-                    let ssh_dir = h.join(".ssh");
-                    if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
-                        for entry in entries.flatten() {
-                            let p = entry.path();
-                            if p.is_file() {
-                                pub_candidates.push(p);
-                            }
+            for h in home_dirs() {
+                let ssh_dir = h.join(".ssh");
+                if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.is_file() {
+                            pub_candidates.push(p);
                         }
                     }
                 }
@@ -849,19 +880,16 @@ impl AgeStore {
         }
 
         // 4. Check SSH public keys in ~/.ssh/
-        if let Ok(home) = std::env::var("HOME") {
-            if !home.is_empty() {
-                let h = PathBuf::from(home);
-                for ssh_pub in &[
-                    h.join(".ssh").join("id_ed25519.pub"),
-                    h.join(".ssh").join("id_rsa.pub"),
-                ] {
-                    if ssh_pub.is_file() {
-                        if let Ok(content) = std::fs::read_to_string(ssh_pub) {
-                            if let Ok(ssh_rec) = age::ssh::Recipient::from_str(content.trim()) {
-                                recipients.push(Box::new(ssh_rec));
-                                return Ok(recipients);
-                            }
+        for h in home_dirs() {
+            for ssh_pub in &[
+                h.join(".ssh").join("id_ed25519.pub"),
+                h.join(".ssh").join("id_rsa.pub"),
+            ] {
+                if ssh_pub.is_file() {
+                    if let Ok(content) = std::fs::read_to_string(ssh_pub) {
+                        if let Ok(ssh_rec) = age::ssh::Recipient::from_str(content.trim()) {
+                            recipients.push(Box::new(ssh_rec));
+                            return Ok(recipients);
                         }
                     }
                 }
@@ -985,6 +1013,8 @@ impl AccountStore for AgeStore {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    static TEST_STORAGE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn test_memory_store_lifecycle() {
@@ -1169,6 +1199,7 @@ mod tests {
 
     #[test]
     fn test_age_store_lifecycle_with_passphrase() {
+        let _guard = TEST_STORAGE_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempdir().unwrap();
         let store_path = dir.path().join("credentials.age");
         let store = AgeStore::new(store_path.clone(), None, None);
@@ -1182,12 +1213,58 @@ mod tests {
 
     #[test]
     fn test_age_store_fallback_candidate_paths() {
+        let _guard = TEST_STORAGE_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let _temp = if std::env::var("HOME").is_err()
+            && std::env::var("USERPROFILE").is_err()
+            && std::env::var("APPDATA").is_err()
+        {
+            let temp = tempdir().unwrap();
+            std::env::set_var("HOME", temp.path());
+            Some(temp)
+        } else {
+            None
+        };
+
         let candidates = AgeStore::candidate_key_paths();
         assert!(!candidates.is_empty());
         assert!(candidates.iter().any(|c| c
             .to_string_lossy()
             .contains(".config/sops/age/keys.txt")
             || c.to_string_lossy().contains("sops")));
+
+        if _temp.is_some() {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_age_store_candidate_paths_windows_appdata() {
+        let _guard = TEST_STORAGE_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempdir().unwrap();
+        let appdata_dir = dir.path().join("AppData").join("Roaming");
+        std::env::set_var("APPDATA", &appdata_dir);
+
+        let candidates = AgeStore::candidate_key_paths();
+        assert!(candidates
+            .iter()
+            .any(|c| c.starts_with(&appdata_dir) && c.to_string_lossy().contains("sops")));
+
+        std::env::remove_var("APPDATA");
+    }
+
+    #[test]
+    fn test_age_store_candidate_paths_windows_userprofile() {
+        let _guard = TEST_STORAGE_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempdir().unwrap();
+        let profile_dir = dir.path().join("Users").join("testuser");
+        std::env::set_var("USERPROFILE", &profile_dir);
+
+        let candidates = AgeStore::candidate_key_paths();
+        assert!(candidates
+            .iter()
+            .any(|c| c.starts_with(&profile_dir) && c.to_string_lossy().contains("sops")));
+
+        std::env::remove_var("USERPROFILE");
     }
 
     #[test]

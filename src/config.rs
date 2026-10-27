@@ -230,11 +230,25 @@ pub fn default_config_paths() -> Vec<PathBuf> {
         None
     };
 
-    let config_dir = config_dir.or_else(|| {
-        std::env::var("HOME")
-            .ok()
-            .map(|h| PathBuf::from(h).join(".config").join("tfa"))
-    });
+    let config_dir = config_dir
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .filter(|h| !h.is_empty())
+                .map(|h| PathBuf::from(h).join(".config").join("tfa"))
+        })
+        .or_else(|| {
+            std::env::var("APPDATA")
+                .ok()
+                .filter(|a| !a.is_empty())
+                .map(|a| PathBuf::from(a).join("tfa"))
+        })
+        .or_else(|| {
+            std::env::var("USERPROFILE")
+                .ok()
+                .filter(|u| !u.is_empty())
+                .map(|u| PathBuf::from(u).join(".config").join("tfa"))
+        });
 
     if let Some(dir) = config_dir {
         paths.push(dir.join("config.toml"));

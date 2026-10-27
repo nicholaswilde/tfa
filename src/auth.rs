@@ -105,6 +105,25 @@ pub fn auth_file_path() -> PathBuf {
             .join("tfa")
             .join(".password_hash");
     }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        if !local.is_empty() {
+            return PathBuf::from(local).join("tfa").join(".password_hash");
+        }
+    }
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        if !appdata.is_empty() {
+            return PathBuf::from(appdata).join("tfa").join(".password_hash");
+        }
+    }
+    if let Ok(userprofile) = std::env::var("USERPROFILE") {
+        if !userprofile.is_empty() {
+            return PathBuf::from(userprofile)
+                .join(".local")
+                .join("share")
+                .join("tfa")
+                .join(".password_hash");
+        }
+    }
     std::env::temp_dir().join(".tfa_password_hash")
 }
 
@@ -131,6 +150,25 @@ pub fn session_file_path() -> PathBuf {
             .join("share")
             .join("tfa")
             .join(".session");
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        if !local.is_empty() {
+            return PathBuf::from(local).join("tfa").join(".session");
+        }
+    }
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        if !appdata.is_empty() {
+            return PathBuf::from(appdata).join("tfa").join(".session");
+        }
+    }
+    if let Ok(userprofile) = std::env::var("USERPROFILE") {
+        if !userprofile.is_empty() {
+            return PathBuf::from(userprofile)
+                .join(".local")
+                .join("share")
+                .join("tfa")
+                .join(".session");
+        }
     }
     std::env::temp_dir().join(".tfa_session")
 }
