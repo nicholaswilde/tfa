@@ -72,7 +72,7 @@ tfa [COMMAND]
 
 | Command | Description | Example |
 | :--- | :--- | :--- |
-| `generate` (`gen`) | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account] [--json]` |
+| `generate` (`gen`, `g`) | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account] [--json]` |
 | `generate -c` | Generate token and copy to clipboard | `tfa generate [account] -c` |
 | `generate -w` | Watch token countdown with progress bar | `tfa generate [account] -w` |
 | `instant` (`ins`) | Generate token instantly from secret, URI, or stdin without storage | `tfa instant [secret_or_uri]` |
@@ -80,16 +80,16 @@ tfa [COMMAND]
 | `watch all` | Watch all passwords in active namespace | `tfa watch all` |
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
 | `qr` | Render account as terminal QR code | `tfa qr github [--light]` |
-| `list` | List all configured accounts | `tfa list [--codes] [--json]` |
+| `list` (`ls`) | List all configured accounts | `tfa list [--codes] [--json]` |
 | `status` | Live overview of all accounts and tokens | `tfa status [--json]` |
 | `show` | Display account parameters and stored secret | `tfa show github [-r] [--json]` |
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
-| `delete` | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
-| `rename` | Rename an account within the active namespace | `tfa rename <old_name> <new_name>` |
+| `delete` (`del`, `rm`, `remove`) | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
+| `rename` (`ren`) | Rename an account within the active namespace | `tfa rename <old_name> <new_name>` |
 | `move` (`mv`) | Relocate an account to a different namespace | `tfa move <account> --to <target_ns>` |
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
-| `namespace` (`ns`) | Multi-tenant namespace management (`list`, `create`, `rename`, `delete`, `set-default`) | `tfa ns list` |
+| `namespace` (`ns`) | Multi-tenant namespace management (`list`/`ls`, `create`, `rename`/`ren`/`mv`, `delete`/`del`/`rm`, `set-default`/`use`/`switch`) | `tfa ns list` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
 | `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
 
@@ -454,13 +454,16 @@ tfa -n work watch all
 
 # List all namespaces
 tfa ns list
+tfa ns ls
 
 # Create or rename namespaces
 tfa ns create dev
 tfa ns rename work office
+tfa ns ren work office
 
 # Rename an account within current namespace
 tfa rename github gh
+tfa ren github gh
 
 # Move an account to another namespace
 tfa move aws --to work
@@ -468,9 +471,11 @@ tfa mv personal_email -t home
 
 # Switch active default namespace across sessions (persists to config file)
 tfa ns set-default work
+tfa ns use work
 
 # Delete a namespace and its contained accounts
 tfa ns delete office --force
+tfa ns rm office -f
 ```
 
 ---

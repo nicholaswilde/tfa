@@ -85,7 +85,7 @@ pub struct Cli {
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Generate a 2FA token (TOTP, Steam, or HOTP) for an account
-    #[command(alias = "gen")]
+    #[command(alias = "gen", alias = "g")]
     Generate {
         /// Name of the account (interactively prompted via fuzzy search if omitted and --secret not supplied)
         account: Option<String>,
@@ -194,6 +194,7 @@ pub enum Commands {
         light: Option<bool>,
     },
     /// List all stored accounts or live token status
+    #[command(alias = "ls")]
     List {
         /// Include live TOTP codes and remaining time-to-live
         #[arg(short, long)]
@@ -209,11 +210,13 @@ pub enum Commands {
         json: bool,
     },
     /// Delete an account secret
+    #[command(alias = "del", alias = "rm", alias = "remove")]
     Delete {
         /// Name of the account (interactively prompted via fuzzy search if omitted)
         account: Option<String>,
     },
     /// Rename an account within the active namespace
+    #[command(alias = "ren")]
     Rename {
         /// Current account name
         old_name: String,
@@ -352,6 +355,7 @@ pub enum WatchCommands {
 #[derive(Subcommand, Debug, Clone)]
 pub enum NamespaceCommands {
     /// List all namespaces and indicate the active/default one
+    #[command(alias = "ls")]
     List,
     /// Create a new namespace
     Create {
@@ -359,6 +363,7 @@ pub enum NamespaceCommands {
         name: String,
     },
     /// Rename an existing namespace, safely migrating all contained accounts
+    #[command(alias = "ren", alias = "mv")]
     Rename {
         /// Current namespace name
         old_name: String,
@@ -366,6 +371,7 @@ pub enum NamespaceCommands {
         new_name: String,
     },
     /// Delete a namespace and its contained accounts
+    #[command(alias = "del", alias = "rm", alias = "remove")]
     Delete {
         /// Name of the namespace to delete
         name: String,
@@ -374,6 +380,7 @@ pub enum NamespaceCommands {
         force: bool,
     },
     /// Switch and persist default active namespace in configuration file
+    #[command(alias = "use", alias = "switch", alias = "set")]
     SetDefault {
         /// Name of the namespace to set as default
         name: String,
@@ -4798,5 +4805,92 @@ light: true
         assert_eq!(report.summary.weak_secrets, 1);
         assert_eq!(report.summary.duplicate_secrets, 2);
         assert_eq!(report.summary.legacy_algorithms, 2); // weak_one and shared1 both use SHA-1
+    }
+
+    #[test]
+    fn test_cli_parse_tier1_aliases() {
+        // 1. list -> ls
+        let cli_ls = Cli::try_parse_from(["tfa", "ls"]).unwrap();
+        assert!(matches!(cli_ls.command, Some(Commands::List { .. })));
+
+        // 2. delete -> del, rm, remove
+        for alias in ["del", "rm", "remove"] {
+            let cli_del = Cli::try_parse_from(["tfa", alias, "github"]).unwrap();
+            match cli_del.command {
+                Some(Commands::Delete { account }) => {
+                    assert_eq!(account.as_deref(), Some("github"));
+                }
+                _ => panic!("Expected Delete command for alias {alias}"),
+            }
+        }
+
+        // 3. rename -> ren
+        let cli_ren = Cli::try_parse_from(["tfa", "ren", "old", "new"]).unwrap();
+        match cli_ren.command {
+            Some(Commands::Rename { old_name, new_name }) => {
+                assert_eq!(old_name, "old");
+                assert_eq!(new_name, "new");
+            }
+            _ => panic!("Expected Rename command for alias ren"),
+        }
+
+        // 4. generate -> g
+        let cli_g = Cli::try_parse_from(["tfa", "g", "github"]).unwrap();
+        match cli_g.command {
+            Some(Commands::Generate { account, .. }) => {
+                assert_eq!(account.as_deref(), Some("github"));
+            }
+            _ => panic!("Expected Generate command for alias g"),
+        }
+
+        // 5. namespace subcommands:
+        // ns ls -> NamespaceCommands::List
+        let cli_ns_ls = Cli::try_parse_from(["tfa", "ns", "ls"]).unwrap();
+        assert!(matches!(
+            cli_ns_ls.command,
+            Some(Commands::Namespace {
+                command: NamespaceCommands::List
+            })
+        ));
+
+        // ns del, rm, remove -> NamespaceCommands::Delete
+        for alias in ["del", "rm", "remove"] {
+            let cli_ns_del = Cli::try_parse_from(["tfa", "ns", alias, "work"]).unwrap();
+            match cli_ns_del.command {
+                Some(Commands::Namespace {
+                    command: NamespaceCommands::Delete { name, .. },
+                }) => {
+                    assert_eq!(name, "work");
+                }
+                _ => panic!("Expected NamespaceCommands::Delete for alias {alias}"),
+            }
+        }
+
+        // ns ren, mv -> NamespaceCommands::Rename
+        for alias in ["ren", "mv"] {
+            let cli_ns_ren = Cli::try_parse_from(["tfa", "ns", alias, "old", "new"]).unwrap();
+            match cli_ns_ren.command {
+                Some(Commands::Namespace {
+                    command: NamespaceCommands::Rename { old_name, new_name },
+                }) => {
+                    assert_eq!(old_name, "old");
+                    assert_eq!(new_name, "new");
+                }
+                _ => panic!("Expected NamespaceCommands::Rename for alias {alias}"),
+            }
+        }
+
+        // ns set, use, switch -> NamespaceCommands::SetDefault
+        for alias in ["set", "use", "switch"] {
+            let cli_ns_set = Cli::try_parse_from(["tfa", "ns", alias, "work"]).unwrap();
+            match cli_ns_set.command {
+                Some(Commands::Namespace {
+                    command: NamespaceCommands::SetDefault { name },
+                }) => {
+                    assert_eq!(name, "work");
+                }
+                _ => panic!("Expected NamespaceCommands::SetDefault for alias {alias}"),
+            }
+        }
     }
 }
