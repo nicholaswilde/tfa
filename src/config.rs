@@ -46,6 +46,7 @@ pub struct ConfigFile {
     #[serde(alias = "clipboard_command")]
     pub clip_command: Option<String>,
     pub default_namespace: Option<String>,
+    pub default_command: Option<String>,
     pub digits: Option<u8>,
     #[serde(alias = "step")]
     pub period: Option<u64>,
@@ -277,6 +278,7 @@ pub struct ResolvedConfig {
     pub clipboard: ClipboardProvider,
     pub clip_command: Option<String>,
     pub namespace: String,
+    pub default_command: String,
     pub digits: Option<u8>,
     pub period: Option<u64>,
     pub algorithm: Option<totp_rs::Algorithm>,
@@ -294,6 +296,7 @@ impl Default for ResolvedConfig {
             clipboard: ClipboardProvider::System,
             clip_command: None,
             namespace: "default".to_string(),
+            default_command: "list".to_string(),
             digits: None,
             period: None,
             algorithm: None,
@@ -516,12 +519,29 @@ pub fn resolve_configuration(
                 .filter(|s| !s.is_empty())
         });
 
+    // Default command precedence: Env > Config File > Default ("list")
+    let default_command = if let Ok(cmd_env) = std::env::var("TFA_DEFAULT_COMMAND") {
+        if !cmd_env.trim().is_empty() {
+            cmd_env.trim().to_lowercase()
+        } else {
+            "list".to_string()
+        }
+    } else if let Some(cmd_cfg) = config_file
+        .as_ref()
+        .and_then(|c| c.default_command.as_ref())
+    {
+        cmd_cfg.trim().to_lowercase()
+    } else {
+        "list".to_string()
+    };
+
     Ok((
         ResolvedConfig {
             storage,
             clipboard,
             clip_command,
             namespace,
+            default_command,
             digits,
             period,
             algorithm,

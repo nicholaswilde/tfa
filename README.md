@@ -68,6 +68,8 @@ The compiled binary will be placed at `target/release/tfa`.
 tfa [COMMAND]
 ```
 
+When executed without a command (`tfa`), it runs the default command (`list`, or configured via `default_command` / `TFA_DEFAULT_COMMAND`).
+
 ### Commands
 
 | Command | Description | Example |
@@ -392,6 +394,7 @@ gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3" # optional default 
 clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
 clip_command = "wl-copy"      # optional custom command receiving token via stdin
 default_namespace = "personal"# active default namespace (default: "default")
+default_command = "list"      # default command when invoked without args (list, status, watch all)
 digits = 6                    # 6 or 8
 period = 30                   # 30 or 60
 algorithm = "sha1"            # sha1, sha256, sha512, or steam
@@ -410,6 +413,7 @@ gpg_fingerprint: "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
 clipboard: system
 clip_command: "xclip -selection clipboard"
 default_namespace: personal
+default_command: list
 digits: 6
 period: 30
 algorithm: sha1
@@ -429,6 +433,7 @@ password_timeout: 300
   "clipboard": "system",
   "clip_command": "wl-copy",
   "default_namespace": "personal",
+  "default_command": "list",
   "digits": 6,
   "period": 30,
   "algorithm": "sha1",

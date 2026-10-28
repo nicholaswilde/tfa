@@ -733,6 +733,24 @@ pub fn run_app(
         cli.namespace.clone(),
     )?;
 
+    // Default to configured default command (defaulting to "list") when no command is supplied
+    if cli.command.is_none() {
+        cli.command = match resolved_cfg.default_command.as_str() {
+            "watch" | "watch all" | "watch_all" | "watch-all" => Some(Commands::Watch {
+                command: Some(WatchCommands::All { filter: None }),
+                account: None,
+                all: true,
+                filter: None,
+                copy: None,
+            }),
+            "status" => Some(Commands::Status { json: false }),
+            _ => Some(Commands::List {
+                codes: false,
+                json: false,
+            }),
+        };
+    }
+
     // If the subcommand is Namespace management, operate on the root store directly
     if let Some(Commands::Namespace {
         command: ref ns_cmd,
@@ -1623,9 +1641,7 @@ pub fn run_app(
                 write!(out_writer, "{text}")?;
             }
         }
-        None => {
-            writeln!(out_writer, "Use --help for usage instructions.")?;
-        }
+        None => unreachable!("Default command handled above"),
     }
     Ok(())
 }
@@ -2409,7 +2425,40 @@ mod tests {
         let none_cli = Cli::try_parse_from(["tfa"]).unwrap();
         assert!(run_app(none_cli, &store, &cb, &mut out).is_ok());
         let out_str = String::from_utf8(out).unwrap();
-        assert!(out_str.contains("Use --help for usage instructions."));
+        assert_eq!(out_str.trim(), "No accounts configured.");
+
+        // Add account and verify running tfa lists it
+        let add_cli = Cli::try_parse_from(["tfa", "add", "github", "JBSWY3DPEHPK3PXP"]).unwrap();
+        let mut add_out = Vec::new();
+        assert!(run_app(add_cli, &store, &cb, &mut add_out).is_ok());
+
+        let mut out2 = Vec::new();
+        let none_cli2 = Cli::try_parse_from(["tfa"]).unwrap();
+        assert!(run_app(none_cli2, &store, &cb, &mut out2).is_ok());
+        assert_eq!(String::from_utf8(out2).unwrap().trim(), "github");
+    }
+
+    #[test]
+    fn test_run_app_default_command_config() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        std::fs::write(&config_path, "default_command = \"status\"\n").unwrap();
+
+        // Add account
+        let add_cli = Cli::try_parse_from(["tfa", "add", "github", "JBSWY3DPEHPK3PXP"]).unwrap();
+        let mut add_out = Vec::new();
+        assert!(run_app(add_cli, &store, &cb, &mut add_out).is_ok());
+
+        // Run tfa with config specifying status as default_command
+        let cli = Cli::try_parse_from(["tfa", "-C", config_path.to_str().unwrap()]).unwrap();
+        let mut out = Vec::new();
+        assert!(run_app(cli, &store, &cb, &mut out).is_ok());
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains("github"));
+        assert!(out_str.contains("ACCOUNT"));
+        assert!(out_str.contains("TOKEN"));
     }
 
     #[test]
