@@ -386,6 +386,8 @@ When using `--storage age`, `tfa` resolves decryption identities and encryption 
 ### Example Configuration Files
 
 #### TOML (`~/.config/tfa/config.toml`)
+
+##### Flat Format
 ```toml
 storage = "keyring"           # auto, keyring, file, or age
 age_key = "~/.config/sops/age/keys.txt" # optional age key file or secret key
@@ -404,7 +406,30 @@ password = true               # enable master password protection
 password_timeout = 300        # unlock cache TTL in seconds (default: 300)
 ```
 
+##### Nested Format
+```toml
+storage = "keyring"           # auto, keyring, file, or age
+age_key = "~/.config/sops/age/keys.txt" # optional age key file or secret key
+ssh_key = "~/.ssh/id_ed25519" # optional SSH private key file
+gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3" # optional default GPG recipient key
+clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
+clip_command = "wl-copy"      # optional custom command receiving token via stdin
+default_namespace = "personal"# active default namespace (default: "default")
+default_command = "list"      # default command when invoked without args (list, status, watch all)
+digits = 6                    # 6 or 8
+period = 30                   # 30 or 60
+algorithm = "sha1"            # sha1, sha256, sha512, or steam
+auto_copy = true              # automatically copy generated tokens
+light = false                 # terminal QR light theme
+
+[password]
+enabled = true                # enable master password protection
+timeout = 300                 # unlock cache TTL in seconds (default: 300)
+```
+
 #### YAML (`~/.config/tfa/config.yaml`)
+
+##### Flat Format
 ```yaml
 storage: auto
 age_key: ~/.config/sops/age/keys.txt
@@ -423,6 +448,27 @@ password: true
 password_timeout: 300
 ```
 
+##### Nested Format
+```yaml
+storage: auto
+age_key: ~/.config/sops/age/keys.txt
+ssh_key: ~/.ssh/id_ed25519
+gpg_fingerprint: "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
+clipboard: system
+clip_command: "xclip -selection clipboard"
+default_namespace: personal
+default_command: list
+digits: 6
+period: 30
+algorithm: sha1
+auto_copy: true
+light: false
+
+password:
+  enabled: true
+  timeout: 300
+```
+
 #### JSON (`~/.config/tfa/config.json`)
 ```json
 {
@@ -439,8 +485,10 @@ password_timeout: 300
   "algorithm": "sha1",
   "auto_copy": true,
   "light": false,
-  "password": true,
-  "password_timeout": 300
+  "password": {
+    "enabled": true,
+    "timeout": 300
+  }
 }
 ```
 

@@ -816,6 +816,12 @@ auto_copy = false
             cfg3.password_timeout(),
             ConfigFile::DEFAULT_PASSWORD_TIMEOUT
         );
+
+        // 4. YAML nested format
+        let yaml_nested = "password:\n  enabled: true\n  timeout: 120\n";
+        let cfg4 = ConfigFile::parse(yaml_nested, ConfigFormat::Yaml).unwrap();
+        assert!(cfg4.is_password_enabled());
+        assert_eq!(cfg4.password_timeout(), 120);
     }
 
     #[test]
