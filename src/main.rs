@@ -2656,8 +2656,41 @@ mod tests {
     }
 
     #[test]
+    fn test_run_app_export_gpg_cli_validation() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // 1. Error when --gpg is passed with empty key
+        let mut err_out = Vec::new();
+        let empty_gpg_cli = Cli::try_parse_from(["tfa", "export", "--gpg="]).unwrap();
+        assert!(run_app(empty_gpg_cli, &store, &cb, &mut err_out).is_err());
+
+        // 2. Error when --gpg is passed without recipient and without config fingerprint
+        let no_cfg_path = temp_dir.path().join("empty_config.toml");
+        std::fs::write(&no_cfg_path, "").unwrap();
+        let missing_cfg_gpg = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            no_cfg_path.to_str().unwrap(),
+            "export",
+            "--gpg",
+        ])
+        .unwrap();
+        assert!(run_app(missing_cfg_gpg, &store, &cb, &mut err_out).is_err());
+    }
+
+    #[test]
     fn test_run_app_export_and_import_gpg_flow() {
-        let _guard = backup::GPG_TEST_MUTEX.lock().unwrap();
+        let _guard = backup::GPG_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if !backup::is_gpg_available_for_test() {
+            eprintln!(
+                "Skipping GPG integration test: GnuPG / gpg-agent not available or functional"
+            );
+            return;
+        }
         let store1 = MemoryStore::new();
         let cb = MockClipboard::default();
         store1

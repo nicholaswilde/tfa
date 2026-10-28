@@ -12,6 +12,26 @@ use std::process::{Command, Stdio};
 #[cfg(test)]
 pub(crate) static GPG_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+#[cfg(test)]
+pub(crate) fn is_gpg_available_for_test() -> bool {
+    if cfg!(windows) {
+        // GPG key generation in temp GNUPGHOME requires gpg-agent daemon socket IPC,
+        // which is not functional on Windows CI environments (Git for Windows only ships gpg.exe without agent daemon).
+        return false;
+    }
+    let prog = gpg_program();
+    let Ok(output) = Command::new(&prog).arg("--version").output() else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let Ok(agent) = Command::new("gpg-agent").arg("--version").output() else {
+        return false;
+    };
+    agent.status.success()
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncryptedBackup {
     pub version: u32,
@@ -144,7 +164,16 @@ pub fn encrypt_backup_gpg(data: &[u8], recipient: &str) -> Result<String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| anyhow!("Failed to execute gpg for encryption: {e}"))?;
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow!(
+                    "Failed to execute gpg for encryption: '{}' not found in PATH",
+                    gpg_program()
+                )
+            } else {
+                anyhow!("Failed to execute gpg for encryption: {e}")
+            }
+        })?;
 
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(data);
@@ -187,7 +216,16 @@ pub fn decrypt_backup_gpg(armored: &str) -> Result<Vec<u8>> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| anyhow!("Failed to execute gpg for decryption: {e}"))?;
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow!(
+                    "Failed to execute gpg for decryption: '{}' not found in PATH",
+                    gpg_program()
+                )
+            } else {
+                anyhow!("Failed to execute gpg for decryption: {e}")
+            }
+        })?;
 
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(armored.as_bytes());
@@ -375,7 +413,11 @@ mod tests {
 
     #[test]
     fn test_gpg_encrypt_decrypt_and_missing_key() {
-        let _guard = GPG_TEST_MUTEX.lock().unwrap();
+        let _guard = GPG_TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        if !is_gpg_available_for_test() {
+            eprintln!("Skipping GPG test: GnuPG / gpg-agent not available or functional");
+            return;
+        }
         let gpg_dir = tempfile::tempdir().unwrap();
         #[cfg(unix)]
         {
@@ -395,7 +437,7 @@ mod tests {
         );
 
         // 2. Generate a temporary GPG key in isolated GNUPGHOME
-        let status = Command::new("gpg")
+        let status = Command::new(gpg_program())
             .args([
                 "--batch",
                 "--passphrase",
@@ -410,7 +452,7 @@ mod tests {
             .unwrap();
         assert!(status.success());
 
-        let list_out = Command::new("gpg")
+        let list_out = Command::new(gpg_program())
             .args(["--list-keys", "--with-colons"])
             .output()
             .unwrap();
