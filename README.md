@@ -89,7 +89,7 @@ tfa [COMMAND]
 | `rename` (`ren`) | Rename an account within the active namespace | `tfa rename <old_name> <new_name>` |
 | `move` (`mv`) | Relocate an account to a different namespace | `tfa move <account> --to <target_ns>` |
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
-| `namespace` (`ns`) | Multi-tenant namespace management (`list`/`ls`, `create`, `rename`/`ren`/`mv`, `delete`/`del`/`rm`, `set-default`/`use`/`switch`) | `tfa ns list` |
+| `namespace` (`ns`) | Multi-tenant namespace management (`current`, `default`, `list`/`ls`, `create`, `rename`/`ren`/`mv`, `delete`/`del`/`rm`, `set-default`/`use`/`switch`) | `tfa ns` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
 | `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
 
@@ -452,7 +452,12 @@ tfa -n work list
 tfa -n work generate aws
 tfa -n work watch all
 
-# List all namespaces
+# Show current active or configured default namespace
+tfa ns
+tfa ns current
+tfa ns default
+
+# List all namespaces (indicates default and active)
 tfa ns list
 tfa ns ls
 

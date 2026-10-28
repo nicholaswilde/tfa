@@ -292,7 +292,7 @@ pub enum Commands {
     #[command(alias = "ns")]
     Namespace {
         #[command(subcommand)]
-        command: NamespaceCommands,
+        command: Option<NamespaceCommands>,
     },
     /// Manage master password protection and unlock sessions
     #[command(alias = "pwd", alias = "pw")]
@@ -357,6 +357,12 @@ pub enum NamespaceCommands {
     /// List all namespaces and indicate the active/default one
     #[command(alias = "ls")]
     List,
+    /// Show the current active namespace
+    #[command(alias = "show", alias = "get")]
+    Current,
+    /// Show the default namespace configured in settings
+    #[command(alias = "get-default", alias = "show-default")]
+    Default,
     /// Create a new namespace
     Create {
         /// Name of the new namespace
@@ -719,7 +725,7 @@ pub fn run_app(
     clipboard: &dyn Clipboard,
     out_writer: &mut dyn Write,
 ) -> anyhow::Result<()> {
-    let (resolved_cfg, _) = config::resolve_configuration(
+    let (resolved_cfg, config_file) = config::resolve_configuration(
         cli.config.as_deref(),
         cli.storage,
         cli.clipboard,
@@ -732,28 +738,51 @@ pub fn run_app(
         command: ref ns_cmd,
     }) = cli.command
     {
+        let default_ns = config_file
+            .as_ref()
+            .and_then(|c| c.default_namespace.as_ref())
+            .map(|ns| namespace::normalize_namespace(ns))
+            .unwrap_or_else(|| namespace::DEFAULT_NAMESPACE.to_string());
+
         match ns_cmd {
-            NamespaceCommands::List => {
+            Some(NamespaceCommands::List) => {
                 let mut namespaces = NamespaceStore::list_all_namespaces(store)?;
-                // Ensure default namespace exists in list
+                // Ensure default namespace and active namespace exist in list
                 if !namespaces.contains(&resolved_cfg.namespace) {
                     namespaces.push(resolved_cfg.namespace.clone());
-                    namespaces.sort();
                 }
+                if !namespaces.contains(&default_ns) {
+                    namespaces.push(default_ns.clone());
+                }
+                namespaces.sort();
                 writeln!(out_writer, "{:<20} STATUS", "NAMESPACE")?;
                 for ns in namespaces {
                     let is_active = ns == resolved_cfg.namespace;
-                    let status = if is_active { "(active)" } else { "" };
+                    let is_default = ns == default_ns;
+                    let status = match (is_default, is_active) {
+                        (true, true) => "(default, active)",
+                        (true, false) => "(default)",
+                        (false, true) => "(active)",
+                        (false, false) => "",
+                    };
                     writeln!(out_writer, "{:<20} {}", ns, status)?;
                 }
                 return Ok(());
             }
-            NamespaceCommands::Create { name } => {
+            Some(NamespaceCommands::Current) | None => {
+                writeln!(out_writer, "{}", resolved_cfg.namespace)?;
+                return Ok(());
+            }
+            Some(NamespaceCommands::Default) => {
+                writeln!(out_writer, "{default_ns}")?;
+                return Ok(());
+            }
+            Some(NamespaceCommands::Create { name }) => {
                 let norm = namespace::normalize_namespace(name);
                 writeln!(out_writer, "Namespace '{norm}' created.")?;
                 return Ok(());
             }
-            NamespaceCommands::Rename { old_name, new_name } => {
+            Some(NamespaceCommands::Rename { old_name, new_name }) => {
                 let migrated = NamespaceStore::rename_namespace(store, old_name, new_name)?;
                 writeln!(
                     out_writer,
@@ -761,7 +790,7 @@ pub fn run_app(
                 )?;
                 return Ok(());
             }
-            NamespaceCommands::Delete { name, force } => {
+            Some(NamespaceCommands::Delete { name, force }) => {
                 let norm = namespace::normalize_namespace(name);
                 if !force {
                     #[cfg(test)]
@@ -793,7 +822,7 @@ pub fn run_app(
                 )?;
                 return Ok(());
             }
-            NamespaceCommands::SetDefault { name } => {
+            Some(NamespaceCommands::SetDefault { name }) => {
                 let norm = namespace::normalize_namespace(name);
                 let config_path =
                     ConfigFile::set_default_namespace_in_file(cli.config.as_deref(), &norm)?;
@@ -3408,7 +3437,7 @@ light: true
         let cli_ns = Cli::try_parse_from(["tfa", "ns", "list"]).unwrap();
         match cli_ns.command {
             Some(Commands::Namespace {
-                command: NamespaceCommands::List,
+                command: Some(NamespaceCommands::List),
             }) => {}
             _ => panic!("Expected ns alias to map to Namespace command"),
         }
@@ -4849,7 +4878,7 @@ light: true
         assert!(matches!(
             cli_ns_ls.command,
             Some(Commands::Namespace {
-                command: NamespaceCommands::List
+                command: Some(NamespaceCommands::List)
             })
         ));
 
@@ -4858,7 +4887,7 @@ light: true
             let cli_ns_del = Cli::try_parse_from(["tfa", "ns", alias, "work"]).unwrap();
             match cli_ns_del.command {
                 Some(Commands::Namespace {
-                    command: NamespaceCommands::Delete { name, .. },
+                    command: Some(NamespaceCommands::Delete { name, .. }),
                 }) => {
                     assert_eq!(name, "work");
                 }
@@ -4871,7 +4900,7 @@ light: true
             let cli_ns_ren = Cli::try_parse_from(["tfa", "ns", alias, "old", "new"]).unwrap();
             match cli_ns_ren.command {
                 Some(Commands::Namespace {
-                    command: NamespaceCommands::Rename { old_name, new_name },
+                    command: Some(NamespaceCommands::Rename { old_name, new_name }),
                 }) => {
                     assert_eq!(old_name, "old");
                     assert_eq!(new_name, "new");
@@ -4885,12 +4914,106 @@ light: true
             let cli_ns_set = Cli::try_parse_from(["tfa", "ns", alias, "work"]).unwrap();
             match cli_ns_set.command {
                 Some(Commands::Namespace {
-                    command: NamespaceCommands::SetDefault { name },
+                    command: Some(NamespaceCommands::SetDefault { name }),
                 }) => {
                     assert_eq!(name, "work");
                 }
                 _ => panic!("Expected NamespaceCommands::SetDefault for alias {alias}"),
             }
         }
+    }
+
+    #[test]
+    fn test_show_current_and_default_namespace() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+
+        // 1. Initial state: default is "default"
+        // Test `tfa ns` (no subcommands)
+        let cli_ns_bare = Cli::try_parse_from(["tfa", "ns"]).unwrap();
+        let mut out = Vec::new();
+        assert!(run_app(cli_ns_bare, &store, &cb, &mut out).is_ok());
+        assert_eq!(String::from_utf8(out).unwrap().trim(), "default");
+
+        // Test `tfa ns current`
+        let cli_ns_curr = Cli::try_parse_from(["tfa", "ns", "current"]).unwrap();
+        let mut out_curr = Vec::new();
+        assert!(run_app(cli_ns_curr, &store, &cb, &mut out_curr).is_ok());
+        assert_eq!(String::from_utf8(out_curr).unwrap().trim(), "default");
+
+        // Test `tfa ns default`
+        let cli_ns_def = Cli::try_parse_from(["tfa", "ns", "default"]).unwrap();
+        let mut out_def = Vec::new();
+        assert!(run_app(cli_ns_def, &store, &cb, &mut out_def).is_ok());
+        assert_eq!(String::from_utf8(out_def).unwrap().trim(), "default");
+
+        // 2. Set default namespace to "work"
+        let cli_set = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "ns",
+            "set-default",
+            "work",
+        ])
+        .unwrap();
+        let mut out_set = Vec::new();
+        assert!(run_app(cli_set, &store, &cb, &mut out_set).is_ok());
+
+        // 3. Test `tfa -C <config> ns` and `tfa -C <config> ns default`
+        let cli_check_def =
+            Cli::try_parse_from(["tfa", "-C", config_path.to_str().unwrap(), "ns", "default"])
+                .unwrap();
+        let mut out_check = Vec::new();
+        assert!(run_app(cli_check_def, &store, &cb, &mut out_check).is_ok());
+        assert_eq!(String::from_utf8(out_check).unwrap().trim(), "work");
+
+        // Test `tfa -C <config> ns` bare
+        let cli_check_bare =
+            Cli::try_parse_from(["tfa", "-C", config_path.to_str().unwrap(), "ns"]).unwrap();
+        let mut out_check_bare = Vec::new();
+        assert!(run_app(cli_check_bare, &store, &cb, &mut out_check_bare).is_ok());
+        assert_eq!(String::from_utf8(out_check_bare).unwrap().trim(), "work");
+
+        // 4. Test with -n override: `tfa -C <config> -n personal ns current` vs `default`
+        let cli_override_curr = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "-n",
+            "personal",
+            "ns",
+            "current",
+        ])
+        .unwrap();
+        let mut out_over_curr = Vec::new();
+        assert!(run_app(cli_override_curr, &store, &cb, &mut out_over_curr).is_ok());
+        assert_eq!(String::from_utf8(out_over_curr).unwrap().trim(), "personal");
+
+        let cli_override_def = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            config_path.to_str().unwrap(),
+            "-n",
+            "personal",
+            "ns",
+            "default",
+        ])
+        .unwrap();
+        let mut out_over_def = Vec::new();
+        assert!(run_app(cli_override_def, &store, &cb, &mut out_over_def).is_ok());
+        assert_eq!(String::from_utf8(out_over_def).unwrap().trim(), "work");
+
+        // 5. Check `tfa -C <config> ns list` shows (default, active)
+        let cli_list =
+            Cli::try_parse_from(["tfa", "-C", config_path.to_str().unwrap(), "ns", "list"])
+                .unwrap();
+        let mut out_list = Vec::new();
+        assert!(run_app(cli_list, &store, &cb, &mut out_list).is_ok());
+        let list_str = String::from_utf8(out_list).unwrap();
+        assert!(list_str.contains("work"));
+        assert!(list_str.contains("(default, active)"));
     }
 }
