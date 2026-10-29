@@ -1813,8 +1813,12 @@ pub fn run_app(
         }) => {
             let path = Path::new(&file_or_payload);
             let content = if path.is_file() {
-                std::fs::read_to_string(path)
-                    .with_context(|| format!("Failed reading backup file '{}'", path.display()))?
+                match std::fs::read_to_string(path) {
+                    Ok(text) => text,
+                    Err(_) => qr::scan_qr_from_image(path).with_context(|| {
+                        format!("Failed reading backup file '{}'", path.display())
+                    })?,
+                }
             } else if path.exists() {
                 anyhow::bail!("Path '{}' is not a file", path.display());
             } else if !file_or_payload.starts_with("otpauth-migration://")
@@ -1826,6 +1830,11 @@ pub fn run_app(
                     || file_or_payload.ends_with(".gpg")
                     || file_or_payload.ends_with(".asc")
                     || file_or_payload.ends_with(".pgp")
+                    || file_or_payload.ends_with(".txt")
+                    || file_or_payload.ends_with(".csv")
+                    || file_or_payload.ends_with(".png")
+                    || file_or_payload.ends_with(".jpg")
+                    || file_or_payload.ends_with(".jpeg")
                     || file_or_payload.contains(std::path::MAIN_SEPARATOR))
             {
                 anyhow::bail!("File not found: '{}'", file_or_payload);
@@ -3367,6 +3376,44 @@ mod tests {
         let accounts = store.list_accounts().unwrap();
         assert_eq!(accounts.len(), 3);
         assert!(accounts.contains(&"Test1:test1@example1.com".to_string()));
+    }
+
+    #[test]
+    fn test_run_app_import_google_migration_qr_image() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let uri = "otpauth-migration://offline?data=CjMKCkhlbGxvId6tvu8SGFRlc3QxOnRlc3QxQGV4YW1wbGUxLmNvbRoFVGVzdDEgASgBMAIKMwoKSGVsbG8h3q2%2B8BIYVGVzdDI6dGVzdDJAZXhhbXBsZTIuY29tGgVUZXN0MiABKAEwAgozCgpIZWxsbyHerb7xEhhUZXN0Mzp0ZXN0M0BleGFtcGxlMy5jb20aBVRlc3QzIAEoATACEAEYASAAKI3orYEE";
+        let qr = qrcodegen::QrCode::encode_text(uri, qrcodegen::QrCodeEcc::Medium).unwrap();
+        let size = qr.size() as u32;
+        let border = 4u32;
+        let img_dim = size + border * 2;
+        let mut img_buf = image::GrayImage::new(img_dim, img_dim);
+        for pixel in img_buf.pixels_mut() {
+            *pixel = image::Luma([255u8]);
+        }
+        for y in 0..size {
+            for x in 0..size {
+                if qr.get_module(x as i32, y as i32) {
+                    img_buf.put_pixel(x + border, y + border, image::Luma([0u8]));
+                }
+            }
+        }
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let img_path = temp_dir.path().join("google_migration_qr.png");
+        img_buf.save(&img_path).unwrap();
+
+        let import_cli =
+            Cli::try_parse_from(["tfa", "import", img_path.to_str().unwrap()]).unwrap();
+        assert!(run_app(import_cli, &store, &cb, &mut out).is_ok());
+
+        let accounts = store.list_accounts().unwrap();
+        assert_eq!(accounts.len(), 3);
+        assert!(accounts.contains(&"Test1:test1@example1.com".to_string()));
+        assert!(accounts.contains(&"Test2:test2@example2.com".to_string()));
+        assert!(accounts.contains(&"Test3:test3@example3.com".to_string()));
     }
 
     #[test]

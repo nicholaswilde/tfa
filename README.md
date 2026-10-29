@@ -323,12 +323,15 @@ tfa export backup.json --unencrypted
 tfa import backup.enc
 tfa import backup.gpg
 
-# Import directly from Google Authenticator QR migration link:
+# Import directly from Google Authenticator QR migration image or link:
+tfa import google_qr.png
 tfa import "otpauth-migration://offline?data=..."
 
-# Import from 2FAS (*.2fas), Bitwarden, or Aegis export:
+# Import from 2FAS (*.2fas), Bitwarden (JSON/CSV), 1Password (CSV), Aegis, LastPass, Proton, andOTP, Raivo OTP, Ente Auth, or Stratum export:
 tfa import backup.2fas
 tfa import bitwarden_export.json
+tfa import 1password_export.csv
+tfa import ente_export.txt
 
 # Preview changes with dry-run:
 tfa import backup.enc --dry-run

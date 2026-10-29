@@ -117,7 +117,7 @@ impl TfaHotp {
             secret_opt.ok_or_else(|| anyhow::anyhow!("Missing secret parameter in OTPAuth URL"))?;
         let clean_secret: String = raw_secret
             .chars()
-            .filter(|c| !c.is_whitespace() && *c != '-')
+            .filter(|c| !c.is_whitespace() && *c != '-' && *c != '=')
             .collect::<String>()
             .to_uppercase();
         let secret = Secret::try_from_base32(clean_secret)
@@ -185,6 +185,38 @@ pub struct TfaTotp {
     inner: TfaEngine,
 }
 
+fn normalize_otpauth_url(url_str: &str) -> String {
+    let Ok(mut u) = url::Url::parse(url_str) else {
+        return url_str.to_string();
+    };
+    let mut is_steam = false;
+    let pairs: Vec<(String, String)> = u
+        .query_pairs()
+        .map(|(k, v)| {
+            if k == "secret" {
+                let clean: String = v
+                    .chars()
+                    .filter(|c| !c.is_whitespace() && *c != '-' && *c != '=')
+                    .collect::<String>()
+                    .to_uppercase();
+                (k.into_owned(), clean)
+            } else {
+                if k == "encoder" && v.eq_ignore_ascii_case("steam") {
+                    is_steam = true;
+                }
+                (k.into_owned(), v.into_owned())
+            }
+        })
+        .collect();
+    if is_steam {
+        let _ = u.set_host(Some("steam"));
+    }
+    if !pairs.is_empty() {
+        u.query_pairs_mut().clear().extend_pairs(pairs);
+    }
+    u.to_string()
+}
+
 impl TfaTotp {
     /// Create TOTP or HOTP instance with defaults from raw base32 secret or otpauth:// URI
     pub fn from_input(account: &str, input: &str) -> Result<Self> {
@@ -213,7 +245,7 @@ impl TfaTotp {
             } else {
                 let clean_secret: String = input
                     .chars()
-                    .filter(|c| !c.is_whitespace() && *c != '-')
+                    .filter(|c| !c.is_whitespace() && *c != '-' && *c != '=')
                     .collect::<String>()
                     .to_uppercase();
 
@@ -247,12 +279,13 @@ impl TfaTotp {
 
         // 2. Otherwise build TOTP (supports standard RFC 6238 and Steam Guard)
         let base_totp = if input.starts_with("otpauth://") {
-            Totp::from_url_unchecked(input)
+            let normalized = normalize_otpauth_url(input);
+            Totp::from_url_unchecked(&normalized)
                 .map_err(|e| anyhow::anyhow!("Invalid OTPAuth URL: {e}"))?
         } else {
             let clean_secret: String = input
                 .chars()
-                .filter(|c| !c.is_whitespace() && *c != '-')
+                .filter(|c| !c.is_whitespace() && *c != '-' && *c != '=')
                 .collect::<String>()
                 .to_uppercase();
 
