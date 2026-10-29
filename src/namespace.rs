@@ -15,6 +15,17 @@ pub fn normalize_namespace(ns: &str) -> String {
     }
 }
 
+/// Split an account identifier if it uses inline `namespace/account` addressing.
+pub fn split_inline_account(account: &str) -> Option<(String, String)> {
+    let (ns, acct) = account.split_once('/')?;
+    let ns_trim = ns.trim();
+    let acct_trim = acct.trim();
+    if ns_trim.is_empty() || acct_trim.is_empty() {
+        return None;
+    }
+    Some((normalize_namespace(ns_trim), acct_trim.to_string()))
+}
+
 /// Qualified key representation in storage:
 /// - If namespace is "default", the key is stored plain as `<account>`.
 /// - For any other namespace (e.g. "work", "home"), it is stored as `<namespace>:<account>`.

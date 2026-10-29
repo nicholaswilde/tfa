@@ -58,11 +58,20 @@ pub fn parse_import_payload(input: &str) -> Result<Vec<ImportItem>> {
         }
     }
 
-    if items.is_empty() {
-        bail!("Could not identify valid 2FA secrets or accounts in import payload");
+    if !items.is_empty() {
+        return Ok(items);
     }
 
-    Ok(items)
+    // 5. Try YAML (totp-cli dump)
+    if let Ok(v @ Value::Array(_)) = serde_yaml_ng::from_str::<Value>(trimmed) {
+        if let Ok(yaml_items) = parse_value_export(v) {
+            if !yaml_items.is_empty() {
+                return Ok(yaml_items);
+            }
+        }
+    }
+
+    bail!("Could not identify valid 2FA secrets or accounts in import payload")
 }
 
 fn parse_google_migration(uri: &str) -> Result<Vec<ImportItem>> {
@@ -89,6 +98,10 @@ fn parse_google_migration(uri: &str) -> Result<Vec<ImportItem>> {
 
 fn parse_json_export(json_str: &str) -> Result<Vec<ImportItem>> {
     let v: Value = serde_json::from_str(json_str)?;
+    parse_value_export(v)
+}
+
+fn parse_value_export(v: Value) -> Result<Vec<ImportItem>> {
     let mut items = Vec::new();
 
     match v {
@@ -225,6 +238,22 @@ fn parse_json_export(json_str: &str) -> Result<Vec<ImportItem>> {
 
             for item in arr {
                 if let Some(obj) = item.as_object() {
+                    if let Some(ns_accounts) = obj.get("accounts").and_then(|a| a.as_array()) {
+                        let ns_name = obj
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("default");
+                        for acc_val in ns_accounts {
+                            if let Some(acc_obj) = acc_val.as_object() {
+                                if let Some(mut imp) = build_item_from_obj(acc_obj) {
+                                    imp.account =
+                                        crate::namespace::scoped_key(ns_name, &imp.account);
+                                    items.push(imp);
+                                }
+                            }
+                        }
+                        continue;
+                    }
                     if let Some(imp) = build_item_from_obj(obj) {
                         items.push(imp);
                     }
@@ -256,9 +285,15 @@ fn build_item_from_obj(obj: &serde_json::Map<String, Value>) -> Option<ImportIte
         .filter(|s| !s.is_empty());
     let secret_str = obj
         .get("secret")
+        .or_else(|| obj.get("token"))
         .and_then(|s| s.as_str())
         .map(str::trim)
         .filter(|s| !s.is_empty())?;
+    let prefix = obj
+        .get("prefix")
+        .and_then(|p| p.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
 
     let account_name = match (issuer, raw_name) {
         (Some(iss), Some(acc)) if iss != acc && !acc.starts_with(iss) => format!("{iss}:{acc}"),
@@ -268,12 +303,15 @@ fn build_item_from_obj(obj: &serde_json::Map<String, Value>) -> Option<ImportIte
     };
 
     let has_otp_meta = issuer.is_some()
+        || prefix.is_some()
         || obj.contains_key("type")
         || obj.contains_key("kind")
         || obj.contains_key("digits")
+        || obj.contains_key("length")
         || obj.contains_key("period")
         || obj.contains_key("timer")
         || obj.contains_key("timeStep")
+        || obj.contains_key("timePeriod")
         || obj.contains_key("algorithm");
 
     let final_secret = if has_otp_meta && !secret_str.starts_with("otpauth://") {
@@ -294,10 +332,13 @@ fn build_item_from_obj(obj: &serde_json::Map<String, Value>) -> Option<ImportIte
                 u.query_pairs_mut().append_pair("issuer", iss);
             }
             if let Some(alg) = obj.get("algorithm").and_then(|a| a.as_str()) {
-                u.query_pairs_mut()
-                    .append_pair("algorithm", &alg.trim().to_uppercase());
+                let alg_trimmed = alg.trim();
+                if !alg_trimmed.is_empty() {
+                    u.query_pairs_mut()
+                        .append_pair("algorithm", &alg_trimmed.to_uppercase());
+                }
             }
-            if let Some(d) = val_to_u64(obj.get("digits")) {
+            if let Some(d) = val_to_u64(obj.get("digits").or_else(|| obj.get("length"))) {
                 u.query_pairs_mut().append_pair("digits", &d.to_string());
             }
             if host == "hotp" {
@@ -306,9 +347,13 @@ fn build_item_from_obj(obj: &serde_json::Map<String, Value>) -> Option<ImportIte
             } else if let Some(p) = val_to_u64(
                 obj.get("period")
                     .or_else(|| obj.get("timer"))
-                    .or_else(|| obj.get("timeStep")),
+                    .or_else(|| obj.get("timeStep"))
+                    .or_else(|| obj.get("timePeriod")),
             ) {
                 u.query_pairs_mut().append_pair("period", &p.to_string());
+            }
+            if let Some(pfx) = prefix {
+                u.query_pairs_mut().append_pair("prefix", pfx);
             }
             u.to_string()
         } else {
@@ -914,5 +959,44 @@ DigitalOcean,https://cloud.digitalocean.com,devops@example.com,pw3,GEZDGNBVGY3TQ
             let eng = crate::totp::TfaTotp::from_input(&item.account, &item.secret).unwrap();
             assert_eq!(eng.generate_current().len(), 6);
         }
+    }
+
+    #[test]
+    fn test_import_totp_cli_yaml() {
+        let yaml = "\
+- name: default
+  accounts:
+    - name: github
+      token: JBSWY3DPEHPK3PXP
+- name: work
+  accounts:
+    - name: aws
+      token: GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ
+      length: 8
+      timePeriod: 60
+      algorithm: sha256
+      prefix: mypin
+    - name: gitlab
+      token: JBSWY3DPEHPK3PXP
+";
+
+        let items = parse_import_payload(yaml).unwrap();
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].account, "github");
+        assert_eq!(items[0].secret, "JBSWY3DPEHPK3PXP");
+        assert_eq!(items[1].account, "work:aws");
+        assert!(items[1].secret.contains("digits=8"));
+        assert!(items[1].secret.contains("period=60"));
+        assert!(items[1].secret.contains("algorithm=SHA256"));
+        assert!(items[1].secret.contains("prefix=mypin"));
+        assert_eq!(items[2].account, "work:gitlab");
+
+        let eng0 = crate::totp::TfaTotp::from_input(&items[0].account, &items[0].secret).unwrap();
+        assert_eq!(eng0.digits(), 6);
+
+        let eng1 = crate::totp::TfaTotp::from_input(&items[1].account, &items[1].secret).unwrap();
+        assert_eq!(eng1.digits(), 8);
+        assert_eq!(eng1.step(), 60);
+        assert_eq!(eng1.algorithm(), totp_rs::Algorithm::SHA256);
     }
 }

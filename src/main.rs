@@ -247,6 +247,33 @@ pub enum Commands {
         /// Initial counter for counter-based (HOTP) accounts
         #[arg(short, long)]
         counter: Option<u64>,
+        /// Static prefix (e.g. PIN) prepended to generated OTP tokens
+        #[arg(long)]
+        prefix: Option<String>,
+    },
+    /// Edit parameters or prefix of an existing account in-place
+    #[command(alias = "set")]
+    Edit {
+        /// Name of the account
+        account: String,
+        /// Number of digits in generated code (e.g. 5, 6, 8)
+        #[arg(short, long)]
+        digits: Option<u8>,
+        /// Time step period in seconds (e.g. 30 or 60)
+        #[arg(short, long)]
+        period: Option<u64>,
+        /// Hash algorithm (sha1, sha256, sha512, steam)
+        #[arg(short, long)]
+        algorithm: Option<totp_rs::Algorithm>,
+        /// Counter for counter-based (HOTP) accounts
+        #[arg(short, long)]
+        counter: Option<u64>,
+        /// Static prefix (e.g. PIN) prepended to generated OTP tokens
+        #[arg(long, conflicts_with = "clear_prefix")]
+        prefix: Option<String>,
+        /// Clear any configured token prefix
+        #[arg(long, conflicts_with = "prefix")]
+        clear_prefix: bool,
     },
     /// Render account as a terminal QR code for mobile authenticator scanning
     Qr {
@@ -499,6 +526,8 @@ pub struct AccountDetails {
     pub period: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub counter: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
     pub live_code: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ttl: Option<u64>,
@@ -867,7 +896,7 @@ pub fn run_app(
     clipboard: &dyn Clipboard,
     out_writer: &mut dyn Write,
 ) -> anyhow::Result<()> {
-    let (resolved_cfg, config_file) = config::resolve_configuration(
+    let (mut resolved_cfg, config_file) = config::resolve_configuration(
         cli.config.as_deref(),
         cli.storage,
         cli.clipboard,
@@ -1200,6 +1229,57 @@ pub fn run_app(
         }
     }
 
+    // Resolve inline `namespace/account` addressing across account-scoped commands
+    let has_explicit_ns = cli.namespace.is_some();
+    let mut apply_inline_ns = |acct: &mut String| {
+        if let Some((inline_ns, clean_acct)) = namespace::split_inline_account(acct) {
+            if !has_explicit_ns {
+                resolved_cfg.namespace = inline_ns;
+            }
+            *acct = clean_acct;
+        }
+    };
+    match &mut cli.command {
+        Some(Commands::Generate {
+            account: Some(ref mut a),
+            secret: None,
+            ..
+        })
+        | Some(Commands::Add {
+            account: Some(ref mut a),
+            ..
+        })
+        | Some(Commands::Edit {
+            account: ref mut a, ..
+        })
+        | Some(Commands::Delete {
+            account: Some(ref mut a),
+        })
+        | Some(Commands::Show {
+            account: ref mut a, ..
+        })
+        | Some(Commands::Qr {
+            account: ref mut a, ..
+        })
+        | Some(Commands::Move {
+            account: ref mut a, ..
+        }) => apply_inline_ns(a),
+        Some(Commands::Watch {
+            account: Some(ref mut a),
+            ..
+        }) if a != "all" => apply_inline_ns(a),
+        Some(Commands::Rename {
+            old_name: ref mut a,
+            new_name: ref mut b,
+        }) => {
+            apply_inline_ns(a);
+            if let Some((_, clean_b)) = namespace::split_inline_account(b) {
+                *b = clean_b;
+            }
+        }
+        _ => {}
+    }
+
     // For all other commands, scope store access to the active namespace
     let root_store = store;
     let scoped_store = NamespaceStore::new(root_store, &resolved_cfg.namespace);
@@ -1452,6 +1532,7 @@ pub fn run_app(
             period,
             algorithm,
             counter,
+            prefix,
         }) => {
             let (target_account, raw_secret) = if let Some(qr_path) = qr {
                 let decoded = qr::scan_qr_from_image(&qr_path)?;
@@ -1501,7 +1582,7 @@ pub fn run_app(
             let resolved_algorithm = algorithm.or(resolved_cfg.algorithm);
 
             // Validate and generate canonical OTPAuth URL with custom parameters
-            let engine = TfaTotp::build(
+            let mut engine = TfaTotp::build(
                 &target_account,
                 &raw_secret,
                 resolved_digits,
@@ -1509,9 +1590,39 @@ pub fn run_app(
                 resolved_algorithm,
                 counter,
             )?;
+            if let Some(pfx) = prefix {
+                engine.set_prefix(Some(pfx));
+            }
             let url = engine.to_url()?;
             store.set_secret(&target_account, &url)?;
             writeln!(out_writer, "Account '{target_account}' added successfully.")?;
+        }
+        Some(Commands::Edit {
+            account,
+            digits,
+            period,
+            algorithm,
+            counter,
+            prefix,
+            clear_prefix,
+        }) => {
+            let existing_secret = store.get_secret(&account)?;
+            let mut engine = TfaTotp::build(
+                &account,
+                &existing_secret,
+                digits,
+                period,
+                algorithm,
+                counter,
+            )?;
+            if clear_prefix {
+                engine.set_prefix(None);
+            } else if let Some(pfx) = prefix {
+                engine.set_prefix(Some(pfx));
+            }
+            let url = engine.to_url()?;
+            store.set_secret(&account, &url)?;
+            writeln!(out_writer, "Account '{account}' updated.")?;
         }
         Some(Commands::Qr { account, light }) => {
             let secret = store.get_secret(&account)?;
@@ -1676,6 +1787,7 @@ pub fn run_app(
                     } else {
                         None
                     },
+                    prefix: engine.prefix().map(|s| s.to_string()),
                     live_code: engine.generate_current(),
                     ttl: if is_hotp { None } else { Some(engine.ttl()) },
                 };
@@ -1684,6 +1796,9 @@ pub fn run_app(
                 let engine = TfaTotp::from_input(&account, &secret)?;
                 writeln!(out_writer, "Account:   {account}")?;
                 writeln!(out_writer, "Type:      {}", engine.account_type())?;
+                if let Some(pfx) = engine.prefix() {
+                    writeln!(out_writer, "Prefix:    {pfx}")?;
+                }
                 if engine.is_hotp() {
                     writeln!(out_writer, "Digits:    {}", engine.digits())?;
                     writeln!(out_writer, "Counter:   {}", engine.counter().unwrap_or(0))?;
@@ -1832,6 +1947,8 @@ pub fn run_app(
                     || file_or_payload.ends_with(".pgp")
                     || file_or_payload.ends_with(".txt")
                     || file_or_payload.ends_with(".csv")
+                    || file_or_payload.ends_with(".yaml")
+                    || file_or_payload.ends_with(".yml")
                     || file_or_payload.ends_with(".png")
                     || file_or_payload.ends_with(".jpg")
                     || file_or_payload.ends_with(".jpeg")
@@ -3414,6 +3531,37 @@ mod tests {
         assert!(accounts.contains(&"Test1:test1@example1.com".to_string()));
         assert!(accounts.contains(&"Test2:test2@example2.com".to_string()));
         assert!(accounts.contains(&"Test3:test3@example3.com".to_string()));
+    }
+
+    #[test]
+    fn test_run_app_import_totp_cli_yaml_file() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("dump.yaml");
+        let payload = "\
+- name: default
+  accounts:
+    - name: github
+      token: JBSWY3DPEHPK3PXP
+- name: work
+  accounts:
+    - name: aws
+      token: GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ
+      length: 8
+";
+        std::fs::write(&file_path, payload).unwrap();
+
+        let import_cli =
+            Cli::try_parse_from(["tfa", "import", file_path.to_str().unwrap()]).unwrap();
+        assert!(run_app(import_cli, &store, &cb, &mut out).is_ok());
+
+        let accounts = store.list_accounts().unwrap();
+        assert_eq!(accounts.len(), 2);
+        assert!(accounts.contains(&"github".to_string()));
+        assert!(accounts.contains(&"work:aws".to_string()));
     }
 
     #[test]
@@ -5965,5 +6113,145 @@ light: true
         let mut out_status_json = Vec::new();
         assert!(run_app(cli_status_json, &store, &cb, &mut out_status_json).is_ok());
         assert_eq!(String::from_utf8(out_status_json).unwrap().trim(), "[]");
+    }
+
+    #[test]
+    fn test_run_app_inline_namespace_account_addressing() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        // 1. Add account via inline namespace/account
+        let mut out = Vec::new();
+        let add_cli =
+            Cli::try_parse_from(["tfa", "add", "work/github", "JBSWY3DPEHPK3PXP"]).unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+        assert!(store
+            .list_accounts()
+            .unwrap()
+            .contains(&"work:github".to_string()));
+
+        // 2. Generate via inline namespace/account
+        out.clear();
+        let gen_cli = Cli::try_parse_from(["tfa", "generate", "work/github", "-q"]).unwrap();
+        assert!(run_app(gen_cli, &store, &cb, &mut out).is_ok());
+        assert_eq!(String::from_utf8(out.clone()).unwrap().trim().len(), 6);
+
+        // 3. Show via inline namespace/account
+        out.clear();
+        let show_cli = Cli::try_parse_from(["tfa", "show", "work/github", "--json"]).unwrap();
+        assert!(run_app(show_cli, &store, &cb, &mut out).is_ok());
+        let show_val: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(show_val["account"], "github");
+
+        // 4. Rename via inline namespace/account
+        out.clear();
+        let ren_cli = Cli::try_parse_from(["tfa", "rename", "work/github", "gh"]).unwrap();
+        assert!(run_app(ren_cli, &store, &cb, &mut out).is_ok());
+        assert!(store
+            .list_accounts()
+            .unwrap()
+            .contains(&"work:gh".to_string()));
+
+        // 5. Move via inline namespace/account
+        out.clear();
+        let mv_cli = Cli::try_parse_from(["tfa", "move", "work/gh", "--to", "home"]).unwrap();
+        assert!(run_app(mv_cli, &store, &cb, &mut out).is_ok());
+        assert!(store
+            .list_accounts()
+            .unwrap()
+            .contains(&"home:gh".to_string()));
+
+        // 6. Explicit -n flag takes precedence over inline namespace
+        store.set_secret("override:gh", "JBSWY3DPEHPK3PXP").unwrap();
+        out.clear();
+        let prec_cli =
+            Cli::try_parse_from(["tfa", "-n", "override", "show", "home/gh", "--raw"]).unwrap();
+        assert!(run_app(prec_cli, &store, &cb, &mut out).is_ok());
+        assert_eq!(
+            String::from_utf8(out.clone()).unwrap().trim(),
+            "JBSWY3DPEHPK3PXP"
+        );
+
+        // 7. Delete via inline namespace/account
+        out.clear();
+        let del_cli = Cli::try_parse_from(["tfa", "delete", "home/gh"]).unwrap();
+        assert!(run_app(del_cli, &store, &cb, &mut out).is_ok());
+        assert!(!store
+            .list_accounts()
+            .unwrap()
+            .contains(&"home:gh".to_string()));
+    }
+
+    #[test]
+    fn test_run_app_add_and_edit_with_prefix() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        // 1. Add account with --prefix
+        let add_cli = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "work/vpn",
+            "JBSWY3DPEHPK3PXP",
+            "--prefix",
+            "1234",
+        ])
+        .unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // 2. Generate token -> should start with "1234" and be 4 + 6 = 10 chars
+        out.clear();
+        let gen_cli = Cli::try_parse_from(["tfa", "generate", "work/vpn", "-q"]).unwrap();
+        assert!(run_app(gen_cli, &store, &cb, &mut out).is_ok());
+        let tok1 = String::from_utf8(out.clone()).unwrap().trim().to_string();
+        assert!(tok1.starts_with("1234"));
+        assert_eq!(tok1.len(), 10);
+
+        // 3. Edit digits, period, algorithm in-place (preserving existing prefix)
+        out.clear();
+        let edit_cli = Cli::try_parse_from([
+            "tfa",
+            "edit",
+            "work/vpn",
+            "--digits",
+            "8",
+            "--period",
+            "60",
+            "--algorithm",
+            "sha256",
+        ])
+        .unwrap();
+        assert!(run_app(edit_cli, &store, &cb, &mut out).is_ok());
+
+        out.clear();
+        let gen2 = Cli::try_parse_from(["tfa", "generate", "work/vpn", "-q"]).unwrap();
+        assert!(run_app(gen2, &store, &cb, &mut out).is_ok());
+        let tok2 = String::from_utf8(out.clone()).unwrap().trim().to_string();
+        assert!(tok2.starts_with("1234"));
+        assert_eq!(tok2.len(), 12);
+
+        // 4. Edit prefix to new value
+        out.clear();
+        let edit_pfx = Cli::try_parse_from(["tfa", "edit", "work/vpn", "--prefix", "99"]).unwrap();
+        assert!(run_app(edit_pfx, &store, &cb, &mut out).is_ok());
+
+        out.clear();
+        let gen3 = Cli::try_parse_from(["tfa", "generate", "work/vpn", "-q"]).unwrap();
+        assert!(run_app(gen3, &store, &cb, &mut out).is_ok());
+        let tok3 = String::from_utf8(out.clone()).unwrap().trim().to_string();
+        assert!(tok3.starts_with("99"));
+        assert_eq!(tok3.len(), 10);
+
+        // 5. Clear prefix with --clear-prefix
+        out.clear();
+        let clear_cli = Cli::try_parse_from(["tfa", "edit", "work/vpn", "--clear-prefix"]).unwrap();
+        assert!(run_app(clear_cli, &store, &cb, &mut out).is_ok());
+
+        out.clear();
+        let gen4 = Cli::try_parse_from(["tfa", "generate", "work/vpn", "-q"]).unwrap();
+        assert!(run_app(gen4, &store, &cb, &mut out).is_ok());
+        let tok4 = String::from_utf8(out.clone()).unwrap().trim().to_string();
+        assert_eq!(tok4.len(), 8);
     }
 }

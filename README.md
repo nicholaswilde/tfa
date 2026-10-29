@@ -82,6 +82,7 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `watch` | Watch live TOTP countdown with progress bar | `tfa watch [account] [-c]` |
 | `watch all` | Watch all passwords in active namespace | `tfa watch all` |
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
+| `edit` (`set`) | Edit parameters or prefix of an existing account in-place | `tfa edit github --digits 8 --prefix 1234` |
 | `qr` | Render account as terminal QR code | `tfa qr github [--light]` |
 | `list` (`ls`) | List all configured accounts | `tfa list [--codes] [--json]` |
 | `status` | Live overview of all accounts and tokens | `tfa status [--json]` |
@@ -120,6 +121,13 @@ Enter TOTP secret for 'aws':
 # Import directly from a QR code image / screenshot:
 tfa add --qr /path/to/qr_screenshot.png
 tfa add my_account --qr /path/to/qr_screenshot.png
+
+# Add account with a static PIN / prefix prepended to generated OTP tokens:
+tfa add vpn JBSWY3DPEHPK3PXP --prefix 1234
+
+# Edit an existing account's parameters or prefix in-place:
+tfa edit vpn --digits 8 --period 60 --prefix 9999
+tfa edit vpn --clear-prefix
 ```
 
 ### QR Code Display
@@ -327,8 +335,9 @@ tfa import backup.gpg
 tfa import google_qr.png
 tfa import "otpauth-migration://offline?data=..."
 
-# Import from 2FAS (*.2fas), Bitwarden (JSON/CSV), 1Password (CSV), Aegis, LastPass, Proton, andOTP, Raivo OTP, Ente Auth, or Stratum export:
+# Import from 2FAS (*.2fas), totp-cli (YAML), Bitwarden (JSON/CSV), 1Password (CSV), Aegis, LastPass, Proton, andOTP, Raivo OTP, Ente Auth, or Stratum export:
 tfa import backup.2fas
+tfa import dump.yaml
 tfa import bitwarden_export.json
 tfa import 1password_export.csv
 tfa import ente_export.txt

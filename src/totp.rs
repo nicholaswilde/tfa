@@ -183,6 +183,17 @@ pub enum TfaEngine {
 
 pub struct TfaTotp {
     inner: TfaEngine,
+    prefix: Option<String>,
+}
+
+fn extract_prefix_from_url(url_str: &str) -> Option<String> {
+    let u = url::Url::parse(url_str).ok()?;
+    for (k, v) in u.query_pairs() {
+        if k == "prefix" && !v.is_empty() {
+            return Some(v.into_owned());
+        }
+    }
+    None
 }
 
 fn normalize_otpauth_url(url_str: &str) -> String {
@@ -233,6 +244,11 @@ impl TfaTotp {
         counter: Option<u64>,
     ) -> Result<Self> {
         let input = input.trim();
+        let prefix = if input.starts_with("otpauth://") {
+            extract_prefix_from_url(input)
+        } else {
+            None
+        };
 
         // 1. If counter is explicitly provided or URL is otpauth://hotp/, build HOTP
         if counter.is_some() || input.starts_with("otpauth://hotp/") {
@@ -274,6 +290,7 @@ impl TfaTotp {
 
             return Ok(Self {
                 inner: TfaEngine::Hotp(hotp),
+                prefix,
             });
         }
 
@@ -340,7 +357,25 @@ impl TfaTotp {
 
         Ok(Self {
             inner: TfaEngine::Totp(totp),
+            prefix,
         })
+    }
+
+    /// Optional static prefix prepended to generated OTP tokens
+    pub fn prefix(&self) -> Option<&str> {
+        self.prefix.as_deref()
+    }
+
+    /// Set or clear token prefix
+    pub fn set_prefix(&mut self, prefix: Option<String>) {
+        self.prefix = prefix.filter(|p| !p.is_empty());
+    }
+
+    fn apply_prefix(&self, code: String) -> String {
+        match &self.prefix {
+            Some(pfx) if !pfx.is_empty() => format!("{pfx}{code}"),
+            _ => code,
+        }
     }
 
     /// True if account is counter-based (HOTP)
@@ -381,7 +416,8 @@ impl TfaTotp {
     pub fn generate_at_counter(&self, counter: u64) -> Result<String> {
         match &self.inner {
             TfaEngine::Hotp(h) => {
-                generate_hotp(h.secret.as_bytes(), counter, h.digits, h.algorithm)
+                let code = generate_hotp(h.secret.as_bytes(), counter, h.digits, h.algorithm)?;
+                Ok(self.apply_prefix(code))
             }
             TfaEngine::Totp(_) => {
                 anyhow::bail!("Counter generation only supported for HOTP accounts")
@@ -391,19 +427,22 @@ impl TfaTotp {
 
     /// Generate current TOTP code or current-counter HOTP code
     pub fn generate_current(&self) -> String {
-        match &self.inner {
+        let code = match &self.inner {
             TfaEngine::Totp(totp) => totp.generate_current().to_string(),
             TfaEngine::Hotp(h) => {
                 generate_hotp(h.secret.as_bytes(), h.counter, h.digits, h.algorithm)
                     .unwrap_or_default()
             }
-        }
+        };
+        self.apply_prefix(code)
     }
 
     /// Generate TOTP code for the next time step
     pub fn generate_next(&self) -> Result<String> {
         match &self.inner {
-            TfaEngine::Totp(totp) => Ok(totp.generate(totp.next_step_current()).to_string()),
+            TfaEngine::Totp(totp) => {
+                Ok(self.apply_prefix(totp.generate(totp.next_step_current()).to_string()))
+            }
             TfaEngine::Hotp(_) => {
                 anyhow::bail!(
                     "Next-token preview is not supported for counter-based (HOTP) accounts"
@@ -416,7 +455,7 @@ impl TfaTotp {
     #[cfg(test)]
     pub fn generate_at_time(&self, time: u64) -> Result<String> {
         match &self.inner {
-            TfaEngine::Totp(totp) => Ok(totp.generate(time).to_string()),
+            TfaEngine::Totp(totp) => Ok(self.apply_prefix(totp.generate(time).to_string())),
             TfaEngine::Hotp(_) => {
                 anyhow::bail!("Time-based generation only supported for TOTP accounts")
             }
@@ -427,7 +466,9 @@ impl TfaTotp {
     #[cfg(test)]
     pub fn generate_next_at_time(&self, time: u64) -> Result<String> {
         match &self.inner {
-            TfaEngine::Totp(totp) => Ok(totp.generate(totp.next_step(time)).to_string()),
+            TfaEngine::Totp(totp) => {
+                Ok(self.apply_prefix(totp.generate(totp.next_step(time)).to_string()))
+            }
             TfaEngine::Hotp(_) => {
                 anyhow::bail!(
                     "Next-token preview is not supported for counter-based (HOTP) accounts"
@@ -494,12 +535,21 @@ impl TfaTotp {
 
     /// Canonical OTPAuth URL representation
     pub fn to_url(&self) -> Result<String> {
-        match &self.inner {
+        let base = match &self.inner {
             TfaEngine::Totp(totp) => totp
                 .to_url()
-                .map_err(|e| anyhow::anyhow!("Failed exporting OTPAuth URL: {e}")),
-            TfaEngine::Hotp(h) => h.to_url(),
+                .map_err(|e| anyhow::anyhow!("Failed exporting OTPAuth URL: {e}"))?,
+            TfaEngine::Hotp(h) => h.to_url()?,
+        };
+        if let Some(ref pfx) = self.prefix {
+            if !pfx.is_empty() {
+                if let Ok(mut u) = url::Url::parse(&base) {
+                    u.query_pairs_mut().append_pair("prefix", pfx);
+                    return Ok(u.to_string());
+                }
+            }
         }
+        Ok(base)
     }
 }
 
@@ -769,6 +819,7 @@ mod tests {
         .unwrap();
         let hotp_tfa = TfaTotp {
             inner: TfaEngine::Hotp(hotp),
+            prefix: None,
         };
         assert!(hotp_tfa.generate_next().is_err());
         assert!(hotp_tfa.generate_next_at_time(t1).is_err());
