@@ -1,6 +1,6 @@
 [package]
 name = "tfa"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 authors = ["Nicholas Wilde"]
 description = "A CLI two-factor authentication (2FA / TOTP) application"
