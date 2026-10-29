@@ -2,7 +2,7 @@ use anyhow::Context;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use std::collections::BTreeMap;
-use std::io::{self, BufRead, IsTerminal, Write};
+use std::io::{self, BufRead, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 
 mod aegis;
@@ -13,6 +13,7 @@ mod clipboard;
 mod config;
 mod ente;
 mod import;
+mod migrate;
 mod namespace;
 mod qr;
 mod storage;
@@ -22,6 +23,7 @@ mod watch;
 
 use clipboard::{Clipboard, ClipboardProvider, DispatchingClipboard};
 use config::ConfigFile;
+pub use migrate::MigrateBackend;
 use namespace::NamespaceStore;
 use storage::{AccountStore, AgeStore, AutoStore, FileStore, KeyringStore};
 use totp::TfaTotp;
@@ -75,6 +77,30 @@ pub struct Cli {
     /// Custom clipboard command to receive token via standard input (e.g. wl-copy, pbcopy, xclip)
     #[arg(long, env = "TFA_CLIP_COMMAND", global = true)]
     pub clip_command: Option<String>,
+
+    /// Automatically clear copied clipboard token after timeout in seconds (or 0 / false to disable)
+    #[arg(
+        long,
+        value_name = "SECONDS",
+        num_args = 0..=1,
+        default_missing_value = "true",
+        global = true,
+        conflicts_with = "no_clear"
+    )]
+    pub clear_after: Option<String>,
+
+    /// Disable automatic clipboard clearing
+    #[arg(
+        long,
+        visible_alias = "no-clear-after",
+        global = true,
+        conflicts_with = "clear_after"
+    )]
+    pub no_clear: bool,
+
+    /// Internal background clipboard clear worker flag
+    #[arg(long, hide = true)]
+    pub internal_clear_clipboard: Option<u64>,
 
     /// Target namespace for account scoping (e.g. personal, work, home)
     #[arg(
@@ -151,6 +177,17 @@ pub enum Commands {
         /// Hash algorithm (sha1, sha256, sha512, steam)
         #[arg(short, long)]
         algorithm: Option<totp_rs::Algorithm>,
+        /// Unix timestamp in seconds for TOTP generation
+        #[arg(long, conflicts_with = "watch", conflicts_with = "counter")]
+        at: Option<u64>,
+        /// Relative time offset in seconds (e.g. +30, -60) for TOTP generation
+        #[arg(
+            long,
+            allow_hyphen_values = true,
+            conflicts_with = "watch",
+            conflicts_with = "counter"
+        )]
+        skew: Option<i64>,
         /// Preview upcoming token for next time step
         #[arg(long, conflicts_with = "watch", conflicts_with = "counter")]
         next: bool,
@@ -194,6 +231,17 @@ pub enum Commands {
         /// Initial/current counter for counter-based (HOTP) token generation
         #[arg(long)]
         counter: Option<u64>,
+        /// Unix timestamp in seconds for TOTP generation
+        #[arg(long, conflicts_with = "watch", conflicts_with = "counter")]
+        at: Option<u64>,
+        /// Relative time offset in seconds (e.g. +30, -60) for TOTP generation
+        #[arg(
+            long,
+            allow_hyphen_values = true,
+            conflicts_with = "watch",
+            conflicts_with = "counter"
+        )]
+        skew: Option<i64>,
         /// Copy generated token to clipboard
         #[arg(short, long, num_args = 0..=1, default_missing_value = "true")]
         copy: Option<bool>,
@@ -381,6 +429,24 @@ pub enum Commands {
         /// Master passphrase for encrypted backup (prompted securely if omitted)
         #[arg(long, env = "TFA_PASSWORD")]
         password: Option<String>,
+    },
+    /// Migrate accounts directly in memory across storage backends (keyring, file, age)
+    Migrate {
+        /// Source storage backend to read accounts from
+        #[arg(long, value_name = "BACKEND")]
+        from: MigrateBackend,
+        /// Destination storage backend to write accounts to
+        #[arg(long, value_name = "BACKEND")]
+        to: MigrateBackend,
+        /// Overwrite existing accounts in destination storage
+        #[arg(long)]
+        overwrite: bool,
+        /// Preview migration without writing to destination or deleting from source
+        #[arg(long)]
+        dry_run: bool,
+        /// Delete migrated accounts from source storage after transfer
+        #[arg(long)]
+        purge_source: bool,
     },
     /// Generate shell autocompletions script
     Completions {
@@ -817,9 +883,11 @@ pub fn is_stdout_quiet(quiet_flag: Option<bool>) -> bool {
 #[derive(Default, Clone, Copy)]
 struct EmitOptions {
     counter: Option<u64>,
+    at_time: Option<u64>,
     next: bool,
     json: bool,
     should_copy: bool,
+    clear_after: Option<u64>,
     quiet: bool,
 }
 
@@ -834,10 +902,13 @@ fn emit_instant_token(
         if opts.next {
             anyhow::bail!("--next is only supported for time-based (TOTP) accounts");
         }
+        if opts.at_time.is_some() {
+            anyhow::bail!("--at and --skew are only supported for time-based (TOTP) accounts");
+        }
         let c = opts.counter.or_else(|| engine.counter()).unwrap_or(0);
         let code = engine.generate_at_counter(c)?;
         if opts.should_copy {
-            clipboard.set_text(&code)?;
+            clipboard.set_text_with_timeout(&code, opts.clear_after)?;
         }
         if opts.json {
             let res = GenerateResult {
@@ -861,15 +932,20 @@ fn emit_instant_token(
         if opts.counter.is_some() {
             anyhow::bail!("--counter can only be used with HOTP accounts");
         }
-        let code = engine.generate_current();
-        let ttl = engine.ttl();
+        let (code, ttl) = match opts.at_time {
+            Some(t) => (engine.generate_at_time(t)?, engine.ttl_at_time(t)),
+            None => (engine.generate_current(), engine.ttl()),
+        };
         let next_code = if opts.next {
-            Some(engine.generate_next()?)
+            Some(match opts.at_time {
+                Some(t) => engine.generate_next_at_time(t)?,
+                None => engine.generate_next()?,
+            })
         } else {
             None
         };
         if opts.should_copy {
-            clipboard.set_text(&code)?;
+            clipboard.set_text_with_timeout(&code, opts.clear_after)?;
         }
         if opts.json {
             let res = GenerateResult {
@@ -906,6 +982,14 @@ pub fn run_app(
         cli.namespace.clone(),
     )?;
 
+    let effective_clear_after = if cli.no_clear {
+        None
+    } else if let Some(ref ca) = cli.clear_after {
+        config::parse_clipboard_timeout_str(ca, resolved_cfg.clipboard_timeout)?
+    } else {
+        resolved_cfg.clipboard_timeout
+    };
+
     // Default to configured default command (defaulting to "list") when no command is supplied
     if cli.command.is_none() {
         cli.command = match resolved_cfg.default_command.as_str() {
@@ -930,6 +1014,7 @@ pub fn run_app(
             Some(Commands::List { .. }) => {}
             Some(Commands::Status { .. }) => {}
             Some(Commands::Export { .. }) => {}
+            Some(Commands::Migrate { .. }) => {}
             Some(Commands::Watch {
                 command,
                 account,
@@ -1297,12 +1382,15 @@ pub fn run_app(
             digits,
             period,
             algorithm,
+            at,
+            skew,
             next,
             json,
             quiet,
         }) => {
             let is_quiet =
                 quiet.unwrap_or_else(|| !next && !json && !watch && is_stdout_quiet(None));
+            let at_time = totp::resolve_effective_time(at, skew)?;
             if let Some(sec) = secret {
                 let resolved_digits = digits.or(resolved_cfg.digits);
                 let resolved_period = period.or(resolved_cfg.period);
@@ -1341,9 +1429,11 @@ pub fn run_app(
                         &engine,
                         EmitOptions {
                             counter: c_val,
+                            at_time,
                             next,
                             json,
                             should_copy,
+                            clear_after: effective_clear_after,
                             quiet: is_quiet,
                         },
                         clipboard,
@@ -1372,6 +1462,11 @@ pub fn run_app(
                     if next {
                         anyhow::bail!("--next is only supported for time-based (TOTP) accounts");
                     }
+                    if at_time.is_some() {
+                        anyhow::bail!(
+                            "--at and --skew are only supported for time-based (TOTP) accounts"
+                        );
+                    }
                     let current_c = match counter {
                         Some(Some(c)) => c,
                         _ => engine.counter().unwrap_or(0),
@@ -1381,7 +1476,7 @@ pub fn run_app(
                     store.set_secret(&acct, &engine.to_url()?)?;
 
                     if should_copy {
-                        clipboard.set_text(&code)?;
+                        clipboard.set_text_with_timeout(&code, effective_clear_after)?;
                     }
                     if json {
                         let res = GenerateResult {
@@ -1405,15 +1500,20 @@ pub fn run_app(
                     if counter.is_some() {
                         anyhow::bail!("--counter can only be used with HOTP accounts");
                     }
-                    let code = engine.generate_current();
-                    let ttl = engine.ttl();
+                    let (code, ttl) = match at_time {
+                        Some(t) => (engine.generate_at_time(t)?, engine.ttl_at_time(t)),
+                        None => (engine.generate_current(), engine.ttl()),
+                    };
                     let next_code = if next {
-                        Some(engine.generate_next()?)
+                        Some(match at_time {
+                            Some(t) => engine.generate_next_at_time(t)?,
+                            None => engine.generate_next()?,
+                        })
                     } else {
                         None
                     };
                     if should_copy {
-                        clipboard.set_text(&code)?;
+                        clipboard.set_text_with_timeout(&code, effective_clear_after)?;
                     }
                     if json {
                         let res = GenerateResult {
@@ -1444,11 +1544,14 @@ pub fn run_app(
             period,
             algorithm,
             counter,
+            at,
+            skew,
             copy,
             watch,
             quiet,
         }) => {
             let is_quiet = quiet.unwrap_or_else(|| !watch && is_stdout_quiet(None));
+            let at_time = totp::resolve_effective_time(at, skew)?;
             let secret_val = resolve_instant_secret(secret.or(secret_flag), qr.as_deref())?;
             let resolved_digits = digits.or(resolved_cfg.digits);
             let resolved_period = period.or(resolved_cfg.period);
@@ -1475,9 +1578,11 @@ pub fn run_app(
                     &engine,
                     EmitOptions {
                         counter,
+                        at_time,
                         next: false,
                         json: false,
                         should_copy,
+                        clear_after: effective_clear_after,
                         quiet: is_quiet,
                     },
                     clipboard,
@@ -2060,6 +2165,30 @@ pub fn run_app(
                 )?;
             }
         }
+        Some(Commands::Migrate {
+            from,
+            to,
+            overwrite,
+            dry_run,
+            purge_source,
+        }) => {
+            let age_key = cli
+                .age_key
+                .clone()
+                .or_else(|| config_file.as_ref().and_then(|c| c.age_key.clone()));
+            let ssh_key = cli
+                .ssh_key
+                .clone()
+                .or_else(|| std::env::var("TFA_SSH_KEY").ok().map(PathBuf::from))
+                .or_else(|| std::env::var("TFA_AGE_SSH_KEY").ok().map(PathBuf::from))
+                .or_else(|| config_file.as_ref().and_then(|c| c.ssh_key.clone()));
+            let opts = migrate::MigrateOptions {
+                overwrite,
+                dry_run,
+                purge_source,
+            };
+            migrate::run_migrate(from, to, opts, age_key, ssh_key, out_writer)?;
+        }
         Some(Commands::Namespace { .. }) => unreachable!("Handled above"),
         Some(Commands::Password { .. }) => unreachable!("Handled above"),
         Some(Commands::Audit { json }) => {
@@ -2156,6 +2285,16 @@ fn main() -> anyhow::Result<()> {
 
     let clipboard =
         DispatchingClipboard::new(resolved_cfg.clipboard, resolved_cfg.clip_command.clone());
+
+    if let Some(secs) = cli.internal_clear_clipboard {
+        let mut expected = String::new();
+        let _ = io::stdin().read_to_string(&mut expected);
+        if secs > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(secs));
+        }
+        let _ = clipboard.clear_if_matches(&expected);
+        return Ok(());
+    }
 
     let store: Box<dyn AccountStore> = match resolved_cfg.storage {
         StorageBackend::Auto => Box::new(AutoStore::default_auto()?),
@@ -5040,6 +5179,8 @@ light: true
                 period,
                 algorithm,
                 counter,
+                at,
+                skew,
                 copy,
                 watch,
                 quiet,
@@ -5051,6 +5192,8 @@ light: true
                 assert_eq!(period, None);
                 assert_eq!(algorithm, None);
                 assert_eq!(counter, None);
+                assert_eq!(at, None);
+                assert_eq!(skew, None);
                 assert_eq!(copy, None);
                 assert!(!watch);
                 assert_eq!(quiet, None);
@@ -6387,5 +6530,368 @@ light: true
         assert!(run_app(gen4, &store, &cb, &mut out).is_ok());
         let tok4 = String::from_utf8(out.clone()).unwrap().trim().to_string();
         assert_eq!(tok4.len(), 8);
+    }
+
+    #[test]
+    fn test_run_app_generate_and_instant_at_and_skew() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        // RFC 6238 SHA1 secret: "12345678901234567890" -> GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ
+        let secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+        let add_cli = Cli::try_parse_from(["tfa", "add", "rfc", secret]).unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // 1. Generate at exact timestamp 59 -> 287082 (1s remaining)
+        out.clear();
+        let gen_at =
+            Cli::try_parse_from(["tfa", "generate", "rfc", "--at", "59", "--quiet=false"]).unwrap();
+        assert!(run_app(gen_at, &store, &cb, &mut out).is_ok());
+        let s_at = String::from_utf8(out.clone()).unwrap();
+        assert_eq!(s_at.trim(), "287082 (1s remaining)");
+
+        // 2. Generate at timestamp 90 with negative skew -31 -> effective timestamp 59 -> 287082
+        out.clear();
+        let gen_skew = Cli::try_parse_from([
+            "tfa", "generate", "rfc", "--at", "90", "--skew", "-31", "-q",
+        ])
+        .unwrap();
+        assert!(run_app(gen_skew, &store, &cb, &mut out).is_ok());
+        assert_eq!(String::from_utf8(out.clone()).unwrap().trim(), "287082");
+
+        // 3. Relative --skew +30 matches current --next token
+        out.clear();
+        let gen_next = Cli::try_parse_from(["tfa", "generate", "rfc", "--next", "--json"]).unwrap();
+        assert!(run_app(gen_next, &store, &cb, &mut out).is_ok());
+        let next_json: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        let expected_next = next_json["next_token"].as_str().unwrap().to_string();
+
+        out.clear();
+        let gen_plus_30 =
+            Cli::try_parse_from(["tfa", "generate", "rfc", "--skew", "+30", "-q"]).unwrap();
+        assert!(run_app(gen_plus_30, &store, &cb, &mut out).is_ok());
+        assert_eq!(
+            String::from_utf8(out.clone()).unwrap().trim(),
+            expected_next
+        );
+
+        // 4. Instant with --at 59 and --at 90 --skew -31
+        out.clear();
+        let ins_at = Cli::try_parse_from(["tfa", "instant", secret, "--at", "59", "-q"]).unwrap();
+        assert!(run_app(ins_at, &store, &cb, &mut out).is_ok());
+        assert_eq!(String::from_utf8(out.clone()).unwrap().trim(), "287082");
+
+        out.clear();
+        let ins_skew = Cli::try_parse_from([
+            "tfa", "instant", secret, "--at", "90", "--skew", "-31", "-q",
+        ])
+        .unwrap();
+        assert!(run_app(ins_skew, &store, &cb, &mut out).is_ok());
+        assert_eq!(String::from_utf8(out.clone()).unwrap().trim(), "287082");
+
+        // 5. Negative resulting timestamp errors cleanly
+        out.clear();
+        let bad_skew =
+            Cli::try_parse_from(["tfa", "generate", "rfc", "--at", "10", "--skew", "-20"]).unwrap();
+        assert!(run_app(bad_skew, &store, &cb, &mut out).is_err());
+
+        // 6. --at with --next previews the step following the overridden timestamp
+        out.clear();
+        let gen_at_next =
+            Cli::try_parse_from(["tfa", "generate", "rfc", "--at", "29", "--next"]).unwrap();
+        assert!(run_app(gen_at_next, &store, &cb, &mut out).is_ok());
+        assert_eq!(
+            String::from_utf8(out.clone()).unwrap().trim(),
+            "755224 (1s remaining) [expiring soon] (next: 287082)"
+        );
+
+        // 7. HOTP account rejects --at / --skew
+        let add_hotp =
+            Cli::try_parse_from(["tfa", "add", "hotp_acc", secret, "--counter", "0"]).unwrap();
+        assert!(run_app(add_hotp, &store, &cb, &mut out).is_ok());
+        let hotp_skew =
+            Cli::try_parse_from(["tfa", "generate", "hotp_acc", "--skew", "30"]).unwrap();
+        assert!(run_app(hotp_skew, &store, &cb, &mut out).is_err());
+    }
+
+    #[test]
+    fn test_run_app_clipboard_clear_after_and_no_clear() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let secret = "JBSWY3DPEHPK3PXP";
+        let add_cli = Cli::try_parse_from(["tfa", "add", "github", secret]).unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // 1. Default copy without timeout -> clear_after is None
+        out.clear();
+        let gen1 = Cli::try_parse_from(["tfa", "generate", "github", "-c"]).unwrap();
+        assert!(run_app(gen1, &store, &cb, &mut out).is_ok());
+        assert!(cb.text.lock().unwrap().is_some());
+        assert_eq!(*cb.clear_after.lock().unwrap(), None);
+
+        // 2. --clear-after 15 enables 15s timeout
+        out.clear();
+        let gen2 = Cli::try_parse_from(["tfa", "generate", "github", "-c", "--clear-after", "15"])
+            .unwrap();
+        assert!(run_app(gen2, &store, &cb, &mut out).is_ok());
+        assert_eq!(*cb.clear_after.lock().unwrap(), Some(15));
+
+        // 3. --clear-after without value enables default 30s timeout
+        out.clear();
+        let gen3 =
+            Cli::try_parse_from(["tfa", "generate", "github", "-c", "--clear-after"]).unwrap();
+        assert!(run_app(gen3, &store, &cb, &mut out).is_ok());
+        assert_eq!(
+            *cb.clear_after.lock().unwrap(),
+            Some(config::ConfigFile::DEFAULT_CLIPBOARD_TIMEOUT)
+        );
+
+        // 4. Config file enables clipboard_timeout = 25, overridden by --no-clear or --clear-after=false / --clear-after 0
+        let dir = tempfile::tempdir().unwrap();
+        let cfg_path = dir.path().join("config.toml");
+        std::fs::write(&cfg_path, "clipboard_timeout = 25\n").unwrap();
+
+        out.clear();
+        let gen_cfg = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            cfg_path.to_str().unwrap(),
+            "generate",
+            "github",
+            "-c",
+        ])
+        .unwrap();
+        assert!(run_app(gen_cfg, &store, &cb, &mut out).is_ok());
+        assert_eq!(*cb.clear_after.lock().unwrap(), Some(25));
+
+        out.clear();
+        let gen_no_clear = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            cfg_path.to_str().unwrap(),
+            "generate",
+            "github",
+            "-c",
+            "--no-clear",
+        ])
+        .unwrap();
+        assert!(run_app(gen_no_clear, &store, &cb, &mut out).is_ok());
+        assert_eq!(*cb.clear_after.lock().unwrap(), None);
+
+        out.clear();
+        let gen_zero = Cli::try_parse_from([
+            "tfa",
+            "-C",
+            cfg_path.to_str().unwrap(),
+            "generate",
+            "github",
+            "-c",
+            "--clear-after",
+            "0",
+        ])
+        .unwrap();
+        assert!(run_app(gen_zero, &store, &cb, &mut out).is_ok());
+        assert_eq!(*cb.clear_after.lock().unwrap(), None);
+
+        // 5. Instant with --clear-after 10
+        out.clear();
+        let ins_clear =
+            Cli::try_parse_from(["tfa", "instant", secret, "-c", "--clear-after", "10"]).unwrap();
+        assert!(run_app(ins_clear, &store, &cb, &mut out).is_ok());
+        assert_eq!(*cb.clear_after.lock().unwrap(), Some(10));
+    }
+
+    #[test]
+    fn test_cli_parse_migrate() {
+        // Valid minimal
+        let cli =
+            Cli::try_parse_from(["tfa", "migrate", "--from", "keyring", "--to", "file"]).unwrap();
+        match cli.command {
+            Some(Commands::Migrate {
+                from,
+                to,
+                overwrite,
+                dry_run,
+                purge_source,
+            }) => {
+                assert_eq!(from, MigrateBackend::Keyring);
+                assert_eq!(to, MigrateBackend::File);
+                assert!(!overwrite);
+                assert!(!dry_run);
+                assert!(!purge_source);
+            }
+            _ => panic!("Expected Commands::Migrate"),
+        }
+
+        // Valid with all flags
+        let cli_full = Cli::try_parse_from([
+            "tfa",
+            "migrate",
+            "--from",
+            "file",
+            "--to",
+            "age",
+            "--overwrite",
+            "--dry-run",
+            "--purge-source",
+        ])
+        .unwrap();
+        match cli_full.command {
+            Some(Commands::Migrate {
+                from,
+                to,
+                overwrite,
+                dry_run,
+                purge_source,
+            }) => {
+                assert_eq!(from, MigrateBackend::File);
+                assert_eq!(to, MigrateBackend::Age);
+                assert!(overwrite);
+                assert!(dry_run);
+                assert!(purge_source);
+            }
+            _ => panic!("Expected Commands::Migrate"),
+        }
+
+        // Invalid: auto is not allowed for migrate
+        let err_auto = Cli::try_parse_from(["tfa", "migrate", "--from", "auto", "--to", "file"]);
+        assert!(err_auto.is_err());
+
+        // Invalid: missing --to
+        let err_missing_to = Cli::try_parse_from(["tfa", "migrate", "--from", "file"]);
+        assert!(err_missing_to.is_err());
+
+        // Invalid: missing --from
+        let err_missing_from = Cli::try_parse_from(["tfa", "migrate", "--to", "file"]);
+        assert!(err_missing_from.is_err());
+    }
+
+    #[test]
+    fn test_run_app_migrate_integration() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let orig_xdg = std::env::var("XDG_DATA_HOME").ok();
+        let orig_pass = std::env::var("TFA_AGE_PASSPHRASE").ok();
+
+        std::env::set_var("XDG_DATA_HOME", temp_dir.path());
+        std::env::set_var("TFA_AGE_PASSPHRASE", "test-migrate-passphrase");
+
+        let cb = MockClipboard::default();
+        let dummy_store = MemoryStore::default();
+
+        // 1. Pre-populate file store in temp XDG directory
+        let file_path = FileStore::default_path().unwrap();
+        let file_store = FileStore::new(file_path);
+        file_store
+            .set_secret("my_account", "JBSWY3DPEHPK3PXP")
+            .unwrap();
+        file_store
+            .set_secret("ops:database", "BASE32SECRET3939")
+            .unwrap();
+
+        // 2. Migrate file -> age with --purge-source
+        let cli_migrate = Cli::try_parse_from([
+            "tfa",
+            "migrate",
+            "--from",
+            "file",
+            "--to",
+            "age",
+            "--purge-source",
+        ])
+        .unwrap();
+
+        let mut out = Vec::new();
+        let res = run_app(cli_migrate, &dummy_store, &cb, &mut out);
+        assert!(res.is_ok());
+
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains("Transferred account 'my_account'"));
+        assert!(out_str.contains("Transferred account 'ops:database'"));
+        assert!(out_str.contains("Purged account 'my_account' from source"));
+        assert!(out_str.contains("Purged account 'ops:database' from source"));
+        assert!(out_str.contains("Summary: 2 transferred, 0 updated, 0 skipped, 2 purged."));
+
+        // File store is now purged
+        assert_eq!(file_store.list_accounts().unwrap(), Vec::<String>::new());
+
+        // Age store now contains the accounts
+        let age_path = AgeStore::default_path().unwrap();
+        let age_store = AgeStore::new(age_path, None, None);
+        assert_eq!(
+            age_store.list_accounts().unwrap(),
+            vec!["my_account", "ops:database"]
+        );
+        assert_eq!(
+            age_store.get_secret("my_account").unwrap(),
+            "JBSWY3DPEHPK3PXP"
+        );
+        assert_eq!(
+            age_store.get_secret("ops:database").unwrap(),
+            "BASE32SECRET3939"
+        );
+
+        // 3. Dry-run migrate age -> file
+        let cli_dry = Cli::try_parse_from([
+            "tfa",
+            "migrate",
+            "--from",
+            "age",
+            "--to",
+            "file",
+            "--dry-run",
+        ])
+        .unwrap();
+
+        let mut dry_out = Vec::new();
+        assert!(run_app(cli_dry, &dummy_store, &cb, &mut dry_out).is_ok());
+        let dry_str = String::from_utf8(dry_out).unwrap();
+        assert!(dry_str.contains("[dry-run] Would transfer account 'my_account'"));
+        assert!(dry_str.contains("[dry-run] Would transfer account 'ops:database'"));
+        assert!(dry_str.contains("[dry-run] Summary: 2 to transfer, 0 to update, 0 to skip."));
+        // File store is still empty after dry-run
+        assert_eq!(file_store.list_accounts().unwrap(), Vec::<String>::new());
+
+        // 4. Actual migrate age -> file without purge-source
+        let cli_back =
+            Cli::try_parse_from(["tfa", "migrate", "--from", "age", "--to", "file"]).unwrap();
+
+        let mut back_out = Vec::new();
+        assert!(run_app(cli_back, &dummy_store, &cb, &mut back_out).is_ok());
+        let back_str = String::from_utf8(back_out).unwrap();
+        assert!(back_str.contains("Summary: 2 transferred, 0 updated, 0 skipped."));
+        assert_eq!(
+            file_store.list_accounts().unwrap(),
+            vec!["my_account", "ops:database"]
+        );
+
+        // Clean up environment variables
+        if let Some(xdg) = orig_xdg {
+            std::env::set_var("XDG_DATA_HOME", xdg);
+        } else {
+            std::env::remove_var("XDG_DATA_HOME");
+        }
+        if let Some(p) = orig_pass {
+            std::env::set_var("TFA_AGE_PASSPHRASE", p);
+        } else {
+            std::env::remove_var("TFA_AGE_PASSPHRASE");
+        }
+    }
+
+    #[test]
+    fn test_run_app_migrate_identical_backends_fails() {
+        let cb = MockClipboard::default();
+        let store = MemoryStore::default();
+        let cli =
+            Cli::try_parse_from(["tfa", "migrate", "--from", "file", "--to", "file"]).unwrap();
+        let mut out = Vec::new();
+        let res = run_app(cli, &store, &cb, &mut out);
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("Source and destination storage backends cannot be the same"));
     }
 }

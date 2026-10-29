@@ -89,10 +89,12 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `show` | Display account parameters, raw secret, or live OTP code | `tfa show github [-r] [-t] [--json]` |
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
+| `migrate` | In-memory migration between storage backends (`keyring`, `file`, `age`) | `tfa migrate --from keyring --to age` |
 | `delete` (`del`, `rm`, `remove`) | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
 | `rename` (`ren`) | Rename an account within the active namespace | `tfa rename <old_name> <new_name>` |
 | `move` (`mv`) | Relocate an account to a different namespace | `tfa move <account> --to <target_ns>` |
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
+| `audit` | Scan stored accounts and credentials file for security vulnerabilities | `tfa audit [--json]` |
 | `namespace` (`ns`) | Multi-tenant namespace management (`current`, `default`, `list`/`ls`, `create`, `rename`/`ren`/`mv`, `delete`/`del`/`rm`, `set-default`/`use`/`switch`) | `tfa ns` |
 | `completions` | Output shell completion script | `tfa completions zsh` |
 | `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
@@ -159,6 +161,14 @@ Select account to generate token |
 $ tfa generate github -c
 482910 (24s remaining) [copied]
 
+# Copy token and automatically clear clipboard after 15 seconds (or default 30s if value omitted):
+$ tfa generate github -c --clear-after 15
+$ tfa generate github -c --clear-after
+
+# Explicitly disable automatic clipboard clearing when enabled in config:
+$ tfa generate github -c --no-clear
+$ tfa generate github -c --clear-after 0
+
 # Clean raw token output without decorations (-q / --quiet / --token-only):
 $ tfa generate github -q
 482910
@@ -177,6 +187,11 @@ $ tfa generate github --next
 482910 (24s remaining) (next: 192837)
 # When expiring within 5s:
 # 482910 (3s remaining) [expiring soon] (next: 192837)
+
+# Generate token with relative time offset (clock skew) or explicit Unix timestamp:
+$ tfa generate github --skew -30
+$ tfa generate github --skew +30
+$ tfa generate github --at 1730000000
 
 # Programmatic JSON token output:
 $ tfa generate github --json
@@ -247,6 +262,10 @@ TOTP_TOKEN=JBSWY3DPEHPK3PXP tfa instant
 
 # Instant from QR code image
 tfa instant --qr /path/to/qr.png
+
+# Instant at specific Unix timestamp or relative clock skew
+tfa instant JBSWY3DPEHPK3PXP --at 1730000000
+tfa instant JBSWY3DPEHPK3PXP --skew -30
 ```
 
 ### Viewing Account Details & Secrets
@@ -381,6 +400,39 @@ When password protection is enabled in the configuration file, any `tfa` command
 
 ---
 
+## :shield: Security Audit
+
+Scan all stored accounts across namespaces and local credential storage files for potential security issues:
+- **Weak Secrets (`[HIGH]`):** Base32 secret seeds shorter than 16 characters (< 128-bit entropy).
+- **Duplicate Secrets (`[HIGH]`):** Identical secret seeds shared across multiple accounts or namespaces.
+- **Corrupted Accounts (`[HIGH]`):** Stored secrets or `otpauth://` URIs that fail validation.
+- **File Permissions & Ownership (`[HIGH]`):** Local `credentials.json` files with permissions other than `0600` or owned by a different user UID.
+- **Legacy Hash Algorithms (`[WARN]`):** Accounts using `SHA1` instead of `SHA256` or `SHA512`.
+
+```bash
+# Run human-readable security audit report:
+$ tfa audit
+=== Security Audit Report ===
+
+Accounts Scanned: 3
+Issues Found: 2
+
+Findings:
+  [HIGH] default:legacy_vpn - Weak secret with 10 Base32 characters (< 128-bit / 16 Base32 characters)
+  [WARN] default:github - Legacy SHA-1 algorithm in use (SHA-256 or SHA-512 recommended)
+
+Summary:
+  - Weak secrets: 1
+  - Duplicate secrets: 0
+  - Legacy algorithms: 1
+  - File permission/ownership issues: 0
+
+# Output structured audit findings as JSON for CI/scripts:
+$ tfa audit --json
+```
+
+---
+
 ## :books: Shell Completions
 
 Generate and source completions for your shell:
@@ -413,10 +465,10 @@ Pre-generated completion scripts are also available in the [`completions/`](comp
 
 ### Hierarchical Precedence
 Settings resolve in strict hierarchical precedence order (highest to lowest):
-1. **Command Line Arguments** (e.g. `--storage`, `--age-key`, `--ssh-key`, `--gpg`, `--clipboard`, `--clip-command`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
-2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_SSH_KEY`, `TFA_SSH_KEY_FILE`, `TFA_GPG_FINGERPRINT`, `TFA_GPG_RECIPIENT`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
+1. **Command Line Arguments** (e.g. `--storage`, `--age-key`, `--ssh-key`, `--gpg`, `--clipboard`, `--clip-command`, `--clear-after`, `--no-clear`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
+2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_SSH_KEY`, `TFA_SSH_KEY_FILE`, `TFA_GPG_FINGERPRINT`, `TFA_GPG_RECIPIENT`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_CLIPBOARD_TIMEOUT`, `TFA_CLIPBOARD_CLEAR`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
 3. **Configuration File** (`-C <path>` / `--config <path>`, or default locations: `~/.config/tfa/config.{toml,yaml,yml,json}`)
-4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, namespace: `default`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
+4. **Hardcoded Defaults** (storage: `auto`, clipboard: `system`, clipboard_timeout: disabled, namespace: `default`, digits: `6`, period: `30`, algorithm: `sha1`, auto_copy: `false`, light: `false`)
 
 ### Storage Backends & Headless Environments
 
@@ -439,6 +491,24 @@ When using `--storage age`, `tfa` resolves decryption identities and encryption 
 5. Default SSH keys: `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, or any valid key pair in `~/.ssh/`.
 6. Passphrase fallback: `TFA_AGE_PASSPHRASE` environment variable, or interactive prompt if no identity files exist.
 
+### Storage Backend Migration
+
+Transfer accounts directly across storage backends (`keyring`, `file`, `age`) in memory without intermediate plaintext exports:
+
+```bash
+# Migrate from keyring to age-encrypted storage
+tfa migrate --from keyring --to age
+
+# Preview migration without modifying destination or source
+tfa migrate --from file --to keyring --dry-run
+
+# Overwrite conflicting accounts in destination backend
+tfa migrate --from keyring --to file --overwrite
+
+# Transfer accounts and delete them from the source backend
+tfa migrate --from file --to age --purge-source
+```
+
 ### Example Configuration Files
 
 #### TOML (`~/.config/tfa/config.toml`)
@@ -451,6 +521,8 @@ ssh_key = "~/.ssh/id_ed25519" # optional SSH private key file
 gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3" # optional default GPG recipient key
 clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
 clip_command = "wl-copy"      # optional custom command receiving token via stdin
+clipboard_clear = true        # enable or disable automatic clipboard clearing (true/false)
+clipboard_timeout = 30        # clear copied token after N seconds (0 or false to disable)
 default_namespace = "personal"# active default namespace (default: "default")
 default_command = "list"      # default command when invoked without args (list, status, watch all)
 digits = 6                    # 6 or 8
@@ -470,6 +542,8 @@ ssh_key = "~/.ssh/id_ed25519" # optional SSH private key file
 gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3" # optional default GPG recipient key
 clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
 clip_command = "wl-copy"      # optional custom command receiving token via stdin
+clipboard_clear = true        # enable or disable automatic clipboard clearing (true/false)
+clipboard_timeout = 30        # clear copied token after N seconds (0 or false to disable)
 default_namespace = "personal"# active default namespace (default: "default")
 default_command = "list"      # default command when invoked without args (list, status, watch all)
 digits = 6                    # 6 or 8
@@ -481,6 +555,10 @@ light = false                 # terminal QR light theme
 [password]
 enabled = true                # enable master password protection
 timeout = 300                 # unlock cache TTL in seconds (default: 300)
+
+[clipboard_timeout]
+enabled = true                # enable or disable automatic clipboard clearing
+timeout = 30                  # clear copied token after N seconds (default: 30)
 ```
 
 #### YAML (`~/.config/tfa/config.yaml`)
@@ -493,6 +571,8 @@ ssh_key: ~/.ssh/id_ed25519
 gpg_fingerprint: "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
 clipboard: system
 clip_command: "xclip -selection clipboard"
+clipboard_clear: true
+clipboard_timeout: 30
 default_namespace: personal
 default_command: list
 digits: 6
@@ -512,6 +592,8 @@ ssh_key: ~/.ssh/id_ed25519
 gpg_fingerprint: "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
 clipboard: system
 clip_command: "xclip -selection clipboard"
+clipboard_clear: true
+clipboard_timeout: 30
 default_namespace: personal
 default_command: list
 digits: 6

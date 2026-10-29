@@ -1,10 +1,10 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH tfa 1  "tfa v0.1.5" 
+.TH tfa 1  "tfa v0.1.8" 
 .SH NAME
 tfa \- CLI Two\-Factor Authentication (2FA) tool
 .SH SYNOPSIS
-\fBtfa\fR [\fB\-C\fR|\fB\-\-config\fR] [\fB\-\-storage\fR] [\fB\-\-age\-key\fR] [\fB\-\-ssh\-key\fR] [\fB\-\-clipboard\fR] [\fB\-\-clip\-command\fR] [\fB\-n\fR|\fB\-\-namespace\fR] [\fB\-A\fR|\fB\-\-all\-namespaces\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+\fBtfa\fR [\fB\-C\fR|\fB\-\-config\fR] [\fB\-\-storage\fR] [\fB\-\-age\-key\fR] [\fB\-\-ssh\-key\fR] [\fB\-\-clipboard\fR] [\fB\-\-clip\-command\fR] [\fB\-\-clear\-after\fR] [\fB\-\-no\-clear\fR] [\fB\-n\fR|\fB\-\-namespace\fR] [\fB\-A\fR|\fB\-\-all\-namespaces\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 CLI Two\-Factor Authentication (2FA) tool
 .SH OPTIONS
@@ -51,6 +51,12 @@ osc52: Terminal ANSI escape sequence OSC 52 (works over remote SSH, tmux, screen
 \fB\-\-clip\-command\fR \fI<CLIP_COMMAND>\fR
 Custom clipboard command to receive token via standard input (e.g. wl\-copy, pbcopy, xclip)
 .TP
+\fB\-\-clear\-after\fR [\fI<SECONDS>\fR]
+Automatically clear copied clipboard token after timeout in seconds (or 0 / false to disable)
+.TP
+\fB\-\-no\-clear\fR
+Disable automatic clipboard clearing
+.TP
 \fB\-n\fR, \fB\-\-namespace\fR \fI<NAMESPACE>\fR
 Target namespace for account scoping (e.g. personal, work, home)
 .TP
@@ -75,6 +81,9 @@ Live watch mode displaying continuous TOTP countdown with progress bar
 .TP
 tfa\-add(1)
 Add a new account secret or OTPAuth URL
+.TP
+tfa\-edit(1)
+Edit parameters or prefix of an existing account in\-place
 .TP
 tfa\-qr(1)
 Render account as a terminal QR code for mobile authenticator scanning
@@ -103,6 +112,9 @@ Export accounts to an encrypted backup file or stdout
 tfa\-import(1)
 Import accounts from a backup file, migration URI, or JSON payload
 .TP
+tfa\-migrate(1)
+Migrate accounts directly in memory across storage backends (keyring, file, age)
+.TP
 tfa\-completions(1)
 Generate shell autocompletions script
 .TP
@@ -121,6 +133,6 @@ Scan stored accounts and credentials file for security vulnerabilities
 tfa\-help(1)
 Print this message or the help of the given subcommand(s)
 .SH VERSION
-vv0.1.5
+vv0.1.8
 .SH AUTHORS
 Nicholas Wilde
