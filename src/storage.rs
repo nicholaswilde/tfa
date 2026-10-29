@@ -542,7 +542,17 @@ impl AgeStore {
             }
         }
 
-        // 4. Fallback candidate paths
+        // 4. Passphrase from TFA_AGE_PASSPHRASE
+        if let Ok(pass) = std::env::var("TFA_AGE_PASSPHRASE") {
+            if !pass.is_empty() {
+                identities.push(Box::new(age::scrypt::Identity::new(SecretString::from(
+                    pass,
+                ))));
+                return Ok(identities);
+            }
+        }
+
+        // 5. Fallback candidate paths
         for candidate in Self::candidate_key_paths() {
             if candidate.is_file() {
                 if let Ok(loaded) = Self::load_identities_from_path(&candidate) {
@@ -551,16 +561,6 @@ impl AgeStore {
                         return Ok(identities);
                     }
                 }
-            }
-        }
-
-        // 5. Fallback passphrase from TFA_AGE_PASSPHRASE
-        if let Ok(pass) = std::env::var("TFA_AGE_PASSPHRASE") {
-            if !pass.is_empty() {
-                identities.push(Box::new(age::scrypt::Identity::new(SecretString::from(
-                    pass,
-                ))));
-                return Ok(identities);
             }
         }
 
@@ -691,7 +691,17 @@ impl AgeStore {
             }
         }
 
-        // 3. Derive recipient from candidate key files (sops keys, age keys, etc.)
+        // 4. Passphrase recipient if TFA_AGE_PASSPHRASE is provided
+        if let Ok(pass) = std::env::var("TFA_AGE_PASSPHRASE") {
+            if !pass.is_empty() {
+                recipients.push(Box::new(age::scrypt::Recipient::new(SecretString::from(
+                    pass,
+                ))));
+                return Ok(recipients);
+            }
+        }
+
+        // 5. Derive recipient from candidate key files (sops keys, age keys, etc.)
         for candidate in Self::candidate_key_paths() {
             if candidate.is_file() {
                 if let Ok(content) = std::fs::read_to_string(&candidate) {
@@ -713,7 +723,7 @@ impl AgeStore {
             }
         }
 
-        // 4. Check SSH public keys in ~/.ssh/
+        // 6. Check SSH public keys in ~/.ssh/
         for h in home_dirs() {
             for ssh_pub in &[
                 h.join(".ssh").join("id_ed25519.pub"),
@@ -727,16 +737,6 @@ impl AgeStore {
                         }
                     }
                 }
-            }
-        }
-
-        // 5. Passphrase recipient if TFA_AGE_PASSPHRASE is provided
-        if let Ok(pass) = std::env::var("TFA_AGE_PASSPHRASE") {
-            if !pass.is_empty() {
-                recipients.push(Box::new(age::scrypt::Recipient::new(SecretString::from(
-                    pass,
-                ))));
-                return Ok(recipients);
             }
         }
 
@@ -844,11 +844,12 @@ impl AccountStore for AgeStore {
 }
 
 #[cfg(test)]
+pub(crate) static TEST_STORAGE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
-
-    static TEST_STORAGE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn test_memory_store_lifecycle() {

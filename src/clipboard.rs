@@ -303,6 +303,8 @@ impl Clipboard for MockClipboard {
 mod tests {
     use super::*;
 
+    static TEST_CLIPBOARD_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_osc52_clipboard_set_text() {
         let osc = Osc52Clipboard::new();
@@ -331,6 +333,9 @@ mod tests {
 
     #[test]
     fn test_osc52_standard_sequence() {
+        let _guard = TEST_CLIPBOARD_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Without tmux or screen TERM
         std::env::remove_var("TMUX");
         std::env::set_var("TERM", "xterm-256color");
@@ -342,6 +347,9 @@ mod tests {
 
     #[test]
     fn test_osc52_tmux_dcs_sequence() {
+        let _guard = TEST_CLIPBOARD_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("TMUX", "/tmp/tmux-1000/default,1234,0");
         std::env::set_var("TERM", "screen-256color");
 
@@ -354,6 +362,9 @@ mod tests {
 
     #[test]
     fn test_osc52_screen_chunking() {
+        let _guard = TEST_CLIPBOARD_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TMUX");
         std::env::set_var("TERM", "screen");
 

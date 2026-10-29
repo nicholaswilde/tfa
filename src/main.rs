@@ -6892,6 +6892,9 @@ light: true
 
     #[test]
     fn test_run_app_migrate_integration() {
+        let _storage_guard = crate::storage::TEST_STORAGE_MUTEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let temp_dir = tempfile::tempdir().unwrap();
         let orig_xdg = std::env::var("XDG_DATA_HOME").ok();
         let orig_pass = std::env::var("TFA_AGE_PASSPHRASE").ok();
