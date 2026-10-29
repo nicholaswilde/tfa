@@ -7,7 +7,7 @@ description = "A CLI two-factor authentication (2FA / TOTP) application"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env"] }
-clap_complete = "4.5"
+clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
 totp-rs = { version = "6.0", features = ["gen_secret", "otpauth", "serde", "qr", "steam"] }
 hmac = "0.13.0"
 sha1 = "0.11.0"

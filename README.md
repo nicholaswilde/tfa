@@ -443,7 +443,7 @@ $ tfa audit --json
 
 ## :books: Shell Completions
 
-Generate and source completions for your shell:
+`tfa` features dynamic autocompletion for stored account names, configured namespaces, commands, and options. Shell scripts can be generated for Bash, Zsh, Fish, PowerShell, and Elvish:
 
 ### Bash
 ```bash
@@ -462,6 +462,19 @@ tfa completions zsh > ~/.zfunc/_tfa
 ```bash
 tfa completions fish > ~/.config/fish/completions/tfa.fish
 ```
+
+### PowerShell
+```powershell
+tfa completions powershell >> $PROFILE
+```
+
+### Elvish
+```elvish
+tfa completions elvish >> ~/.elvish/rc.elv
+```
+
+> [!TIP]
+> Dynamic completions automatically query stored account names and namespaces on `<TAB>` while failing gracefully if storage is locked. Pass `--static` to `tfa completions` to generate static shell completion scripts instead.
 
 Pre-generated completion scripts are also available in the [`completions/`](completions/) folder.
 

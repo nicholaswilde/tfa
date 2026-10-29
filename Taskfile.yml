@@ -67,13 +67,14 @@ tasks:
       - cargo build --profile release
 
   completions:
-    desc: Generate shell completions for bash, zsh, fish, and powershell
+    desc: Generate shell completions for bash, zsh, fish, powershell, and elvish
     cmds:
       - mkdir -p completions
       - cargo run -- completions bash > completions/tfa.bash
       - cargo run -- completions zsh > completions/_tfa
       - cargo run -- completions fish > completions/tfa.fish
       - cargo run -- completions powershell > completions/_tfa.ps1
+      - cargo run -- completions elvish > completions/tfa.elv
 
   man:
     desc: Generate UNIX roff man page (assets/tfa.1)

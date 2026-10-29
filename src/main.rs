@@ -1,5 +1,6 @@
 use anyhow::Context;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::engine::ArgValueCandidates;
 use clap_complete::Shell;
 use std::collections::BTreeMap;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
@@ -10,6 +11,7 @@ mod audit;
 mod auth;
 mod backup;
 mod clipboard;
+mod completions;
 mod config;
 mod ente;
 mod export;
@@ -110,7 +112,8 @@ pub struct Cli {
         long,
         env = "TFA_NAMESPACE",
         global = true,
-        conflicts_with = "all_namespaces"
+        conflicts_with = "all_namespaces",
+        add = ArgValueCandidates::new(completions::complete_namespaces)
     )]
     pub namespace: Option<String>,
 
@@ -157,6 +160,7 @@ pub enum Commands {
     #[command(alias = "gen", alias = "g")]
     Generate {
         /// Name of the account (interactively prompted via fuzzy search if omitted and --secret not supplied)
+        #[arg(add = ArgValueCandidates::new(completions::complete_accounts))]
         account: Option<String>,
         /// Generate token instantly from secret, URI, or "-" (stdin) without saving to storage
         #[arg(long)]
@@ -267,6 +271,7 @@ pub enum Commands {
         #[command(subcommand)]
         command: Option<WatchCommands>,
         /// Name of the account (interactively prompted via fuzzy search if omitted)
+        #[arg(add = ArgValueCandidates::new(completions::complete_accounts))]
         account: Option<String>,
         /// Watch all accounts in the active namespace
         #[arg(short, long)]
@@ -307,6 +312,7 @@ pub enum Commands {
     #[command(alias = "set")]
     Edit {
         /// Name of the account
+        #[arg(add = ArgValueCandidates::new(completions::complete_accounts))]
         account: String,
         /// Number of digits in generated code (e.g. 5, 6, 8)
         #[arg(short, long)]
@@ -330,7 +336,10 @@ pub enum Commands {
     /// Render account as a terminal QR code for mobile authenticator scanning
     Qr {
         /// Name of the account (interactively prompted if omitted and --all not supplied)
-        #[arg(conflicts_with = "all")]
+        #[arg(
+            conflicts_with = "all",
+            add = ArgValueCandidates::new(completions::complete_accounts)
+        )]
         account: Option<String>,
         /// Export all accounts in the active namespace as batch migration QR code(s)
         #[arg(short, long, visible_alias = "migration", conflicts_with = "account")]
@@ -359,12 +368,14 @@ pub enum Commands {
     #[command(alias = "del", alias = "rm", alias = "remove")]
     Delete {
         /// Name of the account (interactively prompted via fuzzy search if omitted)
+        #[arg(add = ArgValueCandidates::new(completions::complete_accounts))]
         account: Option<String>,
     },
     /// Rename an account within the active namespace
     #[command(alias = "ren")]
     Rename {
         /// Current account name
+        #[arg(add = ArgValueCandidates::new(completions::complete_accounts))]
         old_name: String,
         /// New account name
         new_name: String,
@@ -373,14 +384,20 @@ pub enum Commands {
     #[command(alias = "mv")]
     Move {
         /// Name of the account to move
+        #[arg(add = ArgValueCandidates::new(completions::complete_accounts))]
         account: String,
         /// Destination namespace
-        #[arg(short = 't', long = "to")]
+        #[arg(
+            short = 't',
+            long = "to",
+            add = ArgValueCandidates::new(completions::complete_namespaces)
+        )]
         to: String,
     },
     /// Show account details and stored secret
     Show {
         /// Name of the account
+        #[arg(add = ArgValueCandidates::new(completions::complete_accounts))]
         account: String,
         /// Print only the raw secret or URI
         #[arg(short, long, conflicts_with = "token")]
@@ -461,6 +478,9 @@ pub enum Commands {
     Completions {
         /// Shell to generate completions for
         shell: Shell,
+        /// Generate static autocompletions script instead of dynamic
+        #[arg(long = "static")]
+        static_completions: bool,
     },
     /// Generate UNIX roff man page
     Man,
@@ -548,6 +568,7 @@ pub enum NamespaceCommands {
     #[command(alias = "ren", alias = "mv")]
     Rename {
         /// Current namespace name
+        #[arg(add = ArgValueCandidates::new(completions::complete_namespaces))]
         old_name: String,
         /// New namespace name
         new_name: String,
@@ -556,6 +577,7 @@ pub enum NamespaceCommands {
     #[command(alias = "del", alias = "rm", alias = "remove")]
     Delete {
         /// Name of the namespace to delete
+        #[arg(add = ArgValueCandidates::new(completions::complete_namespaces))]
         name: String,
         /// Force deletion without interactive confirmation
         #[arg(short, long)]
@@ -565,6 +587,7 @@ pub enum NamespaceCommands {
     #[command(alias = "use", alias = "switch", alias = "set")]
     SetDefault {
         /// Name of the namespace to set as default
+        #[arg(add = ArgValueCandidates::new(completions::complete_namespaces))]
         name: String,
     },
 }
@@ -759,6 +782,12 @@ pub fn select_account_interactive_on(
 }
 
 pub fn generate_completions(shell: Shell, writer: &mut dyn Write) {
+    if completions::generate_dynamic_completions(shell, writer).is_err() {
+        generate_static_completions(shell, writer);
+    }
+}
+
+pub fn generate_static_completions(shell: Shell, writer: &mut dyn Write) {
     let mut cmd = Cli::command();
     let bin_name = cmd.get_name().to_string();
     clap_complete::generate(shell, &mut cmd, bin_name, writer);
@@ -1983,8 +2012,15 @@ pub fn run_app(
                 }
             }
         }
-        Some(Commands::Completions { shell }) => {
-            generate_completions(shell, out_writer);
+        Some(Commands::Completions {
+            shell,
+            static_completions,
+        }) => {
+            if static_completions {
+                generate_static_completions(shell, out_writer);
+            } else {
+                generate_completions(shell, out_writer);
+            }
         }
         Some(Commands::Man) => {
             generate_manpage(out_writer)?;
@@ -2326,6 +2362,10 @@ fn get_passphrase(password: Option<String>, confirm: bool) -> anyhow::Result<Str
 }
 
 fn main() -> anyhow::Result<()> {
+    clap_complete::CompleteEnv::with_factory(Cli::command)
+        .completer("tfa")
+        .complete();
+
     let cli = Cli::parse();
 
     let (resolved_cfg, loaded_cfg) = config::resolve_configuration(
@@ -2887,7 +2927,7 @@ mod tests {
         for (shell_str, expected) in shells {
             let cli = Cli::try_parse_from(["tfa", "completions", shell_str]).unwrap();
             match cli.command {
-                Some(Commands::Completions { shell }) => assert_eq!(shell, expected),
+                Some(Commands::Completions { shell, .. }) => assert_eq!(shell, expected),
                 _ => panic!("Expected completions subcommand"),
             }
         }
@@ -2895,25 +2935,36 @@ mod tests {
 
     #[test]
     fn test_generate_completions_scripts() {
-        // Bash
+        // Dynamic Bash
         let mut bash_buf = Vec::new();
         generate_completions(Shell::Bash, &mut bash_buf);
         let bash_out = String::from_utf8(bash_buf).unwrap();
-        assert!(bash_out.contains("complete -F _tfa -o nosort -o bashdefault -o default tfa"));
-        assert!(bash_out.contains("generate"));
-        assert!(bash_out.contains("completions"));
+        assert!(bash_out.contains("_clap_complete_tfa"));
+        assert!(bash_out.contains("complete -o nospace -o bashdefault"));
 
-        // Zsh
+        // Static Bash
+        let mut static_bash_buf = Vec::new();
+        generate_static_completions(Shell::Bash, &mut static_bash_buf);
+        let static_bash_out = String::from_utf8(static_bash_buf).unwrap();
+        assert!(
+            static_bash_out.contains("complete -F _tfa -o nosort -o bashdefault -o default tfa")
+        );
+        assert!(static_bash_out.contains("generate"));
+        assert!(static_bash_out.contains("completions"));
+
+        // Dynamic Zsh
         let mut zsh_buf = Vec::new();
         generate_completions(Shell::Zsh, &mut zsh_buf);
         let zsh_out = String::from_utf8(zsh_buf).unwrap();
         assert!(zsh_out.contains("#compdef tfa"));
+        assert!(zsh_out.contains("_clap_dynamic_completer_tfa"));
 
-        // Fish
+        // Dynamic Fish
         let mut fish_buf = Vec::new();
         generate_completions(Shell::Fish, &mut fish_buf);
         let fish_out = String::from_utf8(fish_buf).unwrap();
-        assert!(fish_out.contains("complete -c tfa"));
+        assert!(fish_out.contains("complete --keep-order"));
+        assert!(fish_out.contains("COMPLETE=fish"));
     }
 
     #[test]
@@ -3157,7 +3208,13 @@ mod tests {
         let cli = Cli::try_parse_from(["tfa", "completions", "bash"]).unwrap();
         assert!(run_app(cli, &store, &cb, &mut out).is_ok());
         let out_str = String::from_utf8(out).unwrap();
-        assert!(out_str.contains("complete -F _tfa"));
+        assert!(out_str.contains("_clap_complete_tfa"));
+
+        let mut static_out = Vec::new();
+        let static_cli = Cli::try_parse_from(["tfa", "completions", "bash", "--static"]).unwrap();
+        assert!(run_app(static_cli, &store, &cb, &mut static_out).is_ok());
+        let static_str = String::from_utf8(static_out).unwrap();
+        assert!(static_str.contains("complete -F _tfa"));
     }
 
     #[test]
