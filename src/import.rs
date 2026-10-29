@@ -62,8 +62,8 @@ pub fn parse_import_payload(input: &str) -> Result<Vec<ImportItem>> {
         return Ok(items);
     }
 
-    // 5. Try YAML (totp-cli dump)
-    if let Ok(v @ Value::Array(_)) = serde_yaml_ng::from_str::<Value>(trimmed) {
+    // 5. Try YAML (totp-cli dump or key-value map)
+    if let Ok(v) = serde_yaml_ng::from_str::<Value>(trimmed) {
         if let Ok(yaml_items) = parse_value_export(v) {
             if !yaml_items.is_empty() {
                 return Ok(yaml_items);

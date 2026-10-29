@@ -83,11 +83,11 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `watch all` | Watch all passwords in active namespace | `tfa watch all` |
 | `add` | Add account secret or `otpauth://` URI | `tfa add github JBSWY3DPEHPK3PXP` |
 | `edit` (`set`) | Edit parameters or prefix of an existing account in-place | `tfa edit github --digits 8 --prefix 1234` |
-| `qr` | Render account as terminal QR code | `tfa qr github [--light]` |
+| `qr` | Render account or batch migration QR code for mobile scanning | `tfa qr [account] [--all] [--light]` |
 | `list` (`ls`) | List all configured accounts | `tfa list [--codes] [--json]` |
 | `status` | Live overview of all accounts and tokens | `tfa status [--json]` |
 | `show` | Display account parameters, raw secret, or live OTP code | `tfa show github [-r] [-t] [--json]` |
-| `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
+| `export` | Export accounts to encrypted backup or stdout (JSON, OTPAuth, YAML) | `tfa export [--format <json|otpauth|yaml>] [file]` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `migrate` | In-memory migration between storage backends (`keyring`, `file`, `age`) | `tfa migrate --from keyring --to age` |
 | `delete` (`del`, `rm`, `remove`) | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
@@ -134,7 +134,7 @@ tfa edit vpn --clear-prefix
 
 ### QR Code Display
 
-Render any account as a 2D ANSI/Unicode block QR code in the terminal to easily pair mobile authenticator apps:
+Render any account or batch-export accounts as terminal ANSI/Unicode block QR codes to easily pair mobile authenticator apps:
 
 ```bash
 # Standard dark-background terminal (default)
@@ -142,6 +142,9 @@ tfa qr github
 
 # Light-background terminal
 tfa qr github --light
+
+# Export all accounts in active namespace as Google Authenticator migration QR code(s):
+tfa qr --all # or tfa qr --migration
 ```
 
 ### Generating Tokens
@@ -342,6 +345,11 @@ tfa export backup.gpg --gpg
 
 # Export unencrypted JSON to stdout or file:
 tfa export backup.json --unencrypted
+
+# Export unencrypted in JSON, OTPAuth URI list, or YAML format:
+tfa export backup.json --unencrypted --format json
+tfa export accounts.txt --unencrypted --format otpauth
+tfa export dump.yaml --unencrypted --format yaml
 ```
 
 #### Importing Accounts

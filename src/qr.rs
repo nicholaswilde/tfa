@@ -78,6 +78,26 @@ pub fn render_terminal_qr(text: &str, invert: bool) -> Result<String> {
     Ok(out)
 }
 
+/// Render one or more migration QR codes in the terminal with batch progress headers
+pub fn render_migration_terminal_qrs(uris: &[String], invert: bool) -> Result<String> {
+    if uris.is_empty() {
+        return Ok(String::new());
+    }
+    let mut out = String::new();
+    let total = uris.len();
+    for (i, uri) in uris.iter().enumerate() {
+        if total > 1 {
+            out.push_str(&format!("[Migration QR {} of {}]\n", i + 1, total));
+        }
+        let qr = render_terminal_qr(uri, invert)?;
+        out.push_str(&qr);
+        if total > 1 && i + 1 < total {
+            out.push('\n');
+        }
+    }
+    Ok(out)
+}
+
 /// Scan and decode the first QR code found in an image file (PNG, JPEG, etc.).
 pub fn scan_qr_from_image(path: &Path) -> Result<String> {
     let img = image::open(path)
@@ -112,6 +132,23 @@ mod tests {
         let rendered_std = render_terminal_qr(text, false).unwrap();
         assert!(!rendered_std.is_empty());
         assert!(rendered_std.contains('█'));
+    }
+
+    #[test]
+    fn test_render_migration_terminal_qrs_single_and_multi() {
+        let uri1 = "otpauth-migration://offline?data=CjMKCkhlbGxvId6tvu8";
+        let uri2 = "otpauth-migration://offline?data=CjMKCkhlbGxvId6tvu9";
+
+        // Single URI: no multi-batch header
+        let single = render_migration_terminal_qrs(&[uri1.to_string()], true).unwrap();
+        assert!(!single.contains("[Migration QR"));
+        assert!(single.contains('█'));
+
+        // Multi URIs: includes batch headers
+        let multi =
+            render_migration_terminal_qrs(&[uri1.to_string(), uri2.to_string()], true).unwrap();
+        assert!(multi.contains("[Migration QR 1 of 2]"));
+        assert!(multi.contains("[Migration QR 2 of 2]"));
     }
 
     #[test]

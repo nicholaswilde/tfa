@@ -12,6 +12,7 @@ mod backup;
 mod clipboard;
 mod config;
 mod ente;
+mod export;
 mod import;
 mod migrate;
 mod namespace;
@@ -23,6 +24,7 @@ mod watch;
 
 use clipboard::{Clipboard, ClipboardProvider, DispatchingClipboard};
 use config::ConfigFile;
+pub use export::ExportFormat;
 pub use migrate::MigrateBackend;
 use namespace::NamespaceStore;
 use storage::{AccountStore, AgeStore, AutoStore, FileStore, KeyringStore};
@@ -327,8 +329,12 @@ pub enum Commands {
     },
     /// Render account as a terminal QR code for mobile authenticator scanning
     Qr {
-        /// Name of the account
-        account: String,
+        /// Name of the account (interactively prompted if omitted and --all not supplied)
+        #[arg(conflicts_with = "all")]
+        account: Option<String>,
+        /// Export all accounts in the active namespace as batch migration QR code(s)
+        #[arg(short, long, visible_alias = "migration", conflicts_with = "account")]
+        all: bool,
         /// Invert terminal QR blocks (for light terminal backgrounds)
         #[arg(long, num_args = 0..=1, default_missing_value = "true")]
         light: Option<bool>,
@@ -396,7 +402,10 @@ pub enum Commands {
     Export {
         /// Destination backup file path (prints to stdout if omitted)
         file: Option<PathBuf>,
-        /// Export without encryption (plain JSON)
+        /// Export format (json, otpauth, or yaml)
+        #[arg(long, default_value = "json", value_name = "FORMAT")]
+        format: ExportFormat,
+        /// Export without encryption (plain JSON, YAML, or OTPAuth URLs)
         #[arg(long)]
         unencrypted: bool,
         /// Master passphrase for encryption (prompted securely if omitted)
@@ -1015,6 +1024,7 @@ pub fn run_app(
             Some(Commands::Status { .. }) => {}
             Some(Commands::Export { .. }) => {}
             Some(Commands::Migrate { .. }) => {}
+            Some(Commands::Qr { all: true, .. }) => {}
             Some(Commands::Watch {
                 command,
                 account,
@@ -1346,7 +1356,8 @@ pub fn run_app(
             account: ref mut a, ..
         })
         | Some(Commands::Qr {
-            account: ref mut a, ..
+            account: Some(ref mut a),
+            ..
         })
         | Some(Commands::Move {
             account: ref mut a, ..
@@ -1731,13 +1742,54 @@ pub fn run_app(
             store.set_secret(&account, &url)?;
             writeln!(out_writer, "Account '{account}' updated.")?;
         }
-        Some(Commands::Qr { account, light }) => {
-            let secret = store.get_secret(&account)?;
-            let engine = TfaTotp::from_input(&account, &secret)?;
-            let url = engine.to_url()?;
+        Some(Commands::Qr {
+            account,
+            all,
+            light,
+        }) => {
             let is_light = light.unwrap_or(resolved_cfg.light);
-            let qr_blocks = qr::render_terminal_qr(&url, !is_light)?;
-            write!(out_writer, "{qr_blocks}")?;
+            if all {
+                let accounts = if cli.all_namespaces {
+                    root_store.list_accounts()?
+                } else {
+                    store.list_accounts()?
+                };
+                if accounts.is_empty() {
+                    anyhow::bail!("No accounts configured to generate migration QR code");
+                }
+                let mut mig_accounts = Vec::new();
+                for acct in accounts {
+                    let secret = if cli.all_namespaces {
+                        root_store.get_secret(&acct)?
+                    } else {
+                        store.get_secret(&acct)?
+                    };
+                    if let Ok(mig_acc) =
+                        export::MigrationAccount::from_account_and_secret(&acct, &secret)
+                    {
+                        mig_accounts.push(mig_acc);
+                    }
+                }
+                if mig_accounts.is_empty() {
+                    anyhow::bail!("No valid accounts could be encoded into migration QR payload");
+                }
+                let uris = export::generate_migration_uris(
+                    &mig_accounts,
+                    export::DEFAULT_MAX_ACCOUNTS_PER_BATCH,
+                )?;
+                let qr_blocks = qr::render_migration_terminal_qrs(&uris, !is_light)?;
+                write!(out_writer, "{qr_blocks}")?;
+            } else {
+                let acct = match account {
+                    Some(a) => a,
+                    None => select_account_interactive(store, "Select account to display QR code")?,
+                };
+                let secret = store.get_secret(&acct)?;
+                let engine = TfaTotp::from_input(&acct, &secret)?;
+                let url = engine.to_url()?;
+                let qr_blocks = qr::render_terminal_qr(&url, !is_light)?;
+                write!(out_writer, "{qr_blocks}")?;
+            }
         }
         Some(Commands::List { codes, json }) => {
             if cli.all_namespaces {
@@ -1939,6 +1991,7 @@ pub fn run_app(
         }
         Some(Commands::Export {
             file,
+            format,
             unencrypted,
             password,
             gpg,
@@ -1966,9 +2019,9 @@ pub fn run_app(
                 }
             }
 
-            let json_str = serde_json::to_string_pretty(&map)?;
+            let plain_payload = export::format_export_payload(&map, format)?;
             let output_str = if unencrypted {
-                json_str
+                plain_payload
             } else if let Some(gpg_opt) = gpg {
                 let recipient = match gpg_opt {
                     Some(fp) => {
@@ -1984,7 +2037,7 @@ pub fn run_app(
                         )
                     })?,
                 };
-                backup::encrypt_backup_gpg(json_str.as_bytes(), &recipient)?
+                backup::encrypt_backup_gpg(plain_payload.as_bytes(), &recipient)?
             } else if password.is_none()
                 && std::env::var("TFA_PASSWORD")
                     .ok()
@@ -1993,10 +2046,10 @@ pub fn run_app(
                 && resolved_cfg.gpg_fingerprint.is_some()
             {
                 let recipient = resolved_cfg.gpg_fingerprint.as_deref().unwrap();
-                backup::encrypt_backup_gpg(json_str.as_bytes(), recipient)?
+                backup::encrypt_backup_gpg(plain_payload.as_bytes(), recipient)?
             } else {
                 let pass = get_passphrase(password, true)?;
-                backup::encrypt_backup(json_str.as_bytes(), &pass)?
+                backup::encrypt_backup(plain_payload.as_bytes(), &pass)?
             };
 
             if let Some(dest_path) = file {
@@ -2808,9 +2861,14 @@ mod tests {
     fn test_cli_parse_qr_subcommand() {
         let cli = Cli::try_parse_from(["tfa", "qr", "github", "--light"]).unwrap();
         match cli.command {
-            Some(Commands::Qr { account, light }) => {
-                assert_eq!(account, "github");
+            Some(Commands::Qr {
+                account,
+                light,
+                all,
+            }) => {
+                assert_eq!(account.as_deref(), Some("github"));
                 assert_eq!(light, Some(true));
+                assert!(!all);
             }
             _ => panic!("Expected qr subcommand"),
         }
@@ -3263,11 +3321,13 @@ mod tests {
         match cli.command {
             Some(Commands::Export {
                 file,
+                format,
                 unencrypted,
                 password,
                 gpg,
             }) => {
                 assert!(file.is_none());
+                assert_eq!(format, ExportFormat::Json);
                 assert!(!unencrypted);
                 assert!(password.is_none());
                 assert!(gpg.is_none());
@@ -3279,6 +3339,8 @@ mod tests {
             "tfa",
             "export",
             "backup.enc",
+            "--format",
+            "yaml",
             "--unencrypted",
             "--password",
             "pass123",
@@ -3287,11 +3349,13 @@ mod tests {
         match cli_file.command {
             Some(Commands::Export {
                 file,
+                format,
                 unencrypted,
                 password,
                 gpg,
             }) => {
                 assert_eq!(file, Some(PathBuf::from("backup.enc")));
+                assert_eq!(format, ExportFormat::Yaml);
                 assert!(unencrypted);
                 assert_eq!(password, Some("pass123".to_string()));
                 assert!(gpg.is_none());
@@ -6893,5 +6957,99 @@ light: true
             .unwrap_err()
             .to_string()
             .contains("Source and destination storage backends cannot be the same"));
+    }
+
+    #[test]
+    fn test_run_app_export_formats_and_import_roundtrip() {
+        let cb = MockClipboard::default();
+        let store = MemoryStore::default();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        store
+            .set_secret("aws", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+            .unwrap();
+
+        // 1. JSON format
+        let cli_json =
+            Cli::try_parse_from(["tfa", "export", "--unencrypted", "--format", "json"]).unwrap();
+        let mut out_json = Vec::new();
+        assert!(run_app(cli_json, &store, &cb, &mut out_json).is_ok());
+        let str_json = String::from_utf8(out_json).unwrap();
+        assert!(str_json.contains("\"github\""));
+        assert!(str_json.contains("\"aws\""));
+
+        let store_json = MemoryStore::default();
+        let import_json = Cli::try_parse_from(["tfa", "import", &str_json]).unwrap();
+        let mut out_imp = Vec::new();
+        assert!(run_app(import_json, &store_json, &cb, &mut out_imp).is_ok());
+        assert_eq!(store_json.list_accounts().unwrap(), vec!["aws", "github"]);
+
+        // 2. YAML format
+        let cli_yaml =
+            Cli::try_parse_from(["tfa", "export", "--unencrypted", "--format", "yaml"]).unwrap();
+        let mut out_yaml = Vec::new();
+        assert!(run_app(cli_yaml, &store, &cb, &mut out_yaml).is_ok());
+        let str_yaml = String::from_utf8(out_yaml).unwrap();
+        assert!(str_yaml.contains("github:"));
+        assert!(str_yaml.contains("aws:"));
+
+        let store_yaml = MemoryStore::default();
+        let import_yaml = Cli::try_parse_from(["tfa", "import", &str_yaml]).unwrap();
+        let mut out_imp_yaml = Vec::new();
+        assert!(run_app(import_yaml, &store_yaml, &cb, &mut out_imp_yaml).is_ok());
+        assert_eq!(store_yaml.list_accounts().unwrap(), vec!["aws", "github"]);
+
+        // 3. OTPAuth format
+        let cli_otp =
+            Cli::try_parse_from(["tfa", "export", "--unencrypted", "--format", "otpauth"]).unwrap();
+        let mut out_otp = Vec::new();
+        assert!(run_app(cli_otp, &store, &cb, &mut out_otp).is_ok());
+        let str_otp = String::from_utf8(out_otp).unwrap();
+        assert!(str_otp.contains("otpauth://totp/"));
+
+        let store_otp = MemoryStore::default();
+        let import_otp = Cli::try_parse_from(["tfa", "import", &str_otp]).unwrap();
+        let mut out_imp_otp = Vec::new();
+        assert!(run_app(import_otp, &store_otp, &cb, &mut out_imp_otp).is_ok());
+        assert_eq!(store_otp.list_accounts().unwrap(), vec!["aws", "github"]);
+    }
+
+    #[test]
+    fn test_run_app_qr_all_migration() {
+        let cb = MockClipboard::default();
+        let store = MemoryStore::default();
+
+        // 1. Empty store fails with helpful error
+        let cli_empty = Cli::try_parse_from(["tfa", "qr", "--all"]).unwrap();
+        let mut out_empty = Vec::new();
+        let res_empty = run_app(cli_empty, &store, &cb, &mut out_empty);
+        assert!(res_empty.is_err());
+        assert!(res_empty
+            .unwrap_err()
+            .to_string()
+            .contains("No accounts configured to generate migration QR code"));
+
+        // 2. Populated store generates QR
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        store
+            .set_secret("aws", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+            .unwrap();
+
+        let cli_all = Cli::try_parse_from(["tfa", "qr", "--all"]).unwrap();
+        let mut out_all = Vec::new();
+        assert!(run_app(cli_all, &store, &cb, &mut out_all).is_ok());
+        let str_all = String::from_utf8(out_all).unwrap();
+        assert!(!str_all.is_empty());
+        assert!(str_all.contains('█'));
+
+        // 3. --migration alias works identically
+        let cli_mig = Cli::try_parse_from(["tfa", "qr", "--migration"]).unwrap();
+        let mut out_mig = Vec::new();
+        assert!(run_app(cli_mig, &store, &cb, &mut out_mig).is_ok());
+        let str_mig = String::from_utf8(out_mig).unwrap();
+        assert!(str_mig.contains('█'));
+
+        // 4. Conflicting arguments fail at clap parsing
+        let cli_conflict = Cli::try_parse_from(["tfa", "qr", "github", "--all"]);
+        assert!(cli_conflict.is_err());
     }
 }

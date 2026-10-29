@@ -551,6 +551,14 @@ impl TfaTotp {
         }
     }
 
+    /// Raw secret bytes
+    pub fn secret_bytes(&self) -> Vec<u8> {
+        match &self.inner {
+            TfaEngine::Totp(totp) => totp.secret().as_bytes().to_vec(),
+            TfaEngine::Hotp(h) => h.secret.as_bytes().to_vec(),
+        }
+    }
+
     /// Canonical OTPAuth URL representation
     pub fn to_url(&self) -> Result<String> {
         let base = match &self.inner {
