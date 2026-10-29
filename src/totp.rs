@@ -5,6 +5,27 @@ use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 use totp_rs::{Algorithm, Builder, Secret, Totp};
 
+/// Resolve effective Unix timestamp from optional explicit timestamp and relative skew in seconds
+pub fn resolve_effective_time(at: Option<u64>, skew: Option<i64>) -> Result<Option<u64>> {
+    if at.is_none() && skew.is_none() {
+        return Ok(None);
+    }
+    let base = match at {
+        Some(ts) => ts,
+        None => std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| anyhow::anyhow!("System clock error: {e}"))?
+            .as_secs(),
+    };
+    let effective = match skew {
+        Some(offset) => base
+            .checked_add_signed(offset)
+            .ok_or_else(|| anyhow::anyhow!("Resulting timestamp cannot be negative"))?,
+        None => base,
+    };
+    Ok(Some(effective))
+}
+
 /// Compute RFC 4226 HOTP code
 pub fn generate_hotp(
     secret: &[u8],
@@ -452,7 +473,6 @@ impl TfaTotp {
     }
 
     /// Generate TOTP code for a specific timestamp (TOTP only)
-    #[cfg(test)]
     pub fn generate_at_time(&self, time: u64) -> Result<String> {
         match &self.inner {
             TfaEngine::Totp(totp) => Ok(self.apply_prefix(totp.generate(time).to_string())),
@@ -463,7 +483,6 @@ impl TfaTotp {
     }
 
     /// Generate TOTP code for the next time step from a specific timestamp (TOTP only)
-    #[cfg(test)]
     pub fn generate_next_at_time(&self, time: u64) -> Result<String> {
         match &self.inner {
             TfaEngine::Totp(totp) => {
@@ -486,7 +505,6 @@ impl TfaTotp {
     }
 
     /// Seconds remaining until code expires from a specific timestamp (TOTP only)
-    #[cfg(test)]
     pub fn ttl_at_time(&self, time: u64) -> u64 {
         match &self.inner {
             TfaEngine::Totp(totp) => {
