@@ -38,6 +38,19 @@ pub enum PasswordConfig {
     },
 }
 
+/// Configuration for automatic clipboard clearing timeout.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ClipboardTimeoutConfig {
+    Bool(bool),
+    Seconds(u64),
+    Table {
+        #[serde(default)]
+        enabled: Option<bool>,
+        timeout: Option<u64>,
+    },
+}
+
 /// Representation of values loaded from a configuration file.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfigFile {
@@ -45,6 +58,10 @@ pub struct ConfigFile {
     pub clipboard: Option<ClipboardProvider>,
     #[serde(alias = "clipboard_command")]
     pub clip_command: Option<String>,
+    #[serde(alias = "clear_clipboard")]
+    pub clipboard_clear: Option<bool>,
+    #[serde(alias = "clear_after")]
+    pub clipboard_timeout: Option<ClipboardTimeoutConfig>,
     pub default_namespace: Option<String>,
     pub default_command: Option<String>,
     pub digits: Option<u8>,
@@ -166,6 +183,38 @@ impl ConfigFile {
     }
 
     pub const DEFAULT_PASSWORD_TIMEOUT: u64 = 300;
+    pub const DEFAULT_CLIPBOARD_TIMEOUT: u64 = 30;
+
+    /// Effective clipboard clear timeout in seconds (`None` when disabled).
+    pub fn effective_clipboard_timeout(&self) -> Option<u64> {
+        if self.clipboard_clear == Some(false) {
+            return None;
+        }
+        match &self.clipboard_timeout {
+            Some(ClipboardTimeoutConfig::Bool(false)) => None,
+            Some(ClipboardTimeoutConfig::Bool(true)) => Some(Self::DEFAULT_CLIPBOARD_TIMEOUT),
+            Some(ClipboardTimeoutConfig::Seconds(0)) => None,
+            Some(ClipboardTimeoutConfig::Seconds(s)) => Some(*s),
+            Some(ClipboardTimeoutConfig::Table { enabled, timeout }) => {
+                if *enabled == Some(false) {
+                    None
+                } else {
+                    match timeout {
+                        Some(0) => None,
+                        Some(s) => Some(*s),
+                        None => Some(Self::DEFAULT_CLIPBOARD_TIMEOUT),
+                    }
+                }
+            }
+            None => {
+                if self.clipboard_clear == Some(true) {
+                    Some(Self::DEFAULT_CLIPBOARD_TIMEOUT)
+                } else {
+                    None
+                }
+            }
+        }
+    }
 
     /// Whether master password protection is enabled in configuration.
     pub fn is_password_enabled(&self) -> bool {
@@ -286,6 +335,7 @@ pub struct ResolvedConfig {
     pub light: bool,
     pub password_enabled: bool,
     pub password_timeout: u64,
+    pub clipboard_timeout: Option<u64>,
     pub gpg_fingerprint: Option<String>,
 }
 
@@ -304,7 +354,23 @@ impl Default for ResolvedConfig {
             light: false,
             password_enabled: false,
             password_timeout: ConfigFile::DEFAULT_PASSWORD_TIMEOUT,
+            clipboard_timeout: None,
             gpg_fingerprint: None,
+        }
+    }
+}
+
+pub fn parse_clipboard_timeout_str(s: &str, fallback_secs: Option<u64>) -> Result<Option<u64>> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "0" | "false" | "no" | "off" | "none" | "disable" | "disabled" => Ok(None),
+        "true" | "yes" | "on" | "enable" | "enabled" => Ok(Some(
+            fallback_secs.unwrap_or(ConfigFile::DEFAULT_CLIPBOARD_TIMEOUT),
+        )),
+        other => {
+            let secs = other
+                .parse::<u64>()
+                .with_context(|| format!("Invalid clipboard timeout '{other}'"))?;
+            Ok(if secs == 0 { None } else { Some(secs) })
         }
     }
 }
@@ -504,7 +570,30 @@ pub fn resolve_configuration(
             .unwrap_or(ConfigFile::DEFAULT_PASSWORD_TIMEOUT)
     };
 
-    // 9. GPG key fingerprint precedence: Env > Config File
+    // 9. Clipboard timeout precedence: TFA_CLIPBOARD_CLEAR / TFA_CLIPBOARD_TIMEOUT > Config File > Default (None)
+    let cfg_cb_timeout = config_file
+        .as_ref()
+        .and_then(|c| c.effective_clipboard_timeout());
+    let mut clipboard_timeout = if let Ok(ct_env) = std::env::var("TFA_CLIPBOARD_TIMEOUT") {
+        parse_clipboard_timeout_str(&ct_env, cfg_cb_timeout)?
+    } else {
+        cfg_cb_timeout
+    };
+    if let Ok(cc_env) = std::env::var("TFA_CLIPBOARD_CLEAR") {
+        match cc_env.trim().to_ascii_lowercase().as_str() {
+            "0" | "false" | "no" | "off" | "disable" | "disabled" => {
+                clipboard_timeout = None;
+            }
+            "1" | "true" | "yes" | "on" | "enable" | "enabled" => {
+                if clipboard_timeout.is_none() {
+                    clipboard_timeout = Some(ConfigFile::DEFAULT_CLIPBOARD_TIMEOUT);
+                }
+            }
+            other => anyhow::bail!("Invalid boolean for TFA_CLIPBOARD_CLEAR: '{other}'"),
+        }
+    }
+
+    // 10. GPG key fingerprint precedence: Env > Config File
     let gpg_fingerprint = std::env::var("TFA_GPG_FINGERPRINT")
         .or_else(|_| std::env::var("TFA_GPG_RECIPIENT"))
         .or_else(|_| std::env::var("TFA_GPG_KEY"))
@@ -549,6 +638,7 @@ pub fn resolve_configuration(
             light,
             password_enabled,
             password_timeout,
+            clipboard_timeout,
             gpg_fingerprint,
         },
         config_file,
@@ -999,6 +1089,84 @@ auto_copy = false
         assert!(reloaded.is_password_enabled());
         assert_eq!(reloaded.password_timeout(), 180);
 
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
+
+    #[test]
+    fn test_clipboard_timeout_config_and_env_resolution() {
+        let _guard = TEST_CONFIG_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", dir.path().to_str().unwrap());
+        std::env::remove_var("TFA_CLIPBOARD_TIMEOUT");
+        std::env::remove_var("TFA_CLIPBOARD_CLEAR");
+
+        // 1. Default is None (disabled)
+        let (res_default, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_default.clipboard_timeout, None);
+
+        // 2. Integer seconds in TOML enables timeout
+        let cfg_num = ConfigFile::parse("clipboard_timeout = 20\n", ConfigFormat::Toml).unwrap();
+        assert_eq!(cfg_num.effective_clipboard_timeout(), Some(20));
+
+        // 3. Zero or false disables timeout
+        let cfg_zero = ConfigFile::parse("clipboard_timeout = 0\n", ConfigFormat::Toml).unwrap();
+        assert_eq!(cfg_zero.effective_clipboard_timeout(), None);
+        let cfg_false =
+            ConfigFile::parse("clipboard_timeout = false\n", ConfigFormat::Toml).unwrap();
+        assert_eq!(cfg_false.effective_clipboard_timeout(), None);
+
+        // 4. Boolean true uses DEFAULT_CLIPBOARD_TIMEOUT (30s)
+        let cfg_true = ConfigFile::parse("clipboard_timeout = true\n", ConfigFormat::Toml).unwrap();
+        assert_eq!(
+            cfg_true.effective_clipboard_timeout(),
+            Some(ConfigFile::DEFAULT_CLIPBOARD_TIMEOUT)
+        );
+
+        // 5. Nested table [clipboard_timeout] enabled = true / false
+        let cfg_table_on = ConfigFile::parse(
+            "[clipboard_timeout]\nenabled = true\ntimeout = 45\n",
+            ConfigFormat::Toml,
+        )
+        .unwrap();
+        assert_eq!(cfg_table_on.effective_clipboard_timeout(), Some(45));
+
+        let cfg_table_off = ConfigFile::parse(
+            "[clipboard_timeout]\nenabled = false\ntimeout = 45\n",
+            ConfigFormat::Toml,
+        )
+        .unwrap();
+        assert_eq!(cfg_table_off.effective_clipboard_timeout(), None);
+
+        // 6. Flat clipboard_clear = false disables even when clipboard_timeout = 20
+        let cfg_clear_off = ConfigFile::parse(
+            "clipboard_clear = false\nclipboard_timeout = 20\n",
+            ConfigFormat::Toml,
+        )
+        .unwrap();
+        assert_eq!(cfg_clear_off.effective_clipboard_timeout(), None);
+
+        // 7. Environment variables TFA_CLIPBOARD_TIMEOUT and TFA_CLIPBOARD_CLEAR
+        std::env::set_var("TFA_CLIPBOARD_TIMEOUT", "15");
+        let (res_env15, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_env15.clipboard_timeout, Some(15));
+
+        std::env::set_var("TFA_CLIPBOARD_CLEAR", "false");
+        let (res_env_off, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_env_off.clipboard_timeout, None);
+        std::env::remove_var("TFA_CLIPBOARD_CLEAR");
+
+        std::env::set_var("TFA_CLIPBOARD_TIMEOUT", "false");
+        let (res_env_false, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_env_false.clipboard_timeout, None);
+
+        std::env::set_var("TFA_CLIPBOARD_TIMEOUT", "true");
+        let (res_env_true, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(
+            res_env_true.clipboard_timeout,
+            Some(ConfigFile::DEFAULT_CLIPBOARD_TIMEOUT)
+        );
+
+        std::env::remove_var("TFA_CLIPBOARD_TIMEOUT");
         std::env::remove_var("XDG_CONFIG_HOME");
     }
 }

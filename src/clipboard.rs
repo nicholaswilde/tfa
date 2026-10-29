@@ -18,6 +18,46 @@ pub enum ClipboardProvider {
 
 pub trait Clipboard {
     fn set_text(&self, text: &str) -> Result<()>;
+
+    /// Clear the clipboard if its current contents match `expected` (or unconditionally if
+    /// the provider is write-only like OSC 52 / custom command). Returns true if cleared.
+    fn clear_if_matches(&self, expected: &str) -> Result<bool> {
+        let _ = expected;
+        self.set_text("")?;
+        Ok(true)
+    }
+
+    /// Copy `text` to the clipboard and optionally schedule automatic clearing after `timeout_secs`.
+    fn set_text_with_timeout(&self, text: &str, timeout_secs: Option<u64>) -> Result<()> {
+        self.set_text(text)?;
+        if let Some(secs) = timeout_secs.filter(|&s| s > 0) {
+            spawn_clipboard_clear_worker(text, secs);
+        }
+        Ok(())
+    }
+}
+
+/// Spawn a detached background process to clear the clipboard after `timeout_secs`
+/// if its contents still match `expected`. Passes the token over stdin to avoid
+/// exposing secrets in process arguments (`ps`).
+pub fn spawn_clipboard_clear_worker(expected: &str, timeout_secs: u64) {
+    if timeout_secs == 0 {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let mut cmd = Command::new(exe);
+    cmd.args(["--internal-clear-clipboard", &timeout_secs.to_string()])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    if let Ok(mut child) = cmd.spawn() {
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(expected.as_bytes());
+            let _ = stdin.flush();
+        }
+    }
 }
 
 /// System clipboard using arboard
@@ -30,6 +70,20 @@ impl Clipboard for SystemClipboard {
             .map_err(|e| anyhow::anyhow!("Failed accessing system clipboard: {e}"))?;
         cb.set_text(text)
             .map_err(|e| anyhow::anyhow!("Failed setting clipboard text: {e}"))
+    }
+
+    fn clear_if_matches(&self, expected: &str) -> Result<bool> {
+        let mut cb = arboard::Clipboard::new()
+            .map_err(|e| anyhow::anyhow!("Failed accessing system clipboard: {e}"))?;
+        if let Ok(current) = cb.get_text() {
+            if current != expected {
+                return Ok(false);
+            }
+        }
+        cb.clear()
+            .or_else(|_| cb.set_text(""))
+            .map_err(|e| anyhow::anyhow!("Failed clearing system clipboard: {e}"))?;
+        Ok(true)
     }
 }
 
@@ -193,6 +247,23 @@ impl Clipboard for DispatchingClipboard {
             ClipboardProvider::Osc52 => Osc52Clipboard::new().set_text(text),
         }
     }
+
+    fn clear_if_matches(&self, expected: &str) -> Result<bool> {
+        if let Some(ref cmd) = self.custom_command {
+            if !cmd.trim().is_empty() {
+                CommandClipboard::new(cmd.clone()).set_text("")?;
+                return Ok(true);
+            }
+        }
+
+        match self.provider {
+            ClipboardProvider::System => SystemClipboard.clear_if_matches(expected),
+            ClipboardProvider::Osc52 => {
+                Osc52Clipboard::new().set_text("")?;
+                Ok(true)
+            }
+        }
+    }
 }
 
 /// In-memory clipboard for testing
@@ -200,6 +271,7 @@ impl Clipboard for DispatchingClipboard {
 #[derive(Default)]
 pub struct MockClipboard {
     pub text: std::sync::Mutex<Option<String>>,
+    pub clear_after: std::sync::Mutex<Option<u64>>,
 }
 
 #[cfg(test)]
@@ -207,6 +279,22 @@ impl Clipboard for MockClipboard {
     fn set_text(&self, text: &str) -> Result<()> {
         let mut lock = self.text.lock().unwrap();
         *lock = Some(text.to_string());
+        Ok(())
+    }
+
+    fn clear_if_matches(&self, expected: &str) -> Result<bool> {
+        let mut lock = self.text.lock().unwrap();
+        if lock.as_deref() == Some(expected) {
+            *lock = Some(String::new());
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn set_text_with_timeout(&self, text: &str, timeout_secs: Option<u64>) -> Result<()> {
+        self.set_text(text)?;
+        *self.clear_after.lock().unwrap() = timeout_secs.filter(|&s| s > 0);
         Ok(())
     }
 }
@@ -339,5 +427,19 @@ mod tests {
 
         let saved = std::fs::read_to_string(output_file).unwrap();
         assert_eq!(saved.trim_start_matches('\u{feff}').trim(), "999888");
+    }
+
+    #[test]
+    fn test_clipboard_clear_if_matches() {
+        let cb = MockClipboard::default();
+        cb.set_text("123456").unwrap();
+
+        // Does not clear when token differs
+        assert!(!cb.clear_if_matches("999999").unwrap());
+        assert_eq!(cb.text.lock().unwrap().as_deref(), Some("123456"));
+
+        // Clears when token matches
+        assert!(cb.clear_if_matches("123456").unwrap());
+        assert_eq!(cb.text.lock().unwrap().as_deref(), Some(""));
     }
 }
