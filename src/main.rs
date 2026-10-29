@@ -2417,6 +2417,8 @@ mod tests {
     use clipboard::MockClipboard;
     use storage::MemoryStore;
 
+    static TEST_ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_cli_parse_default() {
         let cli = Cli::try_parse_from(["tfa"]);
@@ -5210,6 +5212,7 @@ light: true
 
     #[test]
     fn test_resolve_instant_secret_with_reader() {
+        let _guard = TEST_ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         // 1. Direct secret
         let res = resolve_instant_secret_with_reader(
             Some("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ".to_string()),
@@ -5549,25 +5552,39 @@ light: true
 
     #[test]
     fn test_run_app_instant_flows() {
+        let _guard = TEST_ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let store = MemoryStore::new();
         let cb = MockClipboard::default();
 
-        // 1. Instant with raw Base32 secret
+        // 1. Instant with raw Base32 secret at fixed timestamp
         let mut out = Vec::new();
-        let cli1 =
-            Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"]).unwrap();
+        let cli1 = Cli::try_parse_from([
+            "tfa",
+            "instant",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--at",
+            "1700000000",
+        ])
+        .unwrap();
         assert!(run_app(cli1, &store, &cb, &mut out).is_ok());
         let out_str1 = String::from_utf8(out).unwrap();
         assert!(out_str1.contains("remaining)"));
         let token1 = out_str1.split_whitespace().next().unwrap();
         assert_eq!(token1.len(), 6);
         assert!(token1.chars().all(|c| c.is_ascii_digit()));
+        assert_eq!(token1, "921300");
 
         // 2. Instant with copy flag
         let mut out2 = Vec::new();
-        let cli2 =
-            Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "-c"])
-                .unwrap();
+        let cli2 = Cli::try_parse_from([
+            "tfa",
+            "instant",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "-c",
+            "--at",
+            "1700000000",
+        ])
+        .unwrap();
         assert!(run_app(cli2, &store, &cb, &mut out2).is_ok());
         let copied = cb.text.lock().unwrap().clone();
         assert!(copied.is_some());
@@ -5620,6 +5637,8 @@ light: true
             "generate",
             "--secret",
             "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--at",
+            "1700000000",
         ])
         .unwrap();
         assert!(run_app(cli6, &store, &cb, &mut out6).is_ok());
@@ -5683,7 +5702,7 @@ light: true
         // 10. Instant with TOTP_TOKEN env var
         std::env::set_var("TOTP_TOKEN", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
         let mut out10 = Vec::new();
-        let cli10 = Cli::try_parse_from(["tfa", "instant"]).unwrap();
+        let cli10 = Cli::try_parse_from(["tfa", "instant", "--at", "1700000000"]).unwrap();
         assert!(run_app(cli10, &store, &cb, &mut out10).is_ok());
         let out_str10 = String::from_utf8(out10).unwrap();
         let token10 = out_str10.split_whitespace().next().unwrap();
