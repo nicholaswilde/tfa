@@ -24,7 +24,7 @@ A high-performance, single-binary CLI Two-Factor Authentication (2FA / TOTP) app
 - **QR Code Support:** Render terminal-native ANSI/Unicode block QR codes for mobile authenticator scanning (`tfa qr`), and scan QR code images (`tfa add --qr`) to import accounts automatically.
 - **Flexible Secret Input:** Supports raw Base32 secret keys and standard `otpauth://totp/...` URIs.
 - **Clipboard Integration:** Instantly copy tokens to your system clipboard with `-c` / `--copy`.
-- **Shell Completions:** Built-in completion generation for Bash, Zsh, Fish, PowerShell, and Elvish via `clap_complete`.
+- **Dynamic Shell Completions:** Dynamic shell completion of stored accounts and namespaces on `<TAB>` across Bash, Zsh, Fish, PowerShell, and Elvish via `clap_complete`.
 - **Lightweight & Portable:** Static, zero-fluff binary compiled for AMD64, ARM64, ARMv7, ARMv6, macOS, and Windows.
 
 ---
@@ -96,7 +96,7 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
 | `audit` | Scan stored accounts and credentials file for security vulnerabilities | `tfa audit [--json]` |
 | `namespace` (`ns`) | Multi-tenant namespace management (`current`, `default`, `list`/`ls`, `create`, `rename`/`ren`/`mv`, `delete`/`del`/`rm`, `set-default`/`use`/`switch`) | `tfa ns` |
-| `completions` | Output shell completion script | `tfa completions zsh` |
+| `completions` | Output dynamic or static shell completion script (`bash`, `zsh`, `fish`, `powershell`, `elvish`) | `tfa completions zsh [--static]` |
 | `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
 
 ### Adding Accounts
@@ -447,34 +447,52 @@ $ tfa audit --json
 
 ### Bash
 ```bash
+# Add to ~/.bashrc for interactive sessions:
+eval "$(tfa completions bash)"
+
+# Or install to standard completion directory:
 tfa completions bash > ~/.local/share/bash-completion/completions/tfa
 ```
 
 ### Zsh
 ```bash
+# Add to ~/.zshrc (after compinit):
+source <(tfa completions zsh)
+
+# Or save to your fpath directory:
 tfa completions zsh > ~/.zfunc/_tfa
-# Ensure fpath includes ~/.zfunc in your .zshrc:
-# fpath=(~/.zfunc $fpath)
-# autoload -Uz compinit && compinit
+# (Ensure fpath includes ~/.zfunc and autoload -Uz compinit && compinit is called)
 ```
 
 ### Fish
-```bash
+```fish
+# Save to standard fish completion directory:
 tfa completions fish > ~/.config/fish/completions/tfa.fish
+
+# Or load directly in current session:
+tfa completions fish | source
 ```
 
 ### PowerShell
 ```powershell
+# Append to your PowerShell profile:
 tfa completions powershell >> $PROFILE
+
+# Or load into active session:
+tfa completions powershell | Out-String | Invoke-Expression
 ```
 
 ### Elvish
 ```elvish
+# Append to your Elvish rc:
 tfa completions elvish >> ~/.elvish/rc.elv
+
+# Or load into active session:
+eval (tfa completions elvish | slurp)
 ```
 
 > [!TIP]
-> Dynamic completions automatically query stored account names and namespaces on `<TAB>` while failing gracefully if storage is locked. Pass `--static` to `tfa completions` to generate static shell completion scripts instead.
+> Dynamic completions automatically query stored account names (for `generate`, `watch`, `show`, `qr`, `edit`, `delete`, `rename`, `move`) and namespace names (for `-n` / `--namespace`, `--to`, and `tfa namespace` subcommands) on `<TAB>`. Queries fail gracefully (returning empty candidates) if storage is locked or unreachable. Pass `--static` to `tfa completions` to generate static shell completion scripts instead.
 
 Pre-generated completion scripts are also available in the [`completions/`](completions/) folder.
 
