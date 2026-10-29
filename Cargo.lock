@@ -249,7 +249,7 @@ dependencies = [
  "base64ct",
  "blake2",
  "cpufeatures 0.3.1",
- "password-hash",
+ "password-hash 0.6.1",
 ]
 
 [[package]]
@@ -900,6 +900,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto_secretstream"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a6419214057ad50a13efccb3ad7714b86b848e3a5aa7b6cf5a3ff07edf387eb"
+dependencies = [
+ "aead 0.5.2",
+ "chacha20 0.9.1",
+ "getrandom 0.2.17",
+ "poly1305",
+ "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
 name = "ctr"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1444,8 +1458,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2333,6 +2349,17 @@ dependencies = [
 
 [[package]]
 name = "password-hash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "346f04948ba92c43e8469c1ee6736c7563d71012b17d40745260fe106aac2166"
+dependencies = [
+ "base64ct",
+ "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
+name = "password-hash"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
@@ -2872,6 +2899,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0516a385866c09368f0b5bcd1caff3366aace790fcd46e2bb032697bb172fd1f"
 dependencies = [
+ "password-hash 0.5.0",
  "pbkdf2",
  "salsa20",
  "sha2 0.10.9",
@@ -3243,11 +3271,13 @@ dependencies = [
  "argon2",
  "base64 0.22.1",
  "base64ct",
+ "chacha20poly1305",
  "clap",
  "clap_complete",
  "clap_mangen",
  "console",
  "crossterm",
+ "crypto_secretstream",
  "dialoguer",
  "google_authenticator_converter",
  "hex",
@@ -3257,8 +3287,10 @@ dependencies = [
  "pbkdf2",
  "qrcodegen",
  "rand 0.10.3",
+ "rand_core 0.6.4",
  "rpassword",
  "rqrr",
+ "scrypt",
  "serde",
  "serde_json",
  "serde_yaml_ng",

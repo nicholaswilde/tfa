@@ -5,11 +5,13 @@ use std::collections::BTreeMap;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
+mod aegis;
 mod audit;
 mod auth;
 mod backup;
 mod clipboard;
 mod config;
+mod ente;
 mod import;
 mod namespace;
 mod qr;
@@ -1942,6 +1944,8 @@ pub fn run_app(
                     || file_or_payload.ends_with(".enc")
                     || file_or_payload.ends_with(".bak")
                     || file_or_payload.ends_with(".2fas")
+                    || file_or_payload.ends_with(".aegis")
+                    || file_or_payload.ends_with(".ente")
                     || file_or_payload.ends_with(".gpg")
                     || file_or_payload.ends_with(".asc")
                     || file_or_payload.ends_with(".pgp")
@@ -1966,6 +1970,12 @@ pub fn run_app(
             } else if twofas::is_encrypted_2fas_backup(&content) {
                 let pass = get_passphrase(password, false)?;
                 twofas::decrypt_2fas_backup(&content, &pass)?
+            } else if aegis::is_encrypted_aegis_backup(&content) {
+                let pass = get_passphrase(password, false)?;
+                aegis::decrypt_aegis_backup(&content, &pass)?
+            } else if ente::is_encrypted_ente_backup(&content) {
+                let pass = get_passphrase(password, false)?;
+                ente::decrypt_ente_backup(&content, &pass)?
             } else if backup::is_gpg_backup(&content) {
                 let decrypted = backup::decrypt_backup_gpg(&content)?;
                 String::from_utf8(decrypted).context("Decrypted GPG backup is not valid UTF-8")?
@@ -3689,6 +3699,130 @@ mod tests {
         assert!(run_app(ow_cli, &store, &cb, &mut ow_out).is_ok());
         let ow_str = String::from_utf8(ow_out).unwrap();
         assert!(ow_str.contains("Summary: 0 imported, 5 updated, 0 skipped."));
+    }
+
+    #[test]
+    fn test_run_app_import_aegis_encrypted_file() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("aegis_backup.json");
+        std::fs::write(&file_path, aegis::tests::AEGIS_ENCRYPTED_FIXTURE).unwrap();
+
+        // 1. Dry run
+        let mut dry_out = Vec::new();
+        let dry_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "test",
+            "--dry-run",
+        ])
+        .unwrap();
+        assert!(run_app(dry_cli, &store, &cb, &mut dry_out).is_ok());
+        let dry_str = String::from_utf8(dry_out).unwrap();
+        assert!(dry_str.contains("[dry-run] Would import account 'Deno:Mason'"));
+        assert!(dry_str.contains("[dry-run] Summary: 7 to import, 0 to update, 0 to skip."));
+        assert!(store.get_secret("Deno:Mason").is_err());
+
+        // 2. Actual import
+        let mut import_out = Vec::new();
+        let import_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "test",
+        ])
+        .unwrap();
+        assert!(run_app(import_cli, &store, &cb, &mut import_out).is_ok());
+        let import_str = String::from_utf8(import_out).unwrap();
+        assert!(import_str.contains("Imported account 'Deno:Mason'"));
+        assert!(import_str.contains("Summary: 7 imported, 0 updated, 0 skipped."));
+
+        let accounts = store.list_accounts().unwrap();
+        assert_eq!(accounts.len(), 7);
+
+        // 3. Verify TOTP token generation (Boeing:Sophia)
+        let boeing_sec = store.get_secret("Boeing:Sophia").unwrap();
+        let boeing = TfaTotp::from_input("Boeing:Sophia", &boeing_sec).unwrap();
+        let code = boeing.generate_current();
+        assert!(!code.is_empty());
+
+        // 4. Import with wrong password fails
+        let mut err_out = Vec::new();
+        let err_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "wrongpass",
+        ])
+        .unwrap();
+        assert!(run_app(err_cli, &store, &cb, &mut err_out).is_err());
+    }
+
+    #[test]
+    fn test_run_app_import_ente_encrypted_file() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("ente_export.json");
+        let payload = "otpauth://totp/EnteApp:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=EnteApp\notpauth://totp/GitLab:bob?secret=JBSWY3DPEHPK3PXP&issuer=GitLab\n";
+        let encrypted =
+            ente::tests::encrypt_ente_export_for_test(payload, "ente_secret_pw", 1048576, 1);
+        std::fs::write(&file_path, encrypted).unwrap();
+
+        // 1. Dry run
+        let mut dry_out = Vec::new();
+        let dry_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "ente_secret_pw",
+            "--dry-run",
+        ])
+        .unwrap();
+        assert!(run_app(dry_cli, &store, &cb, &mut dry_out).is_ok());
+        let dry_str = String::from_utf8(dry_out).unwrap();
+        assert!(dry_str.contains("[dry-run] Would import account 'alice@example.com'"));
+        assert!(dry_str.contains("[dry-run] Summary: 2 to import, 0 to update, 0 to skip."));
+        assert!(store.get_secret("alice@example.com").is_err());
+
+        // 2. Actual import
+        let mut import_out = Vec::new();
+        let import_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "ente_secret_pw",
+        ])
+        .unwrap();
+        assert!(run_app(import_cli, &store, &cb, &mut import_out).is_ok());
+        let import_str = String::from_utf8(import_out).unwrap();
+        assert!(import_str.contains("Imported account 'alice@example.com'"));
+        assert!(import_str.contains("Imported account 'bob'"));
+        assert!(import_str.contains("Summary: 2 imported, 0 updated, 0 skipped."));
+
+        let accounts = store.list_accounts().unwrap();
+        assert_eq!(accounts.len(), 2);
+
+        // 3. Import with wrong password fails
+        let mut err_out = Vec::new();
+        let err_cli = Cli::try_parse_from([
+            "tfa",
+            "import",
+            file_path.to_str().unwrap(),
+            "--password",
+            "wrongpass",
+        ])
+        .unwrap();
+        assert!(run_app(err_cli, &store, &cb, &mut err_out).is_err());
     }
 
     #[test]

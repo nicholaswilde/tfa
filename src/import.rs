@@ -136,22 +136,17 @@ fn parse_value_export(v: Value) -> Result<Vec<ImportItem>> {
                 .and_then(|db| db.get("entries"))
                 .and_then(|e| e.as_array())
             {
-                for entry in entries {
-                    if let Some(name) = entry.get("name").and_then(|n| n.as_str()) {
-                        if let Some(secret) = entry
-                            .get("info")
-                            .and_then(|i| i.get("secret"))
-                            .and_then(|s| s.as_str())
-                        {
-                            items.push(ImportItem {
-                                account: name.to_string(),
-                                secret: secret.to_string(),
-                            });
-                        }
-                    }
+                let aegis_items = crate::aegis::parse_aegis_entries(entries);
+                if !aegis_items.is_empty() {
+                    return Ok(aegis_items);
                 }
-                if !items.is_empty() {
-                    return Ok(items);
+            }
+
+            // Check for direct Aegis entries format: { "entries": [ { "name": "...", "info": { "secret": "..." } } ] }
+            if let Some(Value::Array(entries)) = map.get("entries") {
+                let aegis_items = crate::aegis::parse_aegis_entries(entries);
+                if !aegis_items.is_empty() {
+                    return Ok(aegis_items);
                 }
             }
 
