@@ -155,6 +155,19 @@ pub enum Commands {
         /// Output generated token details as JSON
         #[arg(long)]
         json: bool,
+        /// Emit only the raw token string without decorations or metadata
+        #[arg(
+            short = 'q',
+            long = "quiet",
+            visible_alias = "token-only",
+            num_args = 0..=1,
+            default_missing_value = "true",
+            require_equals = true,
+            conflicts_with = "watch",
+            conflicts_with = "next",
+            conflicts_with = "json"
+        )]
+        quiet: Option<bool>,
     },
     /// Generate a 2FA token instantly from raw secret, URI, or stdin without storage
     #[command(alias = "ins")]
@@ -185,6 +198,17 @@ pub enum Commands {
         /// Watch and continuously refresh code with progress bar
         #[arg(short, long)]
         watch: bool,
+        /// Emit only the raw token string without decorations or metadata
+        #[arg(
+            short = 'q',
+            long = "quiet",
+            visible_alias = "token-only",
+            num_args = 0..=1,
+            default_missing_value = "true",
+            require_equals = true,
+            conflicts_with = "watch"
+        )]
+        quiet: Option<bool>,
     },
     /// Live watch mode displaying continuous TOTP countdown with progress bar
     Watch {
@@ -276,11 +300,20 @@ pub enum Commands {
         /// Name of the account
         account: String,
         /// Print only the raw secret or URI
-        #[arg(short, long)]
+        #[arg(short, long, conflicts_with = "token")]
         raw: bool,
         /// Output account details and metadata as JSON
-        #[arg(long, conflicts_with = "raw")]
+        #[arg(long, conflicts_with = "raw", conflicts_with = "token")]
         json: bool,
+        /// Print only the current live OTP token
+        #[arg(
+            short = 't',
+            long = "token",
+            visible_alias = "code",
+            conflicts_with = "raw",
+            conflicts_with = "json"
+        )]
+        token: bool,
     },
     /// Export accounts to an encrypted backup file or stdout
     Export {
@@ -739,12 +772,24 @@ pub fn format_totp_output(code: &str, ttl: u64, next_code: Option<&str>, copied:
     line
 }
 
+/// Determine if output should be quiet based on explicit flag or TTY auto-detection
+pub fn is_stdout_quiet(quiet_flag: Option<bool>) -> bool {
+    quiet_flag.unwrap_or_else(|| {
+        if cfg!(test) {
+            std::env::var("TFA_TEST_NON_TERMINAL").is_ok()
+        } else {
+            !io::stdout().is_terminal()
+        }
+    })
+}
+
 #[derive(Default, Clone, Copy)]
 struct EmitOptions {
     counter: Option<u64>,
     next: bool,
     json: bool,
     should_copy: bool,
+    quiet: bool,
 }
 
 fn emit_instant_token(
@@ -774,6 +819,8 @@ fn emit_instant_token(
                 counter: Some(c),
             };
             writeln!(out_writer, "{}", serde_json::to_string_pretty(&res)?)?;
+        } else if opts.quiet {
+            writeln!(out_writer, "{code}")?;
         } else if opts.should_copy {
             writeln!(out_writer, "{code} (counter: {c}) [copied]")?;
         } else {
@@ -804,6 +851,8 @@ fn emit_instant_token(
                 counter: None,
             };
             writeln!(out_writer, "{}", serde_json::to_string_pretty(&res)?)?;
+        } else if opts.quiet {
+            writeln!(out_writer, "{code}")?;
         } else {
             let line = format_totp_output(&code, ttl, next_code.as_deref(), opts.should_copy);
             writeln!(out_writer, "{line}")?;
@@ -1168,7 +1217,10 @@ pub fn run_app(
             algorithm,
             next,
             json,
+            quiet,
         }) => {
+            let is_quiet =
+                quiet.unwrap_or_else(|| !next && !json && !watch && is_stdout_quiet(None));
             if let Some(sec) = secret {
                 let resolved_digits = digits.or(resolved_cfg.digits);
                 let resolved_period = period.or(resolved_cfg.period);
@@ -1210,6 +1262,7 @@ pub fn run_app(
                             next,
                             json,
                             should_copy,
+                            quiet: is_quiet,
                         },
                         clipboard,
                         out_writer,
@@ -1259,6 +1312,8 @@ pub fn run_app(
                             counter: Some(current_c),
                         };
                         writeln!(out_writer, "{}", serde_json::to_string_pretty(&res)?)?;
+                    } else if is_quiet {
+                        writeln!(out_writer, "{code}")?;
                     } else if should_copy {
                         writeln!(out_writer, "{code} (counter: {current_c}) [copied]")?;
                     } else {
@@ -1289,6 +1344,8 @@ pub fn run_app(
                             counter: None,
                         };
                         writeln!(out_writer, "{}", serde_json::to_string_pretty(&res)?)?;
+                    } else if is_quiet {
+                        writeln!(out_writer, "{code}")?;
                     } else {
                         let line =
                             format_totp_output(&code, ttl, next_code.as_deref(), should_copy);
@@ -1307,7 +1364,9 @@ pub fn run_app(
             counter,
             copy,
             watch,
+            quiet,
         }) => {
+            let is_quiet = quiet.unwrap_or_else(|| !watch && is_stdout_quiet(None));
             let secret_val = resolve_instant_secret(secret.or(secret_flag), qr.as_deref())?;
             let resolved_digits = digits.or(resolved_cfg.digits);
             let resolved_period = period.or(resolved_cfg.period);
@@ -1337,6 +1396,7 @@ pub fn run_app(
                         next: false,
                         json: false,
                         should_copy,
+                        quiet: is_quiet,
                     },
                     clipboard,
                     out_writer,
@@ -1589,10 +1649,18 @@ pub fn run_app(
                 "Account '{account}' moved to namespace '{target_ns}'."
             )?;
         }
-        Some(Commands::Show { account, raw, json }) => {
+        Some(Commands::Show {
+            account,
+            raw,
+            json,
+            token,
+        }) => {
             let secret = store.get_secret(&account)?;
             if raw {
                 writeln!(out_writer, "{secret}")?;
+            } else if token {
+                let engine = TfaTotp::from_input(&account, &secret)?;
+                writeln!(out_writer, "{}", engine.generate_current())?;
             } else if json {
                 let engine = TfaTotp::from_input(&account, &secret)?;
                 let is_hotp = engine.is_hotp();
@@ -2103,6 +2171,65 @@ mod tests {
             }
             _ => panic!("Expected generate subcommand"),
         }
+    }
+
+    #[test]
+    fn test_cli_parse_generate_quiet_flags() {
+        // Short flag -q
+        let cli_short = Cli::try_parse_from(["tfa", "generate", "github", "-q"]).unwrap();
+        match cli_short.command {
+            Some(Commands::Generate { account, quiet, .. }) => {
+                assert_eq!(account, Some("github".to_string()));
+                assert_eq!(quiet, Some(true));
+            }
+            _ => panic!("Expected generate subcommand"),
+        }
+
+        // Long flag --quiet
+        let cli_long = Cli::try_parse_from(["tfa", "generate", "github", "--quiet"]).unwrap();
+        match cli_long.command {
+            Some(Commands::Generate { account, quiet, .. }) => {
+                assert_eq!(account, Some("github".to_string()));
+                assert_eq!(quiet, Some(true));
+            }
+            _ => panic!("Expected generate subcommand"),
+        }
+
+        // Alias --token-only
+        let cli_alias = Cli::try_parse_from(["tfa", "generate", "github", "--token-only"]).unwrap();
+        match cli_alias.command {
+            Some(Commands::Generate { account, quiet, .. }) => {
+                assert_eq!(account, Some("github".to_string()));
+                assert_eq!(quiet, Some(true));
+            }
+            _ => panic!("Expected generate subcommand"),
+        }
+
+        // Flag before positional argument (-q github)
+        let cli_before = Cli::try_parse_from(["tfa", "generate", "-q", "github"]).unwrap();
+        match cli_before.command {
+            Some(Commands::Generate { account, quiet, .. }) => {
+                assert_eq!(account, Some("github".to_string()));
+                assert_eq!(quiet, Some(true));
+            }
+            _ => panic!("Expected generate subcommand"),
+        }
+
+        // Explicit override --quiet=false
+        let cli_false =
+            Cli::try_parse_from(["tfa", "generate", "github", "--quiet=false"]).unwrap();
+        match cli_false.command {
+            Some(Commands::Generate { account, quiet, .. }) => {
+                assert_eq!(account, Some("github".to_string()));
+                assert_eq!(quiet, Some(false));
+            }
+            _ => panic!("Expected generate subcommand"),
+        }
+
+        // Conflicts: -q with --watch, --json, --next
+        assert!(Cli::try_parse_from(["tfa", "generate", "github", "-q", "-w"]).is_err());
+        assert!(Cli::try_parse_from(["tfa", "generate", "github", "-q", "--json"]).is_err());
+        assert!(Cli::try_parse_from(["tfa", "generate", "github", "-q", "--next"]).is_err());
     }
 
     #[test]
@@ -2704,36 +2831,89 @@ mod tests {
     fn test_cli_parse_show() {
         let cli = Cli::try_parse_from(["tfa", "show", "github"]).unwrap();
         match cli.command {
-            Some(Commands::Show { account, raw, json }) => {
+            Some(Commands::Show {
+                account,
+                raw,
+                json,
+                token,
+            }) => {
                 assert_eq!(account, "github");
                 assert!(!raw);
                 assert!(!json);
+                assert!(!token);
             }
             _ => panic!("Expected show subcommand"),
         }
 
         let cli_raw = Cli::try_parse_from(["tfa", "show", "github", "-r"]).unwrap();
         match cli_raw.command {
-            Some(Commands::Show { account, raw, json }) => {
+            Some(Commands::Show {
+                account,
+                raw,
+                json,
+                token,
+            }) => {
                 assert_eq!(account, "github");
                 assert!(raw);
                 assert!(!json);
+                assert!(!token);
             }
             _ => panic!("Expected show subcommand"),
         }
 
         let cli_json = Cli::try_parse_from(["tfa", "show", "github", "--json"]).unwrap();
         match cli_json.command {
-            Some(Commands::Show { account, raw, json }) => {
+            Some(Commands::Show {
+                account,
+                raw,
+                json,
+                token,
+            }) => {
                 assert_eq!(account, "github");
                 assert!(!raw);
                 assert!(json);
+                assert!(!token);
             }
             _ => panic!("Expected show subcommand"),
         }
 
         // Conflicts with --raw
         assert!(Cli::try_parse_from(["tfa", "show", "github", "-r", "--json"]).is_err());
+
+        // Token flag -t
+        let cli_token = Cli::try_parse_from(["tfa", "show", "github", "-t"]).unwrap();
+        match cli_token.command {
+            Some(Commands::Show { account, token, .. }) => {
+                assert_eq!(account, "github");
+                assert!(token);
+            }
+            _ => panic!("Expected show subcommand with -t"),
+        }
+
+        // Long flag --token
+        let cli_token_long = Cli::try_parse_from(["tfa", "show", "github", "--token"]).unwrap();
+        match cli_token_long.command {
+            Some(Commands::Show { account, token, .. }) => {
+                assert_eq!(account, "github");
+                assert!(token);
+            }
+            _ => panic!("Expected show subcommand with --token"),
+        }
+
+        // Alias --code
+        let cli_code = Cli::try_parse_from(["tfa", "show", "github", "--code"]).unwrap();
+        match cli_code.command {
+            Some(Commands::Show { account, token, .. }) => {
+                assert_eq!(account, "github");
+                assert!(token);
+            }
+            _ => panic!("Expected show subcommand with --code"),
+        }
+
+        // Conflicts: -t with -r, -t with --json
+        assert!(Cli::try_parse_from(["tfa", "show", "github", "-t", "-r"]).is_err());
+        assert!(Cli::try_parse_from(["tfa", "show", "github", "-t", "--json"]).is_err());
+        assert!(Cli::try_parse_from(["tfa", "show", "github", "--code", "--raw"]).is_err());
     }
 
     #[test]
@@ -2778,6 +2958,23 @@ mod tests {
         assert_eq!(details.live_code.len(), 6);
         assert!(details.ttl.is_some());
         assert_eq!(details.counter, None);
+
+        // Token show (-t)
+        let mut token_out = Vec::new();
+        let show_token = Cli::try_parse_from(["tfa", "show", "my_acc", "-t"]).unwrap();
+        assert!(run_app(show_token, &store, &cb, &mut token_out).is_ok());
+        let token_str = String::from_utf8(token_out).unwrap();
+        assert_eq!(token_str.trim().len(), 6);
+        assert!(token_str.trim().chars().all(|c| c.is_ascii_digit()));
+        assert!(!token_str.contains("Account:"));
+        assert!(!token_str.contains("Live Code:"));
+
+        // Code show (--code alias)
+        let mut code_out = Vec::new();
+        let show_code = Cli::try_parse_from(["tfa", "show", "my_acc", "--code"]).unwrap();
+        assert!(run_app(show_code, &store, &cb, &mut code_out).is_ok());
+        let code_str = String::from_utf8(code_out).unwrap();
+        assert_eq!(code_str.trim(), token_str.trim());
 
         // Missing account fails
         let mut err_out = Vec::new();
@@ -4516,6 +4713,7 @@ light: true
                 counter,
                 copy,
                 watch,
+                quiet,
             }) => {
                 assert_eq!(secret, Some("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ".to_string()));
                 assert_eq!(secret_flag, None);
@@ -4526,6 +4724,7 @@ light: true
                 assert_eq!(counter, None);
                 assert_eq!(copy, None);
                 assert!(!watch);
+                assert_eq!(quiet, None);
             }
             _ => panic!("Expected instant subcommand"),
         }
@@ -4601,6 +4800,158 @@ light: true
             }
             _ => panic!("Expected generate subcommand with secret"),
         }
+    }
+
+    #[test]
+    fn test_cli_parse_instant_quiet_flags() {
+        // Short flag -q
+        let cli_short = Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQ", "-q"]).unwrap();
+        match cli_short.command {
+            Some(Commands::Instant { secret, quiet, .. }) => {
+                assert_eq!(secret, Some("GEZDGNBVGY3TQOJQ".to_string()));
+                assert_eq!(quiet, Some(true));
+            }
+            _ => panic!("Expected instant subcommand"),
+        }
+
+        // Long flag --quiet
+        let cli_long =
+            Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQ", "--quiet"]).unwrap();
+        match cli_long.command {
+            Some(Commands::Instant { secret, quiet, .. }) => {
+                assert_eq!(secret, Some("GEZDGNBVGY3TQOJQ".to_string()));
+                assert_eq!(quiet, Some(true));
+            }
+            _ => panic!("Expected instant subcommand"),
+        }
+
+        // Alias --token-only
+        let cli_alias =
+            Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQ", "--token-only"]).unwrap();
+        match cli_alias.command {
+            Some(Commands::Instant { secret, quiet, .. }) => {
+                assert_eq!(secret, Some("GEZDGNBVGY3TQOJQ".to_string()));
+                assert_eq!(quiet, Some(true));
+            }
+            _ => panic!("Expected instant subcommand"),
+        }
+
+        // Conflicts: -q with -w
+        assert!(Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQ", "-q", "-w"]).is_err());
+    }
+
+    #[test]
+    fn test_run_app_generate_quiet() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let add_cli =
+            Cli::try_parse_from(["tfa", "add", "my_totp", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"])
+                .unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // Generate with -q
+        let mut gen_out = Vec::new();
+        let gen_cli = Cli::try_parse_from(["tfa", "generate", "my_totp", "-q"]).unwrap();
+        assert!(run_app(gen_cli, &store, &cb, &mut gen_out).is_ok());
+        let gen_str = String::from_utf8(gen_out).unwrap();
+        assert_eq!(gen_str.trim().len(), 6);
+        assert!(gen_str.trim().chars().all(|c| c.is_ascii_digit()));
+        assert!(!gen_str.contains("remaining)"));
+        assert!(!gen_str.contains("[copied]"));
+
+        // Generate with --token-only and --copy
+        let mut copy_out = Vec::new();
+        let copy_cli =
+            Cli::try_parse_from(["tfa", "generate", "my_totp", "--token-only", "-c"]).unwrap();
+        assert!(run_app(copy_cli, &store, &cb, &mut copy_out).is_ok());
+        let copy_str = String::from_utf8(copy_out).unwrap();
+        assert_eq!(copy_str.trim().len(), 6);
+        assert!(!copy_str.contains("[copied]"));
+        assert_eq!(cb.text.lock().unwrap().as_deref(), Some(copy_str.trim()));
+
+        // HOTP account with -q
+        let add_hotp = Cli::try_parse_from([
+            "tfa",
+            "add",
+            "my_hotp",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--counter",
+            "10",
+        ])
+        .unwrap();
+        assert!(run_app(add_hotp, &store, &cb, &mut out).is_ok());
+
+        let mut hotp_out = Vec::new();
+        let gen_hotp = Cli::try_parse_from(["tfa", "generate", "my_hotp", "-q"]).unwrap();
+        assert!(run_app(gen_hotp, &store, &cb, &mut hotp_out).is_ok());
+        let hotp_str = String::from_utf8(hotp_out).unwrap();
+        assert_eq!(hotp_str.trim().len(), 6);
+        assert!(!hotp_str.contains("counter:"));
+        assert!(!hotp_str.contains("[copied]"));
+    }
+
+    #[test]
+    fn test_run_app_instant_quiet() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        let mut out = Vec::new();
+        let cli = Cli::try_parse_from(["tfa", "instant", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "-q"])
+            .unwrap();
+        assert!(run_app(cli, &store, &cb, &mut out).is_ok());
+        let out_str = String::from_utf8(out).unwrap();
+        assert_eq!(out_str.trim().len(), 6);
+        assert!(out_str.trim().chars().all(|c| c.is_ascii_digit()));
+        assert!(!out_str.contains("remaining)"));
+
+        let mut out_alias = Vec::new();
+        let cli_alias = Cli::try_parse_from([
+            "tfa",
+            "instant",
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            "--token-only",
+        ])
+        .unwrap();
+        assert!(run_app(cli_alias, &store, &cb, &mut out_alias).is_ok());
+        let alias_str = String::from_utf8(out_alias).unwrap();
+        assert_eq!(alias_str.trim().len(), 6);
+        assert!(!alias_str.contains("remaining)"));
+    }
+
+    #[test]
+    fn test_run_app_generate_auto_quiet_piped() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        let mut out = Vec::new();
+
+        let add_cli =
+            Cli::try_parse_from(["tfa", "add", "auto_acc", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"])
+                .unwrap();
+        assert!(run_app(add_cli, &store, &cb, &mut out).is_ok());
+
+        // Simulate piped / non-terminal via env var TFA_TEST_NON_TERMINAL
+        std::env::set_var("TFA_TEST_NON_TERMINAL", "1");
+
+        // 1. Plain `tfa generate auto_acc` -> defaults to quiet output
+        let mut gen_out = Vec::new();
+        let gen_cli = Cli::try_parse_from(["tfa", "generate", "auto_acc"]).unwrap();
+        assert!(run_app(gen_cli, &store, &cb, &mut gen_out).is_ok());
+        let gen_str = String::from_utf8(gen_out).unwrap();
+        assert_eq!(gen_str.trim().len(), 6);
+        assert!(gen_str.trim().chars().all(|c| c.is_ascii_digit()));
+        assert!(!gen_str.contains("remaining)"));
+
+        // 2. Explicit override `tfa generate auto_acc --quiet=false` -> outputs decorations
+        let mut over_out = Vec::new();
+        let over_cli =
+            Cli::try_parse_from(["tfa", "generate", "auto_acc", "--quiet=false"]).unwrap();
+        assert!(run_app(over_cli, &store, &cb, &mut over_out).is_ok());
+        let over_str = String::from_utf8(over_out).unwrap();
+        assert!(over_str.contains("remaining)"));
+
+        std::env::remove_var("TFA_TEST_NON_TERMINAL");
     }
 
     #[test]

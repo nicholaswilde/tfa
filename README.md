@@ -76,6 +76,7 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | :--- | :--- | :--- |
 | `generate` (`gen`, `g`) | Generate current TOTP token (interactive fuzzy search if omitted) | `tfa generate [account] [--json]` |
 | `generate -c` | Generate token and copy to clipboard | `tfa generate [account] -c` |
+| `generate -q` | Emit raw token only (auto-defaults when piped) | `tfa generate [account] -q` |
 | `generate -w` | Watch token countdown with progress bar | `tfa generate [account] -w` |
 | `instant` (`ins`) | Generate token instantly from secret, URI, or stdin without storage | `tfa instant [secret_or_uri]` |
 | `watch` | Watch live TOTP countdown with progress bar | `tfa watch [account] [-c]` |
@@ -84,7 +85,7 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `qr` | Render account as terminal QR code | `tfa qr github [--light]` |
 | `list` (`ls`) | List all configured accounts | `tfa list [--codes] [--json]` |
 | `status` | Live overview of all accounts and tokens | `tfa status [--json]` |
-| `show` | Display account parameters and stored secret | `tfa show github [-r] [--json]` |
+| `show` | Display account parameters, raw secret, or live OTP code | `tfa show github [-r] [-t] [--json]` |
 | `export` | Export accounts to encrypted backup or stdout | `tfa export backup.enc` |
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `delete` (`del`, `rm`, `remove`) | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
@@ -150,6 +151,19 @@ Select account to generate token |
 $ tfa generate github -c
 482910 (24s remaining) [copied]
 
+# Clean raw token output without decorations (-q / --quiet / --token-only):
+$ tfa generate github -q
+482910
+
+# TTY auto-detection: piped or scripted output automatically defaults to quiet token-only:
+$ TOKEN=$(tfa generate github)
+$ echo "$TOKEN"
+482910
+
+# Explicitly override quiet mode when piped:
+$ tfa generate github --quiet=false | cat
+482910 (24s remaining)
+
 # Preview upcoming token for next time step (with warning indicator when expiring soon):
 $ tfa generate github --next
 482910 (24s remaining) (next: 192837)
@@ -204,6 +218,9 @@ Generate tokens directly from a raw secret, `otpauth://` URI, stdin pipe, or QR 
 # Instant from Base32 secret
 tfa instant JBSWY3DPEHPK3PXP
 
+# Clean raw token output without decorations (-q / --quiet / --token-only)
+tfa instant JBSWY3DPEHPK3PXP -q
+
 # Instant with custom parameters
 tfa instant JBSWY3DPEHPK3PXP -d 8 -p 60 -a sha256
 
@@ -222,6 +239,33 @@ TOTP_TOKEN=JBSWY3DPEHPK3PXP tfa instant
 
 # Instant from QR code image
 tfa instant --qr /path/to/qr.png
+```
+
+### Viewing Account Details & Secrets
+
+Inspect account parameters, extract the stored secret key/URI, or print the current live OTP code:
+
+```bash
+# Formatted account overview
+$ tfa show github
+Account:   github
+Type:      TOTP
+Digits:    6
+Period:    30s
+Algorithm: SHA1
+Secret:    JBSWY3DPEHPK3PXP
+Live Code: 482910 (24s remaining)
+
+# Output only the current live OTP code (-t / --token / --code):
+$ tfa show github -t
+482910
+
+# Output only the raw secret or URI (-r / --raw):
+$ tfa show github -r
+JBSWY3DPEHPK3PXP
+
+# JSON format for scripts and integrations:
+$ tfa show github --json
 ```
 
 ### Dashboard & Status Overview
