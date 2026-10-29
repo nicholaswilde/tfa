@@ -222,12 +222,83 @@ pub fn watch_all(
         let engine_res = store
             .get_secret(acc)
             .and_then(|sec| TfaTotp::from_input(acc, &sec));
-        entries.push((acc.clone(), engine_res));
+        entries.push((None, acc.clone(), engine_res));
     }
 
+    render_watch_table(entries, out, max_ticks)
+}
+
+/// Run watch mode for all accounts across all namespaces, optionally filtered by pattern.
+pub fn watch_all_namespaces(
+    store: &dyn AccountStore,
+    out: &mut dyn Write,
+    filter: Option<&str>,
+    max_ticks: Option<usize>,
+) -> Result<()> {
+    let raw_keys = store.list_accounts()?;
+    if raw_keys.is_empty() {
+        writeln!(out, "No accounts configured.")?;
+        return Ok(());
+    }
+
+    let mut parsed: Vec<(String, String, String)> = raw_keys
+        .into_iter()
+        .map(|k| {
+            let (ns, acct) = crate::namespace::parse_key(&k);
+            (ns, acct, k)
+        })
+        .collect();
+
+    parsed.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+
+    let filtered_items: Vec<(String, String, String)> = parsed
+        .into_iter()
+        .filter(|(ns, acct, _)| {
+            filter.is_none_or(|p| {
+                matches_pattern(p, acct) || matches_pattern(p, &format!("{ns}:{acct}"))
+            })
+        })
+        .collect();
+
+    if filtered_items.is_empty() {
+        if let Some(p) = filter {
+            writeln!(out, "No accounts match filter '{p}'.")?;
+        } else {
+            writeln!(out, "No accounts configured.")?;
+        }
+        return Ok(());
+    }
+
+    let mut entries = Vec::new();
+    for (ns, acct, raw_key) in filtered_items {
+        let engine_res = store
+            .get_secret(&raw_key)
+            .and_then(|sec| TfaTotp::from_input(&acct, &sec));
+        entries.push((Some(ns), acct, engine_res));
+    }
+
+    render_watch_table(entries, out, max_ticks)
+}
+
+fn render_watch_table(
+    entries: Vec<(Option<String>, String, Result<TfaTotp>)>,
+    out: &mut dyn Write,
+    max_ticks: Option<usize>,
+) -> Result<()> {
+    let has_ns = entries.iter().any(|(ns, _, _)| ns.is_some());
+    let max_ns_len = if has_ns {
+        entries
+            .iter()
+            .map(|(ns, _, _)| ns.as_deref().unwrap_or("").len())
+            .max()
+            .unwrap_or(9)
+            .max(9)
+    } else {
+        0
+    };
     let max_acc_len = entries
         .iter()
-        .map(|(a, _)| a.len())
+        .map(|(_, a, _)| a.len())
         .max()
         .unwrap_or(7)
         .max(7);
@@ -248,15 +319,27 @@ pub fn watch_all(
                 write!(out, "\x1b[{}A\r", total_lines - 1)?;
             }
 
-            write!(
-                out,
-                "\x1b[2K{:<width$}  {:^8}  PROGRESS\r\n",
-                "ACCOUNT",
-                "TOKEN",
-                width = max_acc_len
-            )?;
+            if has_ns {
+                write!(
+                    out,
+                    "\x1b[2K{:<ns_width$}  {:<width$}  {:^8}  PROGRESS\r\n",
+                    "NAMESPACE",
+                    "ACCOUNT",
+                    "TOKEN",
+                    ns_width = max_ns_len,
+                    width = max_acc_len
+                )?;
+            } else {
+                write!(
+                    out,
+                    "\x1b[2K{:<width$}  {:^8}  PROGRESS\r\n",
+                    "ACCOUNT",
+                    "TOKEN",
+                    width = max_acc_len
+                )?;
+            }
 
-            for (i, (acc, engine_res)) in entries.iter().enumerate() {
+            for (i, (ns, acc, engine_res)) in entries.iter().enumerate() {
                 let is_last = i + 1 == entries.len();
                 let (token, bar) = match engine_res {
                     Ok(engine) => {
@@ -271,24 +354,51 @@ pub fn watch_all(
                     Err(_) => ("ERROR".to_string(), "[invalid secret]".to_string()),
                 };
 
-                if is_last {
-                    write!(
-                        out,
-                        "\x1b[2K{:<width$}  {:^8}  {}",
-                        acc,
-                        token,
-                        bar,
-                        width = max_acc_len
-                    )?;
+                if has_ns {
+                    let ns_str = ns.as_deref().unwrap_or("default");
+                    if is_last {
+                        write!(
+                            out,
+                            "\x1b[2K{:<ns_width$}  {:<width$}  {:^8}  {}",
+                            ns_str,
+                            acc,
+                            token,
+                            bar,
+                            ns_width = max_ns_len,
+                            width = max_acc_len
+                        )?;
+                    } else {
+                        write!(
+                            out,
+                            "\x1b[2K{:<ns_width$}  {:<width$}  {:^8}  {}\r\n",
+                            ns_str,
+                            acc,
+                            token,
+                            bar,
+                            ns_width = max_ns_len,
+                            width = max_acc_len
+                        )?;
+                    }
                 } else {
-                    write!(
-                        out,
-                        "\x1b[2K{:<width$}  {:^8}  {}\r\n",
-                        acc,
-                        token,
-                        bar,
-                        width = max_acc_len
-                    )?;
+                    if is_last {
+                        write!(
+                            out,
+                            "\x1b[2K{:<width$}  {:^8}  {}",
+                            acc,
+                            token,
+                            bar,
+                            width = max_acc_len
+                        )?;
+                    } else {
+                        write!(
+                            out,
+                            "\x1b[2K{:<width$}  {:^8}  {}\r\n",
+                            acc,
+                            token,
+                            bar,
+                            width = max_acc_len
+                        )?;
+                    }
                 }
             }
             out.flush()?;

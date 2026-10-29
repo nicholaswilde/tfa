@@ -75,11 +75,50 @@ pub struct Cli {
     pub clip_command: Option<String>,
 
     /// Target namespace for account scoping (e.g. personal, work, home)
-    #[arg(short = 'n', long, env = "TFA_NAMESPACE", global = true)]
+    #[arg(
+        short = 'n',
+        long,
+        env = "TFA_NAMESPACE",
+        global = true,
+        conflicts_with = "all_namespaces"
+    )]
     pub namespace: Option<String>,
+
+    /// Show accounts across all namespaces
+    #[arg(
+        short = 'A',
+        long = "all-namespaces",
+        global = true,
+        conflicts_with = "namespace"
+    )]
+    pub all_namespaces: bool,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
+}
+
+impl Cli {
+    pub fn try_parse_from<I, T>(itr: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        let cli = <Self as clap::Parser>::try_parse_from(itr)?;
+        if cli.all_namespaces && cli.namespace.is_some() {
+            return Err(clap::Error::raw(
+                clap::error::ErrorKind::ArgumentConflict,
+                "the argument '--all-namespaces' cannot be used with '--namespace <NAMESPACE>'\n",
+            ));
+        }
+        Ok(cli)
+    }
+
+    pub fn parse() -> Self {
+        match Self::try_parse_from(std::env::args_os()) {
+            Ok(cli) => cli,
+            Err(e) => e.exit(),
+        }
+    }
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -395,6 +434,8 @@ pub enum NamespaceCommands {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct AccountStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub namespace: Option<String>,
     pub account: String,
     pub token: String,
     pub ttl: u64,
@@ -441,44 +482,96 @@ pub fn display_accounts_overview(
         let secret = store.get_secret(acc)?;
         let engine = TfaTotp::from_input(acc, &secret)?;
         statuses.push(AccountStatus {
+            namespace: None,
             account: acc.clone(),
             token: engine.generate_current(),
             ttl: engine.ttl(),
         });
     }
 
+    render_statuses_overview(&statuses, json, out)
+}
+
+pub fn render_statuses_overview(
+    statuses: &[AccountStatus],
+    json: bool,
+    out: &mut dyn Write,
+) -> anyhow::Result<()> {
     if json {
         let json_str = serde_json::to_string_pretty(&statuses)?;
         writeln!(out, "{json_str}")?;
     } else {
-        let max_acc_len = statuses
-            .iter()
-            .map(|s| s.account.len())
-            .max()
-            .unwrap_or(7)
-            .max(7);
-        writeln!(
-            out,
-            "{:<width$}  {:^8}  {:>5}",
-            "ACCOUNT",
-            "TOKEN",
-            "TTL",
-            width = max_acc_len
-        )?;
-        for s in statuses {
-            let ttl_str = if s.ttl == 0 {
-                "-".to_string()
-            } else {
-                format!("{}s", s.ttl)
-            };
+        let has_namespace = statuses.iter().any(|s| s.namespace.is_some());
+        if has_namespace {
+            let max_ns_len = statuses
+                .iter()
+                .map(|s| s.namespace.as_deref().unwrap_or("").len())
+                .max()
+                .unwrap_or(9)
+                .max(9);
+            let max_acc_len = statuses
+                .iter()
+                .map(|s| s.account.len())
+                .max()
+                .unwrap_or(7)
+                .max(7);
+            writeln!(
+                out,
+                "{:<ns_width$}  {:<width$}  {:^8}  {:>5}",
+                "NAMESPACE",
+                "ACCOUNT",
+                "TOKEN",
+                "TTL",
+                ns_width = max_ns_len,
+                width = max_acc_len
+            )?;
+            for s in statuses {
+                let ttl_str = if s.ttl == 0 {
+                    "-".to_string()
+                } else {
+                    format!("{}s", s.ttl)
+                };
+                writeln!(
+                    out,
+                    "{:<ns_width$}  {:<width$}  {:^8}  {:>5}",
+                    s.namespace.as_deref().unwrap_or("default"),
+                    s.account,
+                    s.token,
+                    ttl_str,
+                    ns_width = max_ns_len,
+                    width = max_acc_len
+                )?;
+            }
+        } else {
+            let max_acc_len = statuses
+                .iter()
+                .map(|s| s.account.len())
+                .max()
+                .unwrap_or(7)
+                .max(7);
             writeln!(
                 out,
                 "{:<width$}  {:^8}  {:>5}",
-                s.account,
-                s.token,
-                ttl_str,
+                "ACCOUNT",
+                "TOKEN",
+                "TTL",
                 width = max_acc_len
             )?;
+            for s in statuses {
+                let ttl_str = if s.ttl == 0 {
+                    "-".to_string()
+                } else {
+                    format!("{}s", s.ttl)
+                };
+                writeln!(
+                    out,
+                    "{:<width$}  {:^8}  {:>5}",
+                    s.account,
+                    s.token,
+                    ttl_str,
+                    width = max_acc_len
+                )?;
+            }
         }
     }
     Ok(())
@@ -751,6 +844,37 @@ pub fn run_app(
         };
     }
 
+    // Validate --all-namespaces flag usage
+    if cli.all_namespaces {
+        match &cli.command {
+            Some(Commands::List { .. }) => {}
+            Some(Commands::Status { .. }) => {}
+            Some(Commands::Export { .. }) => {}
+            Some(Commands::Watch {
+                command,
+                account,
+                all,
+                ..
+            }) => {
+                let is_all = match command {
+                    Some(WatchCommands::All { .. }) => true,
+                    None => *all || account.as_deref() == Some("all"),
+                };
+                if !is_all {
+                    anyhow::bail!("--all-namespaces is only supported with 'watch all'");
+                }
+            }
+            Some(Commands::Namespace {
+                command: None | Some(NamespaceCommands::List),
+            }) => {}
+            _ => {
+                anyhow::bail!(
+                    "--all-namespaces is only supported with multi-account commands: list, status, watch all, export"
+                );
+            }
+        }
+    }
+
     // If the subcommand is Namespace management, operate on the root store directly
     if let Some(Commands::Namespace {
         command: ref ns_cmd,
@@ -762,7 +886,13 @@ pub fn run_app(
             .map(|ns| namespace::normalize_namespace(ns))
             .unwrap_or_else(|| namespace::DEFAULT_NAMESPACE.to_string());
 
-        match ns_cmd {
+        let effective_cmd = if cli.all_namespaces && ns_cmd.is_none() {
+            &Some(NamespaceCommands::List)
+        } else {
+            ns_cmd
+        };
+
+        match effective_cmd {
             Some(NamespaceCommands::List) => {
                 let mut namespaces = NamespaceStore::list_all_namespaces(store)?;
                 // Ensure default namespace and active namespace exist in list
@@ -1227,7 +1357,19 @@ pub fn run_app(
 
             if is_all {
                 let resolved_filter = cmd_filter.or(filter.as_deref());
-                watch::watch_all(store, out_writer, resolved_filter, None)?;
+                let test_ticks = std::env::var("TFA_TEST_MAX_TICKS")
+                    .ok()
+                    .and_then(|s| s.parse().ok());
+                if cli.all_namespaces {
+                    watch::watch_all_namespaces(
+                        root_store,
+                        out_writer,
+                        resolved_filter,
+                        test_ticks,
+                    )?;
+                } else {
+                    watch::watch_all(store, out_writer, resolved_filter, test_ticks)?;
+                }
             } else {
                 let acct = match account {
                     Some(a) => a,
@@ -1320,31 +1462,101 @@ pub fn run_app(
             write!(out_writer, "{qr_blocks}")?;
         }
         Some(Commands::List { codes, json }) => {
-            let accounts = store.list_accounts()?;
-            if accounts.is_empty() {
-                if json {
-                    writeln!(out_writer, "[]")?;
+            if cli.all_namespaces {
+                let raw_keys = root_store.list_accounts()?;
+                let mut parsed: Vec<(String, String, String)> = raw_keys
+                    .into_iter()
+                    .map(|k| {
+                        let (ns, acct) = namespace::parse_key(&k);
+                        (ns, acct, k)
+                    })
+                    .collect();
+                parsed.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+
+                if parsed.is_empty() {
+                    if json {
+                        writeln!(out_writer, "[]")?;
+                    } else {
+                        writeln!(out_writer, "No accounts configured.")?;
+                    }
+                } else if codes || json {
+                    let mut statuses = Vec::new();
+                    for (ns, acct, raw_key) in parsed {
+                        let secret = root_store.get_secret(&raw_key)?;
+                        let engine = TfaTotp::from_input(&acct, &secret)?;
+                        statuses.push(AccountStatus {
+                            namespace: Some(ns),
+                            account: acct,
+                            token: engine.generate_current(),
+                            ttl: engine.ttl(),
+                        });
+                    }
+                    render_statuses_overview(&statuses, json, out_writer)?;
                 } else {
-                    writeln!(out_writer, "No accounts configured.")?;
+                    for (ns, acct, _) in parsed {
+                        writeln!(out_writer, "{ns}:{acct}")?;
+                    }
                 }
-            } else if codes || json {
-                display_accounts_overview(&accounts, store, json, out_writer)?;
             } else {
-                for account in accounts {
-                    writeln!(out_writer, "{account}")?;
+                let accounts = store.list_accounts()?;
+                if accounts.is_empty() {
+                    if json {
+                        writeln!(out_writer, "[]")?;
+                    } else {
+                        writeln!(out_writer, "No accounts configured.")?;
+                    }
+                } else if codes || json {
+                    display_accounts_overview(&accounts, store, json, out_writer)?;
+                } else {
+                    for account in accounts {
+                        writeln!(out_writer, "{account}")?;
+                    }
                 }
             }
         }
         Some(Commands::Status { json }) => {
-            let accounts = store.list_accounts()?;
-            if accounts.is_empty() {
-                if json {
-                    writeln!(out_writer, "[]")?;
+            if cli.all_namespaces {
+                let raw_keys = root_store.list_accounts()?;
+                let mut parsed: Vec<(String, String, String)> = raw_keys
+                    .into_iter()
+                    .map(|k| {
+                        let (ns, acct) = namespace::parse_key(&k);
+                        (ns, acct, k)
+                    })
+                    .collect();
+                parsed.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+
+                if parsed.is_empty() {
+                    if json {
+                        writeln!(out_writer, "[]")?;
+                    } else {
+                        writeln!(out_writer, "No accounts configured.")?;
+                    }
                 } else {
-                    writeln!(out_writer, "No accounts configured.")?;
+                    let mut statuses = Vec::new();
+                    for (ns, acct, raw_key) in parsed {
+                        let secret = root_store.get_secret(&raw_key)?;
+                        let engine = TfaTotp::from_input(&acct, &secret)?;
+                        statuses.push(AccountStatus {
+                            namespace: Some(ns),
+                            account: acct,
+                            token: engine.generate_current(),
+                            ttl: engine.ttl(),
+                        });
+                    }
+                    render_statuses_overview(&statuses, json, out_writer)?;
                 }
             } else {
-                display_accounts_overview(&accounts, store, json, out_writer)?;
+                let accounts = store.list_accounts()?;
+                if accounts.is_empty() {
+                    if json {
+                        writeln!(out_writer, "[]")?;
+                    } else {
+                        writeln!(out_writer, "No accounts configured.")?;
+                    }
+                } else {
+                    display_accounts_overview(&accounts, store, json, out_writer)?;
+                }
             }
         }
         Some(Commands::Delete { account }) => {
@@ -1441,11 +1653,27 @@ pub fn run_app(
             password,
             gpg,
         }) => {
-            let accounts = store.list_accounts()?;
             let mut map = BTreeMap::new();
-            for account in &accounts {
-                let secret = store.get_secret(account)?;
-                map.insert(account.clone(), secret);
+            if cli.all_namespaces {
+                let raw_keys = root_store.list_accounts()?;
+                let mut parsed: Vec<(String, String, String)> = raw_keys
+                    .into_iter()
+                    .map(|k| {
+                        let (ns, acct) = namespace::parse_key(&k);
+                        (ns, acct, k)
+                    })
+                    .collect();
+                parsed.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+                for (ns, acct, raw_key) in parsed {
+                    let secret = root_store.get_secret(&raw_key)?;
+                    map.insert(format!("{ns}:{acct}"), secret);
+                }
+            } else {
+                let accounts = store.list_accounts()?;
+                for account in &accounts {
+                    let secret = store.get_secret(account)?;
+                    map.insert(account.clone(), secret);
+                }
             }
 
             let json_str = serde_json::to_string_pretty(&map)?;
@@ -1501,7 +1729,7 @@ pub fn run_app(
                 writeln!(
                     out_writer,
                     "Exported {} account(s) to {}",
-                    accounts.len(),
+                    map.len(),
                     dest_path.display()
                 )?;
             } else {
@@ -5064,5 +5292,280 @@ light: true
         let list_str = String::from_utf8(out_list).unwrap();
         assert!(list_str.contains("work"));
         assert!(list_str.contains("(default, active)"));
+    }
+
+    #[test]
+    fn test_cli_parse_all_namespaces_flag() {
+        let cli = Cli::try_parse_from(["tfa", "list", "-A"]).unwrap();
+        assert!(cli.all_namespaces);
+
+        let cli_long = Cli::try_parse_from(["tfa", "list", "--all-namespaces"]).unwrap();
+        assert!(cli_long.all_namespaces);
+
+        let cli_global = Cli::try_parse_from(["tfa", "-A", "list"]).unwrap();
+        assert!(cli_global.all_namespaces);
+
+        let cli_default = Cli::try_parse_from(["tfa", "list"]).unwrap();
+        assert!(!cli_default.all_namespaces);
+    }
+
+    #[test]
+    fn test_cli_parse_all_namespaces_conflict_with_namespace() {
+        let err = Cli::try_parse_from(["tfa", "list", "-n", "work", "-A"]);
+        assert!(err.is_err());
+
+        let err_long =
+            Cli::try_parse_from(["tfa", "list", "--namespace", "work", "--all-namespaces"]);
+        assert!(err_long.is_err());
+
+        let err_global = Cli::try_parse_from(["tfa", "-A", "list", "-n", "work"]);
+        assert!(err_global.is_err());
+    }
+
+    #[test]
+    fn test_all_namespaces_disallowed_commands() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("myacc", "JBSWY3DPEHPK3PXP").unwrap();
+
+        let disallowed_commands: Vec<Vec<&str>> = vec![
+            vec!["tfa", "generate", "myacc", "-A"],
+            vec!["tfa", "add", "newacc", "-A"],
+            vec!["tfa", "delete", "myacc", "-A"],
+            vec!["tfa", "rename", "myacc", "newacc", "-A"],
+            vec!["tfa", "show", "myacc", "-A"],
+            vec!["tfa", "qr", "myacc", "-A"],
+            vec!["tfa", "instant", "JBSWY3DPEHPK3PXP", "-A"],
+            vec!["tfa", "watch", "myacc", "-A"],
+            vec!["tfa", "completions", "bash", "-A"],
+            vec!["tfa", "man", "-A"],
+            vec!["tfa", "password", "status", "-A"],
+            vec!["tfa", "audit", "-A"],
+            vec!["tfa", "mv", "myacc", "-t", "work", "-A"],
+            vec!["tfa", "import", "fake.json", "-A"],
+        ];
+
+        for cmd_args in disallowed_commands {
+            let cli = Cli::try_parse_from(cmd_args.clone())
+                .unwrap_or_else(|e| panic!("Failed to parse args: {:?}, error: {}", cmd_args, e));
+            let mut out = Vec::new();
+            let res = run_app(cli, &store, &cb, &mut out);
+            assert!(
+                res.is_err(),
+                "Expected command {:?} with -A to fail, but it succeeded",
+                cmd_args
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_namespaces_ns_behavior() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("aws", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("work:github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // 1. `tfa ns -A` defaults to `tfa ns list`
+        let cli_ns_bare = Cli::try_parse_from(["tfa", "ns", "-A"]).unwrap();
+        let mut out_ns_bare = Vec::new();
+        let res_bare = run_app(cli_ns_bare, &store, &cb, &mut out_ns_bare);
+        assert!(res_bare.is_ok());
+        let out_str = String::from_utf8(out_ns_bare).unwrap();
+        assert!(out_str.contains("NAMESPACE"));
+        assert!(out_str.contains("default"));
+        assert!(out_str.contains("work"));
+
+        // 2. `tfa ns list -A` succeeds (redundant -A is ignored)
+        let cli_ns_list = Cli::try_parse_from(["tfa", "ns", "list", "-A"]).unwrap();
+        let mut out_ns_list = Vec::new();
+        assert!(run_app(cli_ns_list, &store, &cb, &mut out_ns_list).is_ok());
+        let list_str = String::from_utf8(out_ns_list).unwrap();
+        assert!(list_str.contains("NAMESPACE"));
+        assert!(list_str.contains("default"));
+        assert!(list_str.contains("work"));
+
+        // 3. Other `ns` subcommands disallowed with -A
+        let disallowed_ns = vec![
+            vec!["tfa", "ns", "create", "testns", "-A"],
+            vec!["tfa", "ns", "rename", "work", "ops", "-A"],
+            vec!["tfa", "ns", "delete", "work", "--force", "-A"],
+            vec!["tfa", "ns", "set-default", "work", "-A"],
+            vec!["tfa", "ns", "current", "-A"],
+            vec!["tfa", "ns", "default", "-A"],
+        ];
+
+        for cmd_args in disallowed_ns {
+            let cli = Cli::try_parse_from(cmd_args.clone()).unwrap_or_else(|e| {
+                panic!("Failed to parse ns args: {:?}, error: {}", cmd_args, e)
+            });
+            let mut out = Vec::new();
+            assert!(
+                run_app(cli, &store, &cb, &mut out).is_err(),
+                "Expected ns command {:?} with -A to fail",
+                cmd_args
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_namespaces_list_plain_text() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("aws", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("work:github", "JBSWY3DPEHPK3PXP").unwrap();
+        store
+            .set_secret("personal:slack", "JBSWY3DPEHPK3PXP")
+            .unwrap();
+
+        // Standard `tfa list` (only default namespace)
+        let cli_normal = Cli::try_parse_from(["tfa", "list"]).unwrap();
+        let mut out_normal = Vec::new();
+        assert!(run_app(cli_normal, &store, &cb, &mut out_normal).is_ok());
+        let str_normal = String::from_utf8(out_normal).unwrap();
+        assert_eq!(str_normal.trim(), "aws");
+
+        // `tfa list -A` format: namespace:account
+        let cli_all = Cli::try_parse_from(["tfa", "list", "-A"]).unwrap();
+        let mut out_all = Vec::new();
+        assert!(run_app(cli_all, &store, &cb, &mut out_all).is_ok());
+        let str_all = String::from_utf8(out_all).unwrap();
+        let lines: Vec<&str> = str_all.lines().collect();
+        assert_eq!(lines, vec!["default:aws", "personal:slack", "work:github"]);
+    }
+
+    #[test]
+    fn test_all_namespaces_list_codes_and_status() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("aws", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("work:github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // `tfa list -A --codes`
+        let cli_codes = Cli::try_parse_from(["tfa", "list", "-A", "--codes"]).unwrap();
+        let mut out_codes = Vec::new();
+        assert!(run_app(cli_codes, &store, &cb, &mut out_codes).is_ok());
+        let str_codes = String::from_utf8(out_codes).unwrap();
+        let header = str_codes.lines().next().unwrap();
+        assert!(header.starts_with("NAMESPACE"));
+        assert!(header.contains("ACCOUNT"));
+        assert!(header.contains("TOKEN"));
+        assert!(header.contains("TTL"));
+        assert!(str_codes.contains("default"));
+        assert!(str_codes.contains("aws"));
+        assert!(str_codes.contains("work"));
+        assert!(str_codes.contains("github"));
+
+        // `tfa status -A`
+        let cli_status = Cli::try_parse_from(["tfa", "status", "-A"]).unwrap();
+        let mut out_status = Vec::new();
+        assert!(run_app(cli_status, &store, &cb, &mut out_status).is_ok());
+        let str_status = String::from_utf8(out_status).unwrap();
+        assert!(str_status.starts_with("NAMESPACE"));
+        assert!(str_status.contains("default"));
+        assert!(str_status.contains("aws"));
+        assert!(str_status.contains("work"));
+        assert!(str_status.contains("github"));
+
+        // `tfa list -A --json`
+        let cli_json = Cli::try_parse_from(["tfa", "list", "-A", "--json"]).unwrap();
+        let mut out_json = Vec::new();
+        assert!(run_app(cli_json, &store, &cb, &mut out_json).is_ok());
+        let json_val: serde_json::Value = serde_json::from_slice(&out_json).unwrap();
+        let arr = json_val.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["namespace"], "default");
+        assert_eq!(arr[0]["account"], "aws");
+        assert_eq!(arr[1]["namespace"], "work");
+        assert_eq!(arr[1]["account"], "github");
+    }
+
+    #[test]
+    fn test_all_namespaces_watch_all() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("aws", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("work:github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // Directly test watch_all_namespaces or watch_all with all_namespaces
+        let cli_watch = Cli::try_parse_from(["tfa", "watch", "all", "-A"]).unwrap();
+        let mut out_watch = Vec::new();
+        // Run with test flag or max_ticks
+        std::env::set_var("TFA_TEST_MAX_TICKS", "1");
+        let res = run_app(cli_watch, &store, &cb, &mut out_watch);
+        std::env::remove_var("TFA_TEST_MAX_TICKS");
+        assert!(res.is_ok());
+        let watch_str = String::from_utf8(out_watch).unwrap();
+        assert!(watch_str.contains("NAMESPACE"));
+        assert!(watch_str.contains("default"));
+        assert!(watch_str.contains("aws"));
+        assert!(watch_str.contains("work"));
+        assert!(watch_str.contains("github"));
+    }
+
+    #[test]
+    fn test_all_namespaces_export() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store.set_secret("aws", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("work:github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // 1. Regular export (only default namespace)
+        let cli_normal = Cli::try_parse_from(["tfa", "export", "--unencrypted"]).unwrap();
+        let mut out_normal = Vec::new();
+        assert!(run_app(cli_normal, &store, &cb, &mut out_normal).is_ok());
+        let normal_json: serde_json::Value = serde_json::from_slice(&out_normal).unwrap();
+        let normal_obj = normal_json.as_object().unwrap();
+        assert_eq!(normal_obj.len(), 1);
+        assert!(normal_obj.contains_key("aws"));
+
+        // 2. Export with -A (all namespaces, namespaced keys)
+        let cli_all = Cli::try_parse_from(["tfa", "export", "-A", "--unencrypted"]).unwrap();
+        let mut out_all = Vec::new();
+        assert!(run_app(cli_all, &store, &cb, &mut out_all).is_ok());
+        let all_json: serde_json::Value = serde_json::from_slice(&out_all).unwrap();
+        let all_obj = all_json.as_object().unwrap();
+        assert_eq!(all_obj.len(), 2);
+        assert!(all_obj.contains_key("default:aws"));
+        assert!(all_obj.contains_key("work:github"));
+    }
+
+    #[test]
+    fn test_all_namespaces_empty_store() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        let cli_list = Cli::try_parse_from(["tfa", "list", "-A"]).unwrap();
+        let mut out_list = Vec::new();
+        assert!(run_app(cli_list, &store, &cb, &mut out_list).is_ok());
+        assert_eq!(
+            String::from_utf8(out_list).unwrap().trim(),
+            "No accounts configured."
+        );
+
+        let cli_codes = Cli::try_parse_from(["tfa", "list", "-A", "--codes"]).unwrap();
+        let mut out_codes = Vec::new();
+        assert!(run_app(cli_codes, &store, &cb, &mut out_codes).is_ok());
+        assert_eq!(
+            String::from_utf8(out_codes).unwrap().trim(),
+            "No accounts configured."
+        );
+
+        let cli_json = Cli::try_parse_from(["tfa", "list", "-A", "--json"]).unwrap();
+        let mut out_json = Vec::new();
+        assert!(run_app(cli_json, &store, &cb, &mut out_json).is_ok());
+        assert_eq!(String::from_utf8(out_json).unwrap().trim(), "[]");
+
+        let cli_status = Cli::try_parse_from(["tfa", "status", "-A"]).unwrap();
+        let mut out_status = Vec::new();
+        assert!(run_app(cli_status, &store, &cb, &mut out_status).is_ok());
+        assert_eq!(
+            String::from_utf8(out_status).unwrap().trim(),
+            "No accounts configured."
+        );
+
+        let cli_status_json = Cli::try_parse_from(["tfa", "status", "-A", "--json"]).unwrap();
+        let mut out_status_json = Vec::new();
+        assert!(run_app(cli_status_json, &store, &cb, &mut out_status_json).is_ok());
+        assert_eq!(String::from_utf8(out_status_json).unwrap().trim(), "[]");
     }
 }

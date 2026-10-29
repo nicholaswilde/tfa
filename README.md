@@ -505,6 +505,13 @@ tfa -n work list
 tfa -n work generate aws
 tfa -n work watch all
 
+# View accounts across all namespaces with -A / --all-namespaces
+tfa list -A
+tfa list -A --codes
+tfa status -A
+tfa watch all -A
+tfa export -A --unencrypted
+
 # Show current active or configured default namespace
 tfa ns
 tfa ns current
