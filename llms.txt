@@ -1,49 +1,49 @@
 # tfa
 
-> High-performance, single-binary Rust CLI Two-Factor Authentication (2FA / TOTP / HOTP / Steam Guard) application with OS keyring, age encryption, and headless file storage.
+> Single-binary Rust CLI 2FA (TOTP / HOTP / Steam Guard) app with OS keyring, age encryption, headless file storage.
 
-`tfa` provides secure credential storage, RFC 6238 TOTP and RFC 4226 HOTP token generation, Steam Guard support, terminal QR code rendering/scanning, multi-namespace segregation, master password session caching, encrypted backups, and dynamic shell completions across Linux, macOS, and Windows.
+`tfa` stores credentials securely, generates RFC 6238 TOTP + RFC 4226 HOTP + Steam Guard tokens, QR rendering/scanning, isolates namespaces, caches master password sessions, encrypts backups, outputs dynamic shell completions across Linux, macOS, Windows.
 
 ## Documentation
 
-- [README.md](README.md): Complete user documentation, CLI usage examples, configuration formats, and installation guide.
-- [AGENTS.md](AGENTS.md): Project architecture, tech stack, coding conventions, and quality gates for AI agents.
+- [README.md](README.md): User docs, CLI examples, config formats, install guide.
+- [AGENTS.md](AGENTS.md): Architecture, tech stack, conventions, quality gates.
 - [Man Page](assets/tfa.1): UNIX roff manual page for `tfa`.
-- [Full Context (llms-full.txt)](llms-full.txt): Consolidated single-file documentation and specifications for LLMs.
+- [Full Context (llms-full.txt)](llms-full.txt): Single-file docs + specs for LLMs.
 
 ## Core Modules
 
-- [src/main.rs](src/main.rs): CLI entry point, `clap` command definitions, argument resolution, and command dispatch.
-- [src/totp.rs](src/totp.rs): RFC 6238 TOTP, RFC 4226 HOTP, and Steam Guard token generation, URI parsing, and secret validation.
-- [src/storage.rs](src/storage.rs): Credential storage abstraction across OS `keyring`, `age` encryption, and local `0600` file fallback.
-- [src/config.rs](src/config.rs): Hierarchical configuration loading (CLI > Env > TOML/YAML/JSON file > defaults).
-- [src/auth.rs](src/auth.rs): Master password protection and sliding-window session unlock caching.
-- [src/namespace.rs](src/namespace.rs): Multi-tenant namespace management, switching, and scoping.
+- [src/main.rs](src/main.rs): CLI entry point, `clap` definitions, arg resolution, command dispatch.
+- [src/totp.rs](src/totp.rs): RFC 6238 TOTP, RFC 4226 HOTP, Steam Guard generation, URI parsing, secret validation.
+- [src/storage.rs](src/storage.rs): Credential storage across OS `keyring`, `age` encryption, local `0600` file fallback.
+- [src/config.rs](src/config.rs): Hierarchical config loader (CLI > Env > TOML/YAML/JSON > defaults).
+- [src/auth.rs](src/auth.rs): Master password protection + sliding-window session unlock cache.
+- [src/namespace.rs](src/namespace.rs): Multi-tenant namespace management, switching, scoping.
 - [src/watch.rs](src/watch.rs): Live terminal TOTP countdown progress bars (`watch` and `watch all`).
-- [src/qr.rs](src/qr.rs): Terminal ANSI/Unicode QR code rendering, image decoding (`rqrr`), and Google Authenticator migration payloads.
-- [src/clipboard.rs](src/clipboard.rs): System clipboard (`arboard`), OSC52 escape sequences, custom clip commands, and auto-clear timeouts.
-- [src/audit.rs](src/audit.rs): Security scanner for weak secrets, duplicate seeds, legacy SHA-1 usage, and file permission checks.
-- [src/completions.rs](src/completions.rs): Dynamic and static shell completions for Bash, Zsh, Fish, PowerShell, and Elvish.
+- [src/qr.rs](src/qr.rs): Terminal ANSI/Unicode QR rendering, image decoding (`rqrr`), Google Authenticator migration payloads.
+- [src/clipboard.rs](src/clipboard.rs): System clipboard (`arboard`), OSC52 sequences, custom clip commands, auto-clear timeouts.
+- [src/audit.rs](src/audit.rs): Security scanner for weak secrets, duplicate seeds, legacy SHA-1, file permissions.
+- [src/completions.rs](src/completions.rs): Dynamic + static shell completions for Bash, Zsh, Fish, PowerShell, Elvish.
 
 ## Backup, Migration & Third-Party Importers
 
-- [src/backup.rs](src/backup.rs): Argon2id + AES-256-GCM symmetric encryption and GPG/OpenPGP backup encryption.
-- [src/export.rs](src/export.rs): Encrypted and unencrypted account exporting (JSON, OTPAuth URI list, YAML).
+- [src/backup.rs](src/backup.rs): Argon2id + AES-256-GCM symmetric encryption + GPG/OpenPGP backup encryption.
+- [src/export.rs](src/export.rs): Encrypted + unencrypted account export (JSON, OTPAuth URI list, YAML).
 - [src/import.rs](src/import.rs): Multi-format importer (Google Authenticator, Bitwarden, 1Password, LastPass, Proton, andOTP, Raivo, Stratum, totp-cli).
-- [src/migrate.rs](src/migrate.rs): Direct in-memory migration between `keyring`, `file`, and `age` storage backends.
-- [src/aegis.rs](src/aegis.rs): Aegis Authenticator JSON/encrypted vault parser and importer.
-- [src/ente.rs](src/ente.rs): Ente Auth export parser and importer.
-- [src/twofas.rs](src/twofas.rs): 2FAS (`.2fas`) backup parser and importer.
+- [src/migrate.rs](src/migrate.rs): Direct in-memory migration between `keyring`, `file`, `age` storage backends.
+- [src/aegis.rs](src/aegis.rs): Aegis Authenticator JSON/encrypted vault parser + importer.
+- [src/ente.rs](src/ente.rs): Ente Auth export parser + importer.
+- [src/twofas.rs](src/twofas.rs): 2FAS (`.2fas`) backup parser + importer.
 
 ## Build & Automation
 
-- [Cargo.toml](Cargo.toml): Rust crate manifest, dependencies, and release/CI build profiles.
-- [Taskfile.yml](Taskfile.yml): Task runner definitions for building, cross-compiling, testing, linting, and releasing.
+- [Cargo.toml](Cargo.toml): Rust crate manifest, dependencies, release/CI build profiles.
+- [Taskfile.yml](Taskfile.yml): Task runner for build, cross-compile, test, lint, release.
 - [build.rs](build.rs): Compile-time git version injection (`PROJECT_VERSION`).
-- [scripts/release.sh](scripts/release.sh): Automated version bump, tagging, and release script.
+- [scripts/release.sh](scripts/release.sh): Automated version bump, tag, release script.
 - [scripts/release_summary.py](scripts/release_summary.py): Git log release notes generator.
 
 ## Optional
 
-- [Shell Completions](completions/): Pre-generated completion scripts for Bash, Zsh, Fish, PowerShell, and Elvish.
-- [LICENSE](LICENSE): Apache License 2.0 terms and conditions.
+- [Shell Completions](completions/): Pre-generated completion scripts for Bash, Zsh, Fish, PowerShell, Elvish.
+- [LICENSE](LICENSE): Apache License 2.0.
