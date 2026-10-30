@@ -1,0 +1,335 @@
+# tfa
+
+> High-performance, single-binary Rust CLI Two-Factor Authentication (2FA / TOTP / HOTP / Steam Guard) application with OS keyring, age encryption, and headless file storage.
+
+`tfa` provides secure credential storage, RFC 6238 TOTP and RFC 4226 HOTP token generation, Steam Guard support, terminal QR code rendering/scanning, multi-namespace segregation, master password session caching, encrypted backups, and dynamic shell completions across Linux, macOS, and Windows.
+
+---
+
+## Table of Contents
+
+1. [Overview & Features](#overview--features)
+2. [Architecture & Repository Layout](#architecture--repository-layout)
+3. [Installation & Building](#installation--building)
+4. [CLI Commands & Usage](#cli-commands--usage)
+5. [Storage Backends & Encryption](#storage-backends--encryption)
+6. [Configuration Reference](#configuration-reference)
+7. [Backup, Export, Import & Migration](#backup-export-import--migration)
+8. [Password Protection & Session Caching](#password-protection--session-caching)
+9. [Security Audit](#security-audit)
+10. [Multi-Namespace Management](#multi-namespace-management)
+11. [Shell Completions & Man Page](#shell-completions--man-page)
+12. [Development & Quality Gates](#development--quality-gates)
+13. [License & Maintainer](#license--maintainer)
+
+---
+
+## Overview & Features
+
+- **Security First:** Credentials reside in OS keyring (`secret-service`/D-Bus on Linux, Keychain on macOS, Windows Credential Manager), `age`-encrypted files (`~/.local/share/tfa/credentials.age`), or `0600` user-only local file storage (`~/.local/share/tfa/credentials.json`).
+- **RFC 6238 & RFC 4226 Compliant:** Standard TOTP (6/8 digits, SHA1/SHA256/SHA512, custom periods), counter-based HOTP, and 5-character alphanumeric Steam Guard tokens powered by `totp-rs`.
+- **Live Watch & Countdown:** Real-time countdown progress bars for single accounts or all accounts in a namespace (`tfa watch`, `tfa watch all`).
+- **QR Code Support:** Render ANSI/Unicode terminal QR codes (`tfa qr`), Google Authenticator batch migration QR codes (`tfa qr --all`), and scan QR images (`tfa add --qr`, `tfa instant --qr`).
+- **Clipboard Integration:** Copy tokens via system clipboard (`arboard`), OSC52 terminal escape sequences, or custom commands (`wl-copy`, `xclip`), with configurable auto-clear timers.
+- **Multi-Format Import/Export:** Encrypted backups (Argon2id + AES-256-GCM or GPG/OpenPGP) and direct import from Google Authenticator, 2FAS, Aegis, Ente Auth, Bitwarden, 1Password, LastPass, Proton, andOTP, Raivo, Stratum, and `totp-cli`.
+- **Dynamic Shell Completions:** Real-time completion of stored accounts and namespaces on `<TAB>` for Bash, Zsh, Fish, PowerShell, and Elvish.
+- **Cross-Platform & Static:** Targets AMD64, ARM64, ARMv7, ARMv6 Linux, macOS, and Windows.
+
+---
+
+## Architecture & Repository Layout
+
+### Directory Structure
+
+```text
+tfa/
+├── Cargo.toml             # Crate manifest, dependencies, release/ci profiles
+├── Taskfile.yml           # Task runner automation
+├── build.rs               # Git version injection (PROJECT_VERSION)
+├── README.md              # User guide and configuration documentation
+├── AGENTS.md              # Agent development conventions and architecture
+├── assets/
+│   └── tfa.1              # Generated UNIX roff man page
+├── completions/           # Pre-generated shell completion scripts
+├── scripts/
+│   ├── release.sh         # Version bump, validation, and git tagger
+│   └── release_summary.py # Release notes generator
+└── src/
+    ├── main.rs            # CLI parser (clap), config merge, command dispatch
+    ├── totp.rs            # TOTP, HOTP, Steam Guard engine & otpauth:// URI parser
+    ├── storage.rs         # Keyring, file (0600), and age storage backends
+    ├── config.rs          # TOML, YAML, JSON config loader & precedence resolver
+    ├── auth.rs            # Master password verification & sliding session cache
+    ├── namespace.rs       # Multi-tenant namespace CRUD & default switching
+    ├── watch.rs           # Terminal live countdown loop & glob filtering
+    ├── qr.rs              # Terminal QR renderer, rqrr scanner, migration protobufs
+    ├── clipboard.rs       # System/OSC52/custom command clipboard & auto-clear
+    ├── audit.rs           # Security auditor (entropy, duplicates, SHA1, perms)
+    ├── backup.rs          # Argon2id + AES-256-GCM & GPG backup crypto
+    ├── export.rs          # Encrypted/plaintext exporter (JSON, OTPAuth, YAML)
+    ├── import.rs          # Multi-vendor 2FA importer
+    ├── migrate.rs         # In-memory backend-to-backend migration
+    ├── aegis.rs           # Aegis vault decryptor and parser
+    ├── ente.rs            # Ente Auth decryptor and parser
+    ├── twofas.rs          # 2FAS backup decryptor and parser
+    └── completions.rs     # Dynamic and static clap_complete generators
+```
+
+### Technology Stack
+
+- **Language:** Rust (Edition 2021)
+- **CLI & Completions:** `clap` (derive, env), `clap_complete` (unstable-dynamic), `clap_mangen`
+- **TOTP / Crypto:** `totp-rs`, `hmac`, `sha1`, `sha2`, `aes-gcm`, `argon2`, `age`, `scrypt`, `pbkdf2`, `chacha20poly1305`, `crypto_secretstream`
+- **Storage & Clipboard:** `keyring`, `arboard`
+- **Terminal & UI:** `crossterm`, `dialoguer` (fuzzy-select), `console`, `rpassword`
+- **QR & Image:** `qrcodegen`, `rqrr`, `image`, `google_authenticator_converter`
+- **Formats:** `serde`, `serde_json`, `toml`, `serde_yaml_ng`, `url`, `base64`, `hex`
+
+---
+
+## Installation & Building
+
+### Homebrew
+
+```bash
+brew install nicholaswilde/homebrew-tap/tfa
+```
+
+### Build from Source
+
+Requires Rust toolchain (1.88+) and optionally `task`:
+
+```bash
+task build:local
+# Or directly with Cargo:
+cargo build --release
+```
+
+Binary output: `target/release/tfa`.
+
+---
+
+## CLI Commands & Usage
+
+```bash
+tfa [OPTIONS] [COMMAND]
+```
+
+Running `tfa` without arguments executes `default_command` (`list` by default, configurable via config or `TFA_DEFAULT_COMMAND`).
+
+### Command Summary
+
+| Command | Aliases | Description | Example |
+| :--- | :--- | :--- | :--- |
+| `generate` | `gen`, `g` | Generate TOTP/HOTP token (fuzzy select if account omitted) | `tfa generate [account] [-c] [-q] [-w] [--next] [--json]` |
+| `instant` | `ins` | Stateless token generation from secret, URI, stdin, or QR | `tfa instant <secret_or_uri> [-d 8] [-p 60] [-a sha256]` |
+| `watch` | - | Live countdown with progress bar (`watch [account]` or `watch all`) | `tfa watch all --filter "git*"` |
+| `add` | - | Add account via Base32 secret, `otpauth://` URI, prompt, or `--qr` | `tfa add github JBSWY3DPEHPK3PXP --prefix 1234` |
+| `edit` | `set` | Modify existing account parameters or prefix in-place | `tfa edit github --digits 8 --period 60 --prefix 9999` |
+| `qr` | - | Render terminal QR code or Google Authenticator migration QR | `tfa qr [account] [--all] [--light]` |
+| `list` | `ls` | List accounts in active or all namespaces | `tfa list [--codes] [-A] [--json]` |
+| `status` | - | Live dashboard of accounts, tokens, and TTLs | `tfa status [-A] [--json]` |
+| `show` | - | Inspect account metadata, raw secret (`-r`), or token (`-t`) | `tfa show github [-r] [-t] [--json]` |
+| `export` | - | Export accounts encrypted (AES-GCM/GPG) or unencrypted | `tfa export backup.enc [--gpg] [--format <json\|otpauth\|yaml>]` |
+| `import` | - | Import accounts from encrypted backup or 3rd-party exports | `tfa import backup.enc [--dry-run] [--overwrite] [--skip]` |
+| `migrate` | - | In-memory migration between `keyring`, `file`, and `age` | `tfa migrate --from keyring --to age [--purge-source]` |
+| `delete` | `del`, `rm`, `remove` | Delete an account secret (fuzzy select if omitted) | `tfa delete [account] [-f]` |
+| `rename` | `ren` | Rename an account in the active namespace | `tfa rename <old_name> <new_name>` |
+| `move` | `mv` | Move an account to another namespace | `tfa move <account> --to <target_ns>` |
+| `password` | `pwd`, `pw` | Manage master password protection (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password add --timeout 600` |
+| `audit` | - | Scan accounts and storage files for security weaknesses | `tfa audit [--json]` |
+| `namespace` | `ns` | Manage namespaces (`current`, `default`, `list`, `create`, `rename`, `delete`, `set-default`) | `tfa ns set-default work` |
+| `completions` | - | Output shell completion scripts (`bash`, `zsh`, `fish`, `powershell`, `elvish`) | `tfa completions zsh [--static]` |
+| `man` | - | Output UNIX roff man page | `tfa man > assets/tfa.1` |
+
+### Key Usage Examples
+
+```bash
+# Add TOTP, Steam Guard, HOTP, or scan from QR image:
+tfa add github JBSWY3DPEHPK3PXP
+tfa add steam_acct JBSWY3DPEHPK3PXP -a steam
+tfa add hotp_acct GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ --counter 0
+tfa add --qr /path/to/qr.png
+
+# Generate tokens with clipboard copy, auto-clear, next-token preview, or time skew:
+tfa generate github -c --clear-after 15
+tfa generate github --next
+tfa generate github --skew -30
+tfa generate github --at 1730000000
+tfa generate github --json
+
+# Stateless generation:
+tfa instant JBSWY3DPEHPK3PXP -q
+echo "JBSWY3DPEHPK3PXP" | tfa instant -
+tfa instant --qr /path/to/qr.png
+```
+
+---
+
+## Storage Backends & Encryption
+
+Configured via `--storage <auto|keyring|file|age>`, `TFA_STORAGE`, or `storage` in config:
+
+1. **`auto` (default):** Uses OS keyring first; falls back to `~/.local/share/tfa/credentials.json` (`0600` permissions) with a notice when headless or D-Bus/Secret Service is unavailable.
+2. **`file`:** Directly uses `~/.local/share/tfa/credentials.json` (`0600`) without querying OS keyring.
+3. **`keyring`:** Strictly requires OS keyring; fails hard if unreachable.
+4. **`age`:** Stores credentials in `~/.local/share/tfa/credentials.age` encrypted via `age`.
+
+### Age Key Resolution Order
+
+1. Explicit age key: `--age-key`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `AGE_KEY_FILE`, `SOPS_AGE_KEY_FILE`.
+2. Explicit SSH key: `--ssh-key`, `TFA_SSH_KEY_FILE`, `TFA_SSH_KEY`, or `ssh_key` in config.
+3. SOPS age key file: `~/.config/sops/age/keys.txt`.
+4. Default age key file: `~/.config/age/keys.txt` (`$XDG_CONFIG_HOME/age/keys.txt`).
+5. Default SSH keys: `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, or valid key pairs in `~/.ssh/`.
+6. Passphrase fallback: `TFA_AGE_PASSPHRASE` or interactive terminal prompt.
+
+---
+
+## Configuration Reference
+
+### Precedence Order (Highest to Lowest)
+
+1. **CLI Flags** (`--storage`, `--age-key`, `--ssh-key`, `--gpg`, `--clipboard`, `--clip-command`, `--clear-after`, `--no-clear`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
+2. **Environment Variables** (`TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_SSH_KEY`, `TFA_SSH_KEY_FILE`, `TFA_GPG_FINGERPRINT`, `TFA_GPG_RECIPIENT`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_CLIPBOARD_TIMEOUT`, `TFA_CLIPBOARD_CLEAR`, `TFA_NAMESPACE`, `TFA_DEFAULT_COMMAND`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
+3. **Config File** (`-C <path>` / `--config <path>` or `~/.config/tfa/config.{toml,yaml,yml,json}`)
+4. **Defaults** (`storage = "auto"`, `clipboard = "system"`, `clipboard_timeout = disabled`, `default_namespace = "default"`, `default_command = "list"`, `digits = 6`, `period = 30`, `algorithm = "sha1"`, `auto_copy = false`, `light = false`)
+
+### Config Schema (TOML Flat Example)
+
+```toml
+storage = "keyring"           # auto, keyring, file, or age
+age_key = "~/.config/sops/age/keys.txt"
+ssh_key = "~/.ssh/id_ed25519"
+gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
+clipboard = "system"          # system or osc52
+clip_command = "wl-copy"
+clipboard_clear = true
+clipboard_timeout = 30
+default_namespace = "personal"
+default_command = "list"      # list, status, watch all
+digits = 6                    # 6 or 8
+period = 30                   # 30 or 60
+algorithm = "sha1"            # sha1, sha256, sha512, or steam
+auto_copy = true
+light = false
+password = true
+password_timeout = 300
+```
+
+Both flat and nested (`[password]`, `[clipboard_timeout]`) formats are supported across TOML, YAML, and JSON.
+
+---
+
+## Backup, Export, Import & Migration
+
+### Export
+
+- **Argon2id + AES-256-GCM encrypted:** `tfa export backup.enc`
+- **GPG / OpenPGP encrypted:** `tfa export backup.gpg --gpg [fingerprint]`
+- **Unencrypted (JSON, OTPAuth URIs, YAML):** `tfa export --unencrypted --format <json|otpauth|yaml> [file]`
+
+### Import
+
+Supports automatic format detection and decryption for:
+- `tfa` encrypted backups (`.enc`, `.gpg`) and plaintext exports
+- Google Authenticator (`otpauth-migration://offline?data=...` URIs and QR images)
+- 2FAS (`.2fas`, encrypted & plaintext)
+- Aegis Authenticator (JSON vault, encrypted & plaintext)
+- Ente Auth (plaintext & encrypted exports)
+- Bitwarden (JSON, CSV)
+- 1Password (CSV)
+- `totp-cli` (YAML)
+- LastPass, Proton Authenticator, andOTP, Raivo OTP, Stratum
+
+Flags: `--dry-run`, `--overwrite`, `--skip`.
+
+### Storage Migration
+
+```bash
+tfa migrate --from <keyring|file|age> --to <keyring|file|age> [--dry-run] [--overwrite] [--purge-source]
+```
+
+---
+
+## Password Protection & Session Caching
+
+Optional master password verification with sliding-window unlock caching (default 300s):
+
+```bash
+tfa password add [--timeout 600]
+tfa password status
+tfa password unlock
+tfa password lock
+tfa password remove
+```
+
+---
+
+## Security Audit
+
+`tfa audit [--json]` inspects all namespaces and storage files for:
+- **`[HIGH]` Weak Secrets:** Base32 secrets < 16 chars (< 128-bit entropy).
+- **`[HIGH]` Duplicate Secrets:** Reused secret seeds across accounts/namespaces.
+- **`[HIGH]` Corrupted Accounts:** Unparseable secrets or URIs.
+- **`[HIGH]` File Permissions/Ownership:** `credentials.json` not `0600` or owned by another UID.
+- **`[WARN]` Legacy Hash Algorithms:** Accounts using `SHA1` instead of `SHA256`/`SHA512`.
+
+---
+
+## Multi-Namespace Management
+
+```bash
+tfa -n work <command>          # Scope command to namespace
+tfa list -A                    # List across all namespaces
+tfa ns                         # Show active/default namespace
+tfa ns list                    # List all namespaces
+tfa ns create <name>           # Create namespace
+tfa ns rename <old> <new>      # Rename namespace
+tfa ns set-default <name>      # Persist default namespace in config
+tfa ns delete <name> [--force] # Delete namespace and its accounts
+tfa move <account> --to <ns>   # Move account between namespaces
+```
+
+---
+
+## Shell Completions & Man Page
+
+```bash
+# Dynamic completions (queries accounts & namespaces on <TAB>):
+tfa completions <bash|zsh|fish|powershell|elvish>
+
+# Static completions:
+tfa completions <shell> --static
+
+# Generate man page:
+tfa man > assets/tfa.1
+```
+
+---
+
+## Development & Quality Gates
+
+Managed via `Taskfile.yml`:
+
+```bash
+task check        # cargo check
+task fmt          # cargo fmt --all
+task fmt:check    # cargo fmt -- --check
+task lint         # cargo clippy -- -D warnings
+task clippy       # cargo clippy --workspace --all-targets --all-features -- -D warnings
+task test         # fmt:check + lint + cargo test + clippy
+task test:ci      # Full CI test suite using ci profile
+task coverage     # cargo llvm-cov summary (>80% required)
+task completions  # Regenerate completions/ scripts
+task man          # Regenerate assets/tfa.1
+task build:local  # cargo build --release
+task build        # Multi-arch Linux builds via cross (amd64, arm64, armv7, armv6)
+```
+
+---
+
+## License & Maintainer
+
+- **License:** [Apache License 2.0](LICENSE)
+- **Author:** [Nicholas Wilde](https://github.com/nicholaswilde)
