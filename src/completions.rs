@@ -26,6 +26,13 @@ pub fn set_test_store(store: Option<Arc<dyn AccountStore>>) {
 
 /// Check if master password protection is active and the session is currently locked.
 pub fn is_storage_locked() -> bool {
+    #[cfg(test)]
+    {
+        if TEST_COMPLETION_STORE.with(|cell| cell.borrow().is_some()) {
+            return false;
+        }
+    }
+
     let (cfg, _) = match crate::config::resolve_configuration(None, None, None, None, None) {
         Ok(res) => res,
         Err(_) => return false,
@@ -129,6 +136,21 @@ pub fn account_candidates_from_store(
     target_namespace: Option<&str>,
     all_namespaces: bool,
 ) -> Vec<CompletionCandidate> {
+    #[cfg(test)]
+    let active_ns = Some(DEFAULT_NAMESPACE);
+    #[cfg(not(test))]
+    let active_ns = None;
+
+    account_candidates_from_store_with_active(store, target_namespace, all_namespaces, active_ns)
+}
+
+/// Generate candidate account names from an `AccountStore` with an optional explicit active namespace.
+pub fn account_candidates_from_store_with_active(
+    store: &dyn AccountStore,
+    target_namespace: Option<&str>,
+    all_namespaces: bool,
+    active_namespace: Option<&str>,
+) -> Vec<CompletionCandidate> {
     let Ok(all_keys) = store.list_accounts() else {
         return Vec::new();
     };
@@ -153,10 +175,14 @@ pub fn account_candidates_from_store(
             }
         }
     } else {
-        let active_ns = crate::config::resolve_configuration(None, None, None, None, None)
-            .ok()
-            .map(|(r, _)| r.namespace)
-            .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string());
+        let active_ns = if let Some(active) = active_namespace {
+            active.to_string()
+        } else {
+            crate::config::resolve_configuration(None, None, None, None, None)
+                .ok()
+                .map(|(r, _)| r.namespace)
+                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string())
+        };
         let norm_active = normalize_namespace(&active_ns);
 
         for key in all_keys {
@@ -283,6 +309,22 @@ mod tests {
             .collect();
 
         assert_eq!(vals, vec!["github", "work/aws"]);
+    }
+
+    #[test]
+    fn test_account_candidates_with_custom_active_namespace() {
+        let store = MemoryStore::new();
+        store.set_secret("github", "secret1").unwrap();
+        store.set_secret("work:aws", "secret2").unwrap();
+
+        let candidates =
+            account_candidates_from_store_with_active(&store, None, false, Some("work"));
+        let vals: Vec<String> = candidates
+            .into_iter()
+            .map(|c| c.get_value().to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(vals, vec!["aws", "default/github"]);
     }
 
     #[test]
