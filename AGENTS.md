@@ -1,28 +1,28 @@
 # AGENTS.md
 
-Instructions, conventions, and architectural context for AI agents working on `tfa`.
+Conventions and architecture for AI agents working on `tfa`.
 
 ---
 
 ## 1. Project Overview & Architecture
 
-**`tfa`** is a high-performance CLI Two-Factor Authentication (2FA / TOTP) application written in Rust. It provides secure credential storage, TOTP token generation, and account management from the terminal.
+**`tfa`**: Rust CLI Two-Factor Authentication (2FA / TOTP) app for secure credential storage, TOTP generation, and account management.
 
 ### Core Goals
-- **Security First:** Secure credential and secret storage leveraging the system `keyring`. Never log or leak secrets.
-- **Portability:** Static, single-binary distribution compiled across multiple architectures (AMD64, ARM64, ARMv7, ARMv6, macOS, Windows).
-- **Simplicity & Speed:** Fast, minimal-overhead command execution with zero unnecessary dependencies (Ponytail discipline).
-- **Token Efficiency:** Concise CLI output and help text for optimal terminal and agent consumption.
+- **Security First:** Store credentials/secrets via system `keyring`. Never log or leak secrets.
+- **Portability:** Static single-binary across AMD64, ARM64, ARMv7, ARMv6, macOS, Windows.
+- **Simplicity & Speed:** Fast execution, zero unnecessary dependencies (Ponytail discipline).
+- **Token Efficiency:** Concise CLI output and help text.
 
 ### Key Capabilities
-- Manage 2FA accounts (add, list, update, remove) securely via system keyring.
-- Generate time-based one-time passwords (TOTP) compliant with RFC 6238 via `totp-rs`.
-- Interactive and automated CLI flows powered by `clap`.
+- Manage 2FA accounts (add, list, update, remove) via system keyring.
+- Generate RFC 6238 TOTP codes via `totp-rs`.
+- Interactive and automated CLI flows via `clap`.
 
 ### Reference Implementation
-For feature parity, capabilities, design inspiration, or CLI conveniences, refer to:
+For feature parity, design, or CLI flags:
 - **Path:** `/home/nicholas/git/yitsushi/totp-cli`
-- Consult `totp-cli` commands, flags, configuration structure, and feature set when planning or expanding `tfa`.
+- Check `totp-cli` commands, flags, and config structure when expanding `tfa`.
 
 ---
 
@@ -42,33 +42,33 @@ For feature parity, capabilities, design inspiration, or CLI conveniences, refer
 
 ## 3. Development Principles & Code Style
 
-- **Build Discipline (Ponytail):** Minimal code that solves the problem. Reuse standard library where possible; avoid speculative abstractions.
-- **Surgical Changes:** Modify only what is requested. Keep edits focused and verifiable.
-- **Secret Hygiene:** Never write unencrypted secrets to disk, configs, or commit history. Passwords/keys reside in `keyring` or encrypted via SOPS if configured.
-- **Configuration Parity:** Whenever modifying configuration fields in `src/config.rs`, update all configuration examples in `README.md` across all supported formats (flat/nested TOML, flat/nested YAML, JSON) and maintain parity in `assets/config.example.toml`.
-- **Code Quality:** All code must pass `cargo fmt -- --check` and `cargo clippy -- -D warnings`.
+- **Build Discipline (Ponytail):** Minimum code solving problem. Reuse stdlib; no speculative abstractions.
+- **Surgical Changes:** Modify only requested code. Keep edits focused and verifiable.
+- **Secret Hygiene:** Never write unencrypted secrets to disk, configs, or git history. Keep secrets in `keyring` or SOPS.
+- **Configuration Parity:** When modifying config fields in `src/config.rs`, update all config examples in `README.md` (flat/nested TOML, flat/nested YAML, JSON) and `assets/config.example.toml`.
+- **Code Quality:** Must pass `cargo fmt -- --check` and `cargo clippy -- -D warnings`.
 
 ---
 
 ## 4. Testing & Quality Gates
 
 ### Test-Driven Development (TDD) Protocol
-1. **Red Phase:** Write failing unit or integration tests reproducing the bug or specifying the new feature before writing any implementation code. Run `cargo test` to verify the failure.
-2. **Green Phase:** Write the minimum necessary implementation code to pass the tests.
-3. **Refactor Phase:** Refactor and clean up code while keeping all tests passing. Verify adherence to Ponytail discipline.
+1. **Red Phase:** Write failing unit/integration tests before implementation. Run `cargo test` to verify failure.
+2. **Green Phase:** Write minimum code to pass tests.
+3. **Refactor Phase:** Clean up code while keeping tests green and adhering to Ponytail discipline.
 
 ### Quality Gates
-Before completing any task, ensure:
-- [ ] `task fmt:check` passes without reformatting needed.
+Before completing any task:
+- [ ] `task fmt:check` passes.
 - [ ] `task lint` / `task clippy` passes with zero warnings (`-D warnings`).
 - [ ] `task test` passes all unit and integration tests.
-- [ ] Code coverage target remains high (>80%).
+- [ ] Code coverage stays >80%.
 
 ---
 
 ## 5. Development Commands (`Taskfile.yml`)
 
-Use `task` as the primary development entry point:
+Use `task` as primary entry point:
 
 ```bash
 task check        # Check for compilation errors
@@ -85,7 +85,7 @@ task build        # Build all multi-arch targets via cross
 Follow global `~/.gemini/config/rules/rtk-rules.md`, `ripgrep-rules.md`, and `github-cli-rules.md`.
 
 ## What To Do Next
-- When asked "what to do next" (or similar), **always check the remote repository issues first** using `gh`:
+- When asked "what to do next", **check remote repository issues first** via `gh`:
   ```bash
   rtk gh issue list | cat
   ```
