@@ -45,6 +45,7 @@ For feature parity, capabilities, design inspiration, or CLI conveniences, refer
 - **Build Discipline (Ponytail):** Minimal code that solves the problem. Reuse standard library where possible; avoid speculative abstractions.
 - **Surgical Changes:** Modify only what is requested. Keep edits focused and verifiable.
 - **Secret Hygiene:** Never write unencrypted secrets to disk, configs, or commit history. Passwords/keys reside in `keyring` or encrypted via SOPS if configured.
+- **Configuration Parity:** Whenever modifying configuration fields in `src/config.rs`, update all configuration examples in `README.md` across all supported formats (flat/nested TOML, flat/nested YAML, JSON) and maintain parity in `assets/config.example.toml`.
 - **Code Quality:** All code must pass `cargo fmt -- --check` and `cargo clippy -- -D warnings`.
 
 ---

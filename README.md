@@ -581,8 +581,6 @@ ssh_key = "~/.ssh/id_ed25519" # optional SSH private key file
 gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3" # optional default GPG recipient key
 clipboard = "system"          # system or osc52 (terminal ANSI escape sequence)
 clip_command = "wl-copy"      # optional custom command receiving token via stdin
-clipboard_clear = true        # enable or disable automatic clipboard clearing (true/false)
-clipboard_timeout = 30        # clear copied token after N seconds (0 or false to disable)
 default_namespace = "personal"# active default namespace (default: "default")
 default_command = "list"      # default command when invoked without args (list, status, watch all)
 digits = 6                    # 6 or 8
@@ -631,8 +629,6 @@ ssh_key: ~/.ssh/id_ed25519
 gpg_fingerprint: "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
 clipboard: system
 clip_command: "xclip -selection clipboard"
-clipboard_clear: true
-clipboard_timeout: 30
 default_namespace: personal
 default_command: list
 digits: 6
@@ -644,9 +640,38 @@ light: false
 password:
   enabled: true
   timeout: 300
+
+clipboard_timeout:
+  enabled: true
+  timeout: 30
 ```
 
 #### JSON (`~/.config/tfa/config.json`)
+
+##### Flat Format
+```json
+{
+  "storage": "auto",
+  "age_key": "~/.config/sops/age/keys.txt",
+  "ssh_key": "~/.ssh/id_ed25519",
+  "gpg_fingerprint": "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3",
+  "clipboard": "system",
+  "clip_command": "wl-copy",
+  "clipboard_clear": true,
+  "clipboard_timeout": 30,
+  "default_namespace": "personal",
+  "default_command": "list",
+  "digits": 6,
+  "period": 30,
+  "algorithm": "sha1",
+  "auto_copy": true,
+  "light": false,
+  "password": true,
+  "password_timeout": 300
+}
+```
+
+##### Nested Format
 ```json
 {
   "storage": "auto",
@@ -665,6 +690,10 @@ password:
   "password": {
     "enabled": true,
     "timeout": 300
+  },
+  "clipboard_timeout": {
+    "enabled": true,
+    "timeout": 30
   }
 }
 ```
