@@ -91,7 +91,7 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `migrate` | In-memory migration between storage backends (`keyring`, `file`, `age`) | `tfa migrate --from keyring --to age` |
 | `delete` (`del`, `rm`, `remove`) | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
-| `rename` (`ren`) | Rename an account within the active namespace | `tfa rename <old_name> <new_name>` |
+| `rename` (`ren`) | Rename an account or batch rename accounts | `tfa rename <old> <new>` / `tfa rename -b [-s <sep>] [--dry-run]` |
 | `move` (`mv`) | Relocate an account to a different namespace | `tfa move <account> --to <target_ns>` |
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
 | `audit` | Scan stored accounts and credentials file for security vulnerabilities | `tfa audit [--json]` |
@@ -735,6 +735,13 @@ tfa ns ren work office
 # Rename an account within current namespace
 tfa rename github gh
 tfa ren github gh
+tfa rename github gh --dry-run
+
+# Batch rename accounts to clean command-line friendly names (lowercase, replace spaces)
+tfa rename --batch --dry-run
+tfa rename --batch
+tfa rename -b -s _
+tfa -A rename --batch
 
 # Move an account to another namespace
 tfa move aws --to work

@@ -50,6 +50,78 @@ pub fn parse_key(key: &str) -> (String, String) {
     }
 }
 
+/// Clean an account name for command-line usability:
+/// - Convert to lowercase
+/// - Replace whitespace and spaces around dashes with the specified separator
+/// - Collapse consecutive separators and trim leading/trailing separators
+pub fn clean_account_name(name: &str, separator: &str) -> String {
+    let sep = if separator.is_empty() { "-" } else { separator };
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let lower = trimmed.to_lowercase();
+    let chars: Vec<char> = lower.chars().collect();
+    let mut result = String::with_capacity(chars.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+        if c.is_whitespace() || (sep == "-" && c == '-') || (sep == "_" && c == '_') {
+            let start = i;
+            let mut has_whitespace = false;
+            let mut has_dash = false;
+            let mut has_underscore = false;
+
+            while i < chars.len() {
+                let curr = chars[i];
+                if curr.is_whitespace() {
+                    has_whitespace = true;
+                    i += 1;
+                } else if curr == '-' {
+                    has_dash = true;
+                    i += 1;
+                } else if curr == '_' {
+                    has_underscore = true;
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let is_separator = has_whitespace
+                || (sep == "-" && has_dash && !has_underscore)
+                || (sep == "_" && has_underscore && !has_dash);
+
+            if is_separator {
+                if !result.is_empty() && !result.ends_with(sep) {
+                    result.push_str(sep);
+                }
+            } else {
+                for ch in &chars[start..i] {
+                    result.push(*ch);
+                }
+            }
+        } else {
+            result.push(c);
+            i += 1;
+        }
+    }
+
+    let mut res = result
+        .trim_matches(|c: char| c.is_whitespace() || c == '-' || c == '_')
+        .to_string();
+    while res.starts_with(sep) {
+        res = res[sep.len()..].to_string();
+    }
+    while res.ends_with(sep) {
+        res.truncate(res.len() - sep.len());
+    }
+
+    res
+}
+
 /// Namespace-scoped wrapper around an underlying `AccountStore`.
 pub struct NamespaceStore<'a> {
     store: &'a dyn AccountStore,
@@ -127,13 +199,13 @@ impl<'a> NamespaceStore<'a> {
         Ok(deleted)
     }
 
-    /// Rename an account within a specific namespace.
-    pub fn rename_account(
+    /// Validate an account rename operation without executing it.
+    pub fn validate_rename_account(
         store: &dyn AccountStore,
         namespace: &str,
         old_name: &str,
         new_name: &str,
-    ) -> Result<()> {
+    ) -> Result<String> {
         let old_name = old_name.trim();
         let new_name = new_name.trim();
         if old_name.is_empty() || new_name.is_empty() {
@@ -152,9 +224,23 @@ impl<'a> NamespaceStore<'a> {
             bail!("Account '{new_name}' already exists in namespace '{ns}'");
         }
 
-        ns_store.set_secret(new_name, &secret)?;
-        if let Err(e) = ns_store.delete_account(old_name) {
-            let _ = ns_store.delete_account(new_name);
+        Ok(secret)
+    }
+
+    /// Rename an account within a specific namespace.
+    pub fn rename_account(
+        store: &dyn AccountStore,
+        namespace: &str,
+        old_name: &str,
+        new_name: &str,
+    ) -> Result<()> {
+        let secret = Self::validate_rename_account(store, namespace, old_name, new_name)?;
+        let ns = normalize_namespace(namespace);
+        let ns_store = NamespaceStore::new(store, &ns);
+
+        ns_store.set_secret(new_name.trim(), &secret)?;
+        if let Err(e) = ns_store.delete_account(old_name.trim()) {
+            let _ = ns_store.delete_account(new_name.trim());
             return Err(e);
         }
 
@@ -418,5 +504,95 @@ mod tests {
         NamespaceStore::move_account(&root_store, "home", "router", "default").unwrap();
         assert!(home_store.get_secret("router").is_err());
         assert_eq!(default_store.get_secret("router").unwrap(), "SEC_ROUTER");
+    }
+
+    #[test]
+    fn test_clean_account_name() {
+        // Basic lowercase and space replacement
+        assert_eq!(clean_account_name("Facebook Bob", "-"), "facebook-bob");
+        assert_eq!(clean_account_name("Facebook Bob", "_"), "facebook_bob");
+        assert_eq!(clean_account_name("Facebook Bob", "."), "facebook.bob");
+
+        // Spaces around dash
+        assert_eq!(clean_account_name("Facebook - Bob", "-"), "facebook-bob");
+        assert_eq!(clean_account_name("Facebook - Bob", "_"), "facebook_bob");
+        assert_eq!(
+            clean_account_name("Facebook   -   Bob", "-"),
+            "facebook-bob"
+        );
+        assert_eq!(clean_account_name("Facebook- Bob", "-"), "facebook-bob");
+        assert_eq!(clean_account_name("Facebook -Bob", "-"), "facebook-bob");
+        assert_eq!(clean_account_name("Facebook -- Bob", "-"), "facebook-bob");
+        assert_eq!(clean_account_name("Facebook - - Bob", "-"), "facebook-bob");
+
+        // Spaces around underscore
+        assert_eq!(clean_account_name("Facebook _ Bob", "_"), "facebook_bob");
+        assert_eq!(clean_account_name("Facebook _ Bob", "-"), "facebook-bob");
+
+        // Multiple spaces
+        assert_eq!(clean_account_name("Facebook   Bob", "-"), "facebook-bob");
+        assert_eq!(clean_account_name("  Facebook Bob  ", "-"), "facebook-bob");
+
+        // Leading and trailing punctuation
+        assert_eq!(clean_account_name("- Facebook Bob -", "-"), "facebook-bob");
+        assert_eq!(
+            clean_account_name("  - Facebook - Bob -  ", "-"),
+            "facebook-bob"
+        );
+        assert_eq!(clean_account_name("- Facebook Bob", "_"), "facebook_bob");
+
+        // Existing clean names without spaces preserved
+        assert_eq!(clean_account_name("aws-s3-bucket", "_"), "aws-s3-bucket");
+        assert_eq!(clean_account_name("aws_s3_bucket", "-"), "aws_s3_bucket");
+        assert_eq!(clean_account_name("already-clean", "-"), "already-clean");
+
+        // Empty and blank
+        assert_eq!(clean_account_name("", "-"), "");
+        assert_eq!(clean_account_name("   ", "-"), "");
+        assert_eq!(clean_account_name("- - -", "-"), "");
+    }
+
+    #[test]
+    fn test_validate_rename_account() {
+        let root_store = MemoryStore::new();
+        let default_store = NamespaceStore::new(&root_store, "default");
+        default_store.set_secret("github", "SEC_GITHUB").unwrap();
+        default_store.set_secret("gitlab", "SEC_GITLAB").unwrap();
+
+        // Valid
+        let secret =
+            NamespaceStore::validate_rename_account(&root_store, "default", "github", "gh")
+                .unwrap();
+        assert_eq!(secret, "SEC_GITHUB");
+
+        // Identical
+        assert!(NamespaceStore::validate_rename_account(
+            &root_store,
+            "default",
+            "github",
+            "github"
+        )
+        .is_err());
+
+        // Empty
+        assert!(NamespaceStore::validate_rename_account(&root_store, "default", "", "gh").is_err());
+        assert!(
+            NamespaceStore::validate_rename_account(&root_store, "default", "github", "").is_err()
+        );
+
+        // Target exists
+        assert!(NamespaceStore::validate_rename_account(
+            &root_store,
+            "default",
+            "github",
+            "gitlab"
+        )
+        .is_err());
+
+        // Missing source
+        assert!(
+            NamespaceStore::validate_rename_account(&root_store, "default", "missing", "gh")
+                .is_err()
+        );
     }
 }
