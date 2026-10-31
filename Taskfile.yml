@@ -118,10 +118,20 @@ tasks:
     cmds:
       - cargo fmt -- --check
 
+  fmt:md:
+    desc: Format Markdown files with rumdl
+    cmds:
+      - rumdl fmt .
+
   lint:
     desc: Lint code with clippy
     cmds:
       - cargo clippy -- -D warnings
+
+  lint:md:
+    desc: Lint Markdown files with rumdl
+    cmds:
+      - rumdl check .
 
   coverage:
     desc: Run tests and generate coverage report (stdout summary)

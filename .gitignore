@@ -59,5 +59,6 @@ Thumbs.db
 # Agentic Stack & MCP Caches
 .codegraph/
 .serena/
+.rumdl_cache/
 .rtk/*
 !.rtk/filters.toml

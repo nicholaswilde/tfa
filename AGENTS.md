@@ -9,18 +9,22 @@ Conventions and architecture for AI agents working on `tfa`.
 **`tfa`**: Rust CLI Two-Factor Authentication (2FA / TOTP) app for secure credential storage, TOTP generation, and account management.
 
 ### Core Goals
+
 - **Security First:** Store credentials/secrets via system `keyring`. Never log or leak secrets.
 - **Portability:** Static single-binary across AMD64, ARM64, ARMv7, ARMv6, macOS, Windows.
 - **Simplicity & Speed:** Fast execution, zero unnecessary dependencies (Ponytail discipline).
 - **Token Efficiency:** Concise CLI output and help text.
 
 ### Key Capabilities
+
 - Manage 2FA accounts (add, list, update, remove) via system keyring.
 - Generate RFC 6238 TOTP codes via `totp-rs`.
 - Interactive and automated CLI flows via `clap`.
 
 ### Reference Implementation
+
 For feature parity, design, or CLI flags:
+
 - **Path:** `/home/nicholas/git/yitsushi/totp-cli`
 - Check `totp-cli` commands, flags, and config structure when expanding `tfa`.
 
@@ -53,12 +57,15 @@ For feature parity, design, or CLI flags:
 ## 4. Testing & Quality Gates
 
 ### Test-Driven Development (TDD) Protocol
+
 1. **Red Phase:** Write failing unit/integration tests before implementation. Run `cargo test` to verify failure.
 2. **Green Phase:** Write minimum code to pass tests.
 3. **Refactor Phase:** Clean up code while keeping tests green and adhering to Ponytail discipline.
 
 ### Quality Gates
+
 Before completing any task:
+
 - [ ] `task fmt:check` passes.
 - [ ] `task lint` / `task clippy` passes with zero warnings (`-D warnings`).
 - [ ] `task test` passes all unit and integration tests.
@@ -82,10 +89,12 @@ task build        # Build all multi-arch targets via cross
 ```
 
 ## 6. RTK Command Guidelines
+
 Follow global `~/.gemini/config/rules/rtk-rules.md`, `ripgrep-rules.md`, and `github-cli-rules.md`.
 
 <!-- context-mode-begin -->
 ## 7. Context-Mode Routing Guidelines
+
 - **Derive, Do Not Dump**: Do NOT use `ctx_execute_file` or `ctx_execute` to dump whole file or full config. Print only specific value, matches, count, or known line range needed.
 - **Tool Call Surface**: When using MCP wrappers, call `call_mcp_tool` with `ServerName: "context-mode_context-mode"` (or `"context-mode"`) and `ToolName: "ctx_execute"`, `"ctx_execute_file"`, `"ctx_batch_execute"`, `"ctx_fetch_and_index"`, `"ctx_search"`, or `"ctx_index"`.
 - **Mandatory Routing**:
@@ -98,7 +107,9 @@ Follow global `~/.gemini/config/rules/rtk-rules.md`, `ripgrep-rules.md`, and `gi
 <!-- context-mode-end -->
 
 ## What To Do Next
+
 - When asked "what to do next", **check remote repository issues first** via `gh`:
+
   ```bash
   rtk gh issue list | cat
   ```

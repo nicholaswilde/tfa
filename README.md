@@ -47,6 +47,7 @@ brew install tfa
 ```
 
 ### Prerequisites
+
 - [Rust toolchain](https://rustup.rs/) (1.88+)
 - [Task](https://taskfile.dev/) (optional, recommended)
 
@@ -333,6 +334,7 @@ $ tfa status --json
 `tfa` provides secure backup and restore with Argon2id + AES-256-GCM symmetric encryption or GPG / OpenPGP public-key encryption, as well as seamless migration from other 2FA applications.
 
 #### Exporting Accounts
+
 ```bash
 # Export encrypted backup (prompts for master passphrase):
 tfa export backup.enc
@@ -353,6 +355,7 @@ tfa export dump.yaml --unencrypted --format yaml
 ```
 
 #### Importing Accounts
+
 ```bash
 # Restore from an encrypted backup file (auto-detects Argon2id/AES-GCM or GPG):
 tfa import backup.enc
@@ -411,6 +414,7 @@ When password protection is enabled in the configuration file, any `tfa` command
 ## :shield: Security Audit
 
 Scan all stored accounts across namespaces and local credential storage files for potential security issues:
+
 - **Weak Secrets (`[HIGH]`):** Base32 secret seeds shorter than 16 characters (< 128-bit entropy).
 - **Duplicate Secrets (`[HIGH]`):** Identical secret seeds shared across multiple accounts or namespaces.
 - **Corrupted Accounts (`[HIGH]`):** Stored secrets or `otpauth://` URIs that fail validation.
@@ -446,6 +450,7 @@ $ tfa audit --json
 `tfa` features dynamic autocompletion for stored account names, configured namespaces, commands, and options. Shell scripts can be generated for Bash, Zsh, Fish, PowerShell, and Elvish:
 
 ### Bash
+
 ```bash
 # Add to ~/.bashrc for interactive sessions:
 eval "$(tfa completions bash)"
@@ -455,6 +460,7 @@ tfa completions bash > ~/.local/share/bash-completion/completions/tfa
 ```
 
 ### Zsh
+
 ```bash
 # Add to ~/.zshrc (after compinit):
 source <(tfa completions zsh)
@@ -465,6 +471,7 @@ tfa completions zsh > ~/.zfunc/_tfa
 ```
 
 ### Fish
+
 ```fish
 # Save to standard fish completion directory:
 tfa completions fish > ~/.config/fish/completions/tfa.fish
@@ -474,6 +481,7 @@ tfa completions fish | source
 ```
 
 ### PowerShell
+
 ```powershell
 # Append to your PowerShell profile:
 tfa completions powershell >> $PROFILE
@@ -483,6 +491,7 @@ tfa completions powershell | Out-String | Invoke-Expression
 ```
 
 ### Elvish
+
 ```elvish
 # Append to your Elvish rc:
 tfa completions elvish >> ~/.elvish/rc.elv
@@ -510,7 +519,9 @@ cp config.example.toml ~/.config/tfa/config.toml
 ```
 
 ### Hierarchical Precedence
+
 Settings resolve in strict hierarchical precedence order (highest to lowest):
+
 1. **Command Line Arguments** (e.g. `--storage`, `--age-key`, `--ssh-key`, `--gpg`, `--clipboard`, `--clip-command`, `--clear-after`, `--no-clear`, `--namespace`, `--digits`, `--period`, `--algorithm`, `--copy`, `--light`)
 2. **Environment Variables** (e.g. `TFA_STORAGE`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `TFA_SSH_KEY`, `TFA_SSH_KEY_FILE`, `TFA_GPG_FINGERPRINT`, `TFA_GPG_RECIPIENT`, `TFA_CLIPBOARD`, `TFA_CLIP_COMMAND`, `TFA_CLIPBOARD_TIMEOUT`, `TFA_CLIPBOARD_CLEAR`, `TFA_NAMESPACE`, `TFA_CONFIG`, `TFA_DIGITS`, `TFA_PERIOD`, `TFA_ALGORITHM`, `TFA_AUTO_COPY`, `TFA_LIGHT`)
 3. **Configuration File** (`-C <path>` / `--config <path>`, or default locations: `~/.config/tfa/config.{toml,yaml,yml,json}`)
@@ -521,15 +532,19 @@ Settings resolve in strict hierarchical precedence order (highest to lowest):
 `tfa` supports four storage options via `storage` in config, `--storage`, or `TFA_STORAGE`:
 
 - **`auto` (default):** Attempts the OS system keyring first (Secret Service on Linux, Keychain on macOS, Credential Manager on Windows). If the keyring daemon is unreachable, locked, or running in a headless/SSH session (`SS error`), `tfa` displays a notice and automatically falls back to local user file storage (`0600` permissions at `~/.local/share/tfa/credentials.json`).
-  ```
+
+  ```text
   [notice] Keyring unavailable (Failed saving secret in keyring: Couldn't access platform storage: SS error: result not returned from SS API); saving to local file store
   ```
+
 - **`file`:** Directly reads and writes to `~/.local/share/tfa/credentials.json` without querying DBus or system keyring, silencing fallback notices in headless, SSH, or server environments.
 - **`keyring`:** Strictly requires the OS system keyring and returns a hard error if unavailable.
 - **`age`:** Identity-based encrypted file storage (`~/.local/share/tfa/credentials.age`) using [`age`](https://github.com/FiloSottile/age). Encrypts credentials with age public keys, SSH keys (`~/.ssh/id_ed25519.pub`, `~/.ssh/id_rsa.pub`), or a passphrase.
 
 #### Age Storage Key Resolution
+
 When using `--storage age`, `tfa` resolves decryption identities and encryption recipients in the following order:
+
 1. Explicit age key argument or environment variable: `--age-key`, `TFA_AGE_KEY`, `TFA_AGE_KEY_FILE`, `AGE_KEY_FILE`, or `SOPS_AGE_KEY_FILE`.
 2. Explicit SSH key file location: `--ssh-key` (`--ssh-key-file`, `--age-ssh-key`), `TFA_SSH_KEY_FILE`, `TFA_SSH_KEY`, or `ssh_key` in configuration.
 3. SOPS age key fallback: `~/.config/sops/age/keys.txt` (or `%APPDATA%\sops\age\keys.txt`).
@@ -562,6 +577,7 @@ tfa migrate --from file --to age --purge-source
 A ready-to-use, fully commented template is available at [`assets/config.example.toml`](assets/config.example.toml).
 
 ##### Flat Format
+
 ```toml
 storage = "keyring"           # auto, keyring, file, or age
 age_key = "~/.config/sops/age/keys.txt" # optional age key file or secret key
@@ -583,6 +599,7 @@ password_timeout = 300        # unlock cache TTL in seconds (default: 300)
 ```
 
 ##### Nested Format
+
 ```toml
 storage = "keyring"           # auto, keyring, file, or age
 age_key = "~/.config/sops/age/keys.txt" # optional age key file or secret key
@@ -610,6 +627,7 @@ timeout = 30                  # clear copied token after N seconds (default: 30)
 #### YAML (`~/.config/tfa/config.yaml`)
 
 ##### Flat Format
+
 ```yaml
 storage: auto
 age_key: ~/.config/sops/age/keys.txt
@@ -631,6 +649,7 @@ password_timeout: 300
 ```
 
 ##### Nested Format
+
 ```yaml
 storage: auto
 age_key: ~/.config/sops/age/keys.txt
@@ -658,6 +677,7 @@ clipboard_timeout:
 #### JSON (`~/.config/tfa/config.json`)
 
 ##### Flat Format
+
 ```json
 {
   "storage": "auto",
@@ -681,6 +701,7 @@ clipboard_timeout:
 ```
 
 ##### Nested Format
+
 ```json
 {
   "storage": "auto",
