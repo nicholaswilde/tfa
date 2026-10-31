@@ -92,7 +92,7 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `import` | Import accounts from backup, migration URI, or JSON | `tfa import backup.enc` |
 | `migrate` | In-memory migration between storage backends (`keyring`, `file`, `age`) | `tfa migrate --from keyring --to age` |
 | `delete` (`del`, `rm`, `remove`) | Remove an account secret (interactive fuzzy search if omitted) | `tfa delete [account]` |
-| `rename` (`ren`) | Rename an account or batch rename accounts | `tfa rename <old> <new>` / `tfa rename -b [-s <sep>] [--dry-run]` |
+| `rename` (`ren`) | Rename an account (manual or auto-clean) or batch rename accounts | `tfa rename <old> [new] [-b] [-s <sep>] [--dry-run]` |
 | `move` (`mv`) | Relocate an account to a different namespace | `tfa move <account> --to <target_ns>` |
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
 | `audit` | Scan stored accounts and credentials file for security vulnerabilities | `tfa audit [--json]` |
@@ -817,10 +817,12 @@ tfa ns create dev
 tfa ns rename work office
 tfa ns ren work office
 
-# Rename an account within current namespace
+# Rename an account within current namespace (manual or auto-clean)
 tfa rename github gh
 tfa ren github gh
 tfa rename github gh --dry-run
+tfa rename "My Account" -s _
+tfa rename "My Account" -b -s _
 
 # Batch rename accounts to clean command-line friendly names (lowercase, replace spaces)
 tfa rename --batch --dry-run

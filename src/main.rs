@@ -380,17 +380,11 @@ pub enum Commands {
             required_unless_present = "batch"
         )]
         old_name: Option<String>,
-        /// New account name
-        #[arg(required_unless_present = "batch")]
+        /// New account name (derived automatically if omitted)
+        #[arg(conflicts_with = "batch")]
         new_name: Option<String>,
-        /// Batch rename accounts to clean command-line friendly names (lowercase, space replaced)
-        #[arg(
-            short = 'b',
-            long,
-            visible_alias = "all",
-            visible_alias = "auto",
-            conflicts_with_all = ["old_name", "new_name"]
-        )]
+        /// Batch or auto rename accounts to clean command-line friendly names (lowercase, space replaced)
+        #[arg(short = 'b', long, visible_alias = "all", visible_alias = "auto")]
         batch: bool,
         /// Space replacement character or string (default: "-")
         #[arg(
@@ -1095,7 +1089,11 @@ pub fn run_app(
             Some(Commands::Namespace {
                 command: None | Some(NamespaceCommands::List),
             }) => {}
-            Some(Commands::Rename { batch: true, .. }) => {}
+            Some(Commands::Rename {
+                batch: true,
+                old_name: None,
+                ..
+            }) => {}
             _ => {
                 anyhow::bail!(
                     "--all-namespaces is only supported with multi-account commands: list, status, watch all, export, rename --batch"
@@ -1422,12 +1420,14 @@ pub fn run_app(
         }) if a != "all" => apply_inline_ns(a),
         Some(Commands::Rename {
             old_name: Some(ref mut a),
-            new_name: Some(ref mut b),
+            ref mut new_name,
             ..
         }) => {
             apply_inline_ns(a);
-            if let Some((_, clean_b)) = namespace::split_inline_account(b) {
-                *b = clean_b;
+            if let Some(ref mut b) = new_name {
+                if let Some((_, clean_b)) = namespace::split_inline_account(b) {
+                    *b = clean_b;
+                }
             }
         }
         _ => {}
@@ -1959,10 +1959,55 @@ pub fn run_app(
             separator,
             dry_run,
         }) => {
-            if batch {
-                let effective_separator = separator
-                    .as_deref()
-                    .unwrap_or(&resolved_cfg.rename_separator);
+            let effective_separator = separator
+                .as_deref()
+                .unwrap_or(&resolved_cfg.rename_separator);
+
+            if let Some(old) = old_name {
+                let target_name = match new_name {
+                    Some(explicit) => explicit,
+                    None => {
+                        let ns = namespace::normalize_namespace(&resolved_cfg.namespace);
+                        let ns_store = NamespaceStore::new(root_store, &ns);
+                        let _ = ns_store.get_secret(&old)?;
+
+                        let clean = namespace::clean_account_name(&old, effective_separator);
+                        if clean.is_empty() {
+                            anyhow::bail!("Clean account name for '{old}' is empty");
+                        }
+                        if clean == old {
+                            let prefix = if dry_run { "[dry-run] " } else { "" };
+                            writeln!(
+                                out_writer,
+                                "{prefix}Account '{old}' is already clean; no rename needed."
+                            )?;
+                            return Ok(());
+                        }
+                        clean
+                    }
+                };
+
+                if dry_run {
+                    NamespaceStore::validate_rename_account(
+                        root_store,
+                        &resolved_cfg.namespace,
+                        &old,
+                        &target_name,
+                    )?;
+                    writeln!(
+                        out_writer,
+                        "[dry-run] Account '{old}' renamed to '{target_name}'."
+                    )?;
+                } else {
+                    NamespaceStore::rename_account(
+                        root_store,
+                        &resolved_cfg.namespace,
+                        &old,
+                        &target_name,
+                    )?;
+                    writeln!(out_writer, "Account '{old}' renamed to '{target_name}'.")?;
+                }
+            } else if batch {
                 let namespaces = if cli.all_namespaces {
                     NamespaceStore::list_all_namespaces(root_store)?
                 } else {
@@ -2037,21 +2082,6 @@ pub fn run_app(
                         out_writer,
                         "Summary: {total_renamed} renamed, {total_skipped} skipped."
                     )?;
-                }
-            } else {
-                let old = old_name.as_deref().unwrap();
-                let new = new_name.as_deref().unwrap();
-                if dry_run {
-                    NamespaceStore::validate_rename_account(
-                        root_store,
-                        &resolved_cfg.namespace,
-                        old,
-                        new,
-                    )?;
-                    writeln!(out_writer, "[dry-run] Account '{old}' renamed to '{new}'.")?;
-                } else {
-                    NamespaceStore::rename_account(root_store, &resolved_cfg.namespace, old, new)?;
-                    writeln!(out_writer, "Account '{old}' renamed to '{new}'.")?;
                 }
             }
         }
@@ -6123,7 +6153,154 @@ light: true
 
         // Error: missing required positional arguments when --batch is not passed
         assert!(Cli::try_parse_from(["tfa", "rename"]).is_err());
-        assert!(Cli::try_parse_from(["tfa", "rename", "old"]).is_err());
+    }
+
+    #[test]
+    fn test_cli_parse_single_account_auto_rename() {
+        let cli_single = Cli::try_parse_from(["tfa", "rename", "My Account"]).unwrap();
+        match cli_single.command {
+            Some(Commands::Rename {
+                old_name,
+                new_name,
+                batch,
+                separator,
+                dry_run,
+            }) => {
+                assert_eq!(old_name.as_deref(), Some("My Account"));
+                assert!(new_name.is_none());
+                assert!(!batch);
+                assert!(separator.is_none());
+                assert!(!dry_run);
+            }
+            _ => panic!("Expected Rename command"),
+        }
+
+        let cli_b_s =
+            Cli::try_parse_from(["tfa", "rename", "My Account", "-b", "-s", "_"]).unwrap();
+        match cli_b_s.command {
+            Some(Commands::Rename {
+                old_name,
+                new_name,
+                batch,
+                separator,
+                dry_run,
+            }) => {
+                assert_eq!(old_name.as_deref(), Some("My Account"));
+                assert!(new_name.is_none());
+                assert!(batch);
+                assert_eq!(separator.as_deref(), Some("_"));
+                assert!(!dry_run);
+            }
+            _ => panic!("Expected Rename command"),
+        }
+
+        let cli_auto =
+            Cli::try_parse_from(["tfa", "rename", "My Account", "--auto", "--separator", "."])
+                .unwrap();
+        match cli_auto.command {
+            Some(Commands::Rename {
+                old_name,
+                new_name,
+                batch,
+                separator,
+                ..
+            }) => {
+                assert_eq!(old_name.as_deref(), Some("My Account"));
+                assert!(new_name.is_none());
+                assert!(batch);
+                assert_eq!(separator.as_deref(), Some("."));
+            }
+            _ => panic!("Expected Rename command"),
+        }
+
+        // new_name cannot be used with batch
+        assert!(Cli::try_parse_from(["tfa", "rename", "My Account", "new_account", "-b"]).is_err());
+    }
+
+    #[test]
+    fn test_run_app_single_account_auto_rename_flow() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        store
+            .set_secret("GitHub Personal", "JBSWY3DPEHPK3PXP")
+            .unwrap();
+        store.set_secret("AWS Prod", "GEZDGNBVGY3TQOJQ").unwrap();
+        store
+            .set_secret("already-clean", "MFRGGZDFMYYTAMBQ")
+            .unwrap();
+
+        // 1. Dry run auto rename for single account with -s _
+        let mut out_dry = Vec::new();
+        let cli_dry =
+            Cli::try_parse_from(["tfa", "rename", "AWS Prod", "-s", "_", "--dry-run"]).unwrap();
+        assert!(run_app(cli_dry, &store, &cb, &mut out_dry).is_ok());
+        let dry_str = String::from_utf8(out_dry).unwrap();
+        assert!(dry_str.contains("[dry-run] Account 'AWS Prod' renamed to 'aws_prod'."));
+        assert!(store.get_secret("AWS Prod").is_ok());
+        assert!(store.get_secret("aws_prod").is_err());
+
+        // 2. Auto rename with -b -s _
+        let mut out_single = Vec::new();
+        let cli_single =
+            Cli::try_parse_from(["tfa", "rename", "AWS Prod", "-b", "-s", "_"]).unwrap();
+        assert!(run_app(cli_single, &store, &cb, &mut out_single).is_ok());
+        let single_str = String::from_utf8(out_single).unwrap();
+        assert!(single_str.contains("Account 'AWS Prod' renamed to 'aws_prod'."));
+        assert!(store.get_secret("AWS Prod").is_err());
+        assert!(store.get_secret("aws_prod").is_ok());
+
+        // 3. Auto rename without -b (default separator "-")
+        let mut out_default = Vec::new();
+        let cli_default = Cli::try_parse_from(["tfa", "rename", "GitHub Personal"]).unwrap();
+        assert!(run_app(cli_default, &store, &cb, &mut out_default).is_ok());
+        let default_str = String::from_utf8(out_default).unwrap();
+        assert!(default_str.contains("Account 'GitHub Personal' renamed to 'github-personal'."));
+        assert!(store.get_secret("GitHub Personal").is_err());
+        assert!(store.get_secret("github-personal").is_ok());
+
+        // 4. Auto rename already clean account
+        let mut out_clean = Vec::new();
+        let cli_clean = Cli::try_parse_from(["tfa", "rename", "already-clean"]).unwrap();
+        assert!(run_app(cli_clean, &store, &cb, &mut out_clean).is_ok());
+        let clean_str = String::from_utf8(out_clean).unwrap();
+        assert!(clean_str.contains("Account 'already-clean' is already clean; no rename needed."));
+
+        // 5. Auto rename already clean account with --dry-run
+        let mut out_clean_dry = Vec::new();
+        let cli_clean_dry =
+            Cli::try_parse_from(["tfa", "rename", "already-clean", "--dry-run"]).unwrap();
+        assert!(run_app(cli_clean_dry, &store, &cb, &mut out_clean_dry).is_ok());
+        let clean_dry_str = String::from_utf8(out_clean_dry).unwrap();
+        assert!(
+            clean_dry_str.contains("Account 'already-clean' is already clean; no rename needed.")
+        );
+
+        // 6. Conflict error if target clean name already exists
+        store.set_secret("Google Work", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("google-work", "GEZDGNBVGY3TQOJQ").unwrap();
+        let cli_conflict = Cli::try_parse_from(["tfa", "rename", "Google Work"]).unwrap();
+        let err_conflict = run_app(cli_conflict, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_conflict.to_string().contains("already exists"));
+
+        // 7. Missing account error
+        let cli_missing = Cli::try_parse_from(["tfa", "rename", "Nonexistent Corp"]).unwrap();
+        let err_missing = run_app(cli_missing, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_missing.to_string().contains("not found"));
+
+        // 8. Auto rename with inline namespace
+        let cli_add_work =
+            Cli::try_parse_from(["tfa", "add", "work/GitLab Corp", "JBSWY3DPEHPK3PXP"]).unwrap();
+        assert!(run_app(cli_add_work, &store, &cb, &mut Vec::new()).is_ok());
+        let mut out_ns = Vec::new();
+        let cli_rename_ns =
+            Cli::try_parse_from(["tfa", "rename", "work/GitLab Corp", "-s", "_"]).unwrap();
+        assert!(run_app(cli_rename_ns, &store, &cb, &mut out_ns).is_ok());
+        let ns_str = String::from_utf8(out_ns).unwrap();
+        assert!(ns_str.contains("Account 'GitLab Corp' renamed to 'gitlab_corp'."));
+        let scoped_work = NamespaceStore::new(&store, "work");
+        assert!(scoped_work.get_secret("gitlab_corp").is_ok());
+        assert!(scoped_work.get_secret("GitLab Corp").is_err());
     }
 
     #[test]
