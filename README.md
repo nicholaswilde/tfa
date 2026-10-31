@@ -500,7 +500,14 @@ Pre-generated completion scripts are also available in the [`completions/`](comp
 
 ## :gear: Configuration
 
-`tfa` supports optional configuration files in **TOML**, **YAML**, or **JSON** format.
+`tfa` supports optional configuration files in **TOML**, **YAML**, or **JSON** format. A fully commented template documenting all supported options and defaults is provided in [`assets/config.example.toml`](assets/config.example.toml) (bundled in release packages as `config.example.toml`).
+
+To quickly initialize configuration from the template:
+
+```bash
+mkdir -p ~/.config/tfa
+cp config.example.toml ~/.config/tfa/config.toml
+```
 
 ### Hierarchical Precedence
 Settings resolve in strict hierarchical precedence order (highest to lowest):
@@ -551,6 +558,8 @@ tfa migrate --from file --to age --purge-source
 ### Example Configuration Files
 
 #### TOML (`~/.config/tfa/config.toml`)
+
+A ready-to-use, fully commented template is available at [`assets/config.example.toml`](assets/config.example.toml).
 
 ##### Flat Format
 ```toml

@@ -1,0 +1,126 @@
+# =============================================================================
+# tfa Configuration Example (config.example.toml)
+# =============================================================================
+# Copy this file to ~/.config/tfa/config.toml (or %APPDATA%\tfa\config.toml on Windows)
+# to customize default behavior.
+#
+# All settings below represent supported options and default values.
+# Because every line is commented out, this file can be copied as-is without
+# altering default behavior until settings are explicitly uncommented.
+#
+# Settings resolve in precedence order: CLI Flags > Environment Variables > Config File > Hardcoded Defaults.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Storage & Cryptography
+# -----------------------------------------------------------------------------
+
+# Storage backend for account credentials and secret keys.
+# Supported values:
+#   "auto"    - Try OS keyring first; fallback to ~/.local/share/tfa/credentials.json if headless/unavailable (default)
+#   "keyring" - Strictly require OS system keyring (Secret Service, macOS Keychain, Windows Credential Manager)
+#   "file"    - Store unencrypted JSON at ~/.local/share/tfa/credentials.json (0600 permissions)
+#   "age"     - Encrypted file at ~/.local/share/tfa/credentials.age using age encryption
+# CLI: --storage <auto|keyring|file|age> | Env: TFA_STORAGE
+# storage = "auto"
+
+# Optional path to age identity key file or secret key string (for --storage age).
+# When unset, tfa auto-resolves from ~/.config/sops/age/keys.txt or ~/.config/age/keys.txt.
+# CLI: --age-key <path|key> | Env: TFA_AGE_KEY, TFA_AGE_KEY_FILE
+# age_key = "~/.config/sops/age/keys.txt"
+
+# Optional path to SSH private key used as age identity for decrypting credentials.
+# When unset, tfa checks ~/.ssh/id_ed25519 and other standard SSH keys.
+# CLI: --ssh-key <path> | Env: TFA_SSH_KEY, TFA_SSH_KEY_FILE
+# ssh_key = "~/.ssh/id_ed25519"
+
+# Default GPG recipient key fingerprint or email for encrypted exports and backups.
+# CLI: --gpg <fingerprint> | Env: TFA_GPG_FINGERPRINT, TFA_GPG_RECIPIENT
+# gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
+
+# -----------------------------------------------------------------------------
+# Clipboard Integration
+# -----------------------------------------------------------------------------
+
+# Clipboard provider for token copying.
+# Supported values:
+#   "system" - Native desktop clipboard integration (default)
+#   "osc52"  - Terminal ANSI OSC 52 escape sequences (ideal over SSH / tmux)
+# CLI: --clipboard <system|osc52> | Env: TFA_CLIPBOARD
+# clipboard = "system"
+
+# Optional custom external command receiving token via stdin (e.g. "wl-copy", "xclip -selection clipboard", "pbcopy").
+# CLI: --clip-command <cmd> | Env: TFA_CLIP_COMMAND
+# clip_command = "wl-copy"
+
+# Enable or disable automatic clipboard clearing after tokens are copied.
+# Default: false (automatically enabled when clipboard_timeout is set).
+# CLI: --no-clear | Env: TFA_CLIPBOARD_CLEAR
+# clipboard_clear = false
+
+# Time in seconds before automatically clearing copied tokens from the clipboard.
+# Set to 0 or false to disable automatic clearing.
+# CLI: --clear-after <secs> | Env: TFA_CLIPBOARD_TIMEOUT
+# clipboard_timeout = 30
+
+# -----------------------------------------------------------------------------
+# CLI Defaults & Token Generation
+# -----------------------------------------------------------------------------
+
+# Default active namespace when not specified via CLI.
+# CLI: -n, --namespace <name> | Env: TFA_NAMESPACE
+# default_namespace = "default"
+
+# Default command executed when tfa is invoked without arguments.
+# Options include: "list", "status", "watch all"
+# Env: TFA_DEFAULT_COMMAND
+# default_command = "list"
+
+# Default number of digits in generated TOTP tokens.
+# Supported values: 6, 8 (default: 6)
+# CLI: --digits <6|8> | Env: TFA_DIGITS
+# digits = 6
+
+# Default token validity period / time-step in seconds.
+# Supported values: 30, 60 (default: 30)
+# CLI: --period <seconds> | Env: TFA_PERIOD
+# period = 30
+
+# Default HMAC algorithm for token generation.
+# Supported values: "sha1", "sha256", "sha512", "steam" (default: "sha1")
+# CLI: --algorithm <alg> | Env: TFA_ALGORITHM
+# algorithm = "sha1"
+
+# Automatically copy generated TOTP tokens to clipboard on show / list.
+# CLI: -c, --copy | Env: TFA_AUTO_COPY
+# auto_copy = false
+
+# Terminal light theme for QR code rendering (invert colors for light backgrounds).
+# CLI: --light | Env: TFA_LIGHT
+# light = false
+
+# -----------------------------------------------------------------------------
+# Master Password Protection
+# -----------------------------------------------------------------------------
+
+# Enable master password protection with sliding window session caching.
+# CLI: tfa password enable / disable
+# password = false
+
+# Session cache time-to-live (TTL) in seconds before reprompting for master password.
+# Default: 300 (5 minutes).
+# password_timeout = 300
+
+# -----------------------------------------------------------------------------
+# Nested Table Syntax Alternative
+# -----------------------------------------------------------------------------
+# Alternatively, password protection and clipboard timeout may be configured
+# using nested tables (omit flat 'password' and 'clipboard_timeout' above):
+#
+#   [password]
+#   enabled = false
+#   timeout = 300
+#
+#   [clipboard_timeout]
+#   enabled = true
+#   timeout = 30

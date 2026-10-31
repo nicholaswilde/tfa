@@ -169,6 +169,11 @@ jobs:
         # Copy docs
         cp {README.md,LICENSE} "$staging/"
 
+        # Copy example configuration
+        if [ -f "assets/config.example.toml" ]; then
+          cp assets/config.example.toml "$staging/"
+        fi
+
         # Copy completions
         if [ -d "completions" ]; then
           cp -r completions/ "$staging/"

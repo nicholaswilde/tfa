@@ -1169,4 +1169,94 @@ auto_copy = false
         std::env::remove_var("TFA_CLIPBOARD_TIMEOUT");
         std::env::remove_var("XDG_CONFIG_HOME");
     }
+
+    #[test]
+    fn test_example_config_file_validity() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let example_path = manifest_dir.join("assets/config.example.toml");
+        assert!(
+            example_path.is_file(),
+            "assets/config.example.toml must exist"
+        );
+
+        // 1. Fully commented example file must load and parse cleanly into default ConfigFile
+        let raw_cfg = ConfigFile::load_from_path(&example_path)
+            .expect("assets/config.example.toml must parse without errors as-is");
+        assert_eq!(
+            raw_cfg,
+            ConfigFile::default(),
+            "Commented-out example config should deserialize to empty/default ConfigFile"
+        );
+
+        // 2. Uncomment all primary settings and verify they deserialize into valid ConfigFile
+        let content =
+            std::fs::read_to_string(&example_path).expect("failed to read example config");
+        let mut uncommented_lines = Vec::new();
+        for line in content.lines() {
+            if let Some(rest) = line.strip_prefix("# ") {
+                if !rest.starts_with(' ') && !rest.starts_with('#') {
+                    if let Some((key, _val)) = rest.split_once('=') {
+                        let k = key.trim();
+                        if !k.is_empty() && k.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+                            uncommented_lines.push(rest.trim());
+                        }
+                    }
+                }
+            }
+        }
+        let uncommented_toml = uncommented_lines.join("\n");
+        let parsed_uncommented = ConfigFile::parse(&uncommented_toml, ConfigFormat::Toml).expect(
+            "uncommented settings from assets/config.example.toml must parse as valid TOML",
+        );
+
+        // Verify key fields are present
+        assert_eq!(parsed_uncommented.storage, Some(StorageBackend::Auto));
+        assert_eq!(
+            parsed_uncommented.clipboard,
+            Some(ClipboardProvider::System)
+        );
+        assert!(parsed_uncommented.clip_command.is_some());
+        assert_eq!(parsed_uncommented.clipboard_clear, Some(false));
+        assert!(parsed_uncommented.clipboard_timeout.is_some());
+        assert_eq!(
+            parsed_uncommented.default_namespace.as_deref(),
+            Some("default")
+        );
+        assert_eq!(parsed_uncommented.default_command.as_deref(), Some("list"));
+        assert_eq!(parsed_uncommented.digits, Some(6));
+        assert_eq!(parsed_uncommented.period, Some(30));
+        assert_eq!(parsed_uncommented.algorithm.as_deref(), Some("sha1"));
+        assert_eq!(parsed_uncommented.auto_copy, Some(false));
+        assert_eq!(parsed_uncommented.light, Some(false));
+        assert!(parsed_uncommented.password.is_some());
+        assert_eq!(parsed_uncommented.password_timeout, Some(300));
+        assert!(parsed_uncommented.age_key.is_some());
+        assert!(parsed_uncommented.ssh_key.is_some());
+        assert!(parsed_uncommented.gpg_fingerprint.is_some());
+
+        // 3. Verify nested table alternative syntax parses cleanly into ConfigFile
+        let in_nested_section = content
+            .split("# Nested Table Syntax Alternative")
+            .nth(1)
+            .expect("nested syntax section should exist");
+        let mut nested_lines = Vec::new();
+        for line in in_nested_section.lines() {
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix('#') {
+                let rest_trimmed = rest.trim();
+                if rest_trimmed.starts_with('[') || rest_trimmed.contains('=') {
+                    nested_lines.push(rest_trimmed);
+                }
+            }
+        }
+        assert!(
+            !nested_lines.is_empty(),
+            "nested table syntax alternative should have settings"
+        );
+        let nested_toml = nested_lines.join("\n");
+        let parsed_nested = ConfigFile::parse(&nested_toml, ConfigFormat::Toml)
+            .expect("nested alternative table examples must parse as valid TOML");
+        assert!(parsed_nested.password.is_some());
+        assert!(parsed_nested.clipboard_timeout.is_some());
+    }
 }
