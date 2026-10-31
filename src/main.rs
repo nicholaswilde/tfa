@@ -397,10 +397,9 @@ pub enum Commands {
             short = 's',
             long = "separator",
             visible_alias = "replace-with",
-            default_value = "-",
             env = "TFA_RENAME_SEPARATOR"
         )]
-        separator: String,
+        separator: Option<String>,
         /// Preview changes without modifying storage
         #[arg(long)]
         dry_run: bool,
@@ -1961,6 +1960,9 @@ pub fn run_app(
             dry_run,
         }) => {
             if batch {
+                let effective_separator = separator
+                    .as_deref()
+                    .unwrap_or(&resolved_cfg.rename_separator);
                 let namespaces = if cli.all_namespaces {
                     NamespaceStore::list_all_namespaces(root_store)?
                 } else {
@@ -1976,7 +1978,7 @@ pub fn run_app(
                     let ns_store = NamespaceStore::new(root_store, &ns);
                     let accounts = ns_store.list_accounts()?;
                     for acct in accounts {
-                        let clean = namespace::clean_account_name(&acct, &separator);
+                        let clean = namespace::clean_account_name(&acct, effective_separator);
                         if clean.is_empty() || clean == acct {
                             continue;
                         }
@@ -2191,7 +2193,11 @@ pub fn run_app(
                         )
                     })?,
                 };
-                backup::encrypt_backup_gpg(plain_payload.as_bytes(), &recipient)?
+                backup::encrypt_backup_gpg(
+                    plain_payload.as_bytes(),
+                    &recipient,
+                    Some(&resolved_cfg.gpg_bin),
+                )?
             } else if password.is_none()
                 && std::env::var("TFA_PASSWORD")
                     .ok()
@@ -2200,7 +2206,11 @@ pub fn run_app(
                 && resolved_cfg.gpg_fingerprint.is_some()
             {
                 let recipient = resolved_cfg.gpg_fingerprint.as_deref().unwrap();
-                backup::encrypt_backup_gpg(plain_payload.as_bytes(), recipient)?
+                backup::encrypt_backup_gpg(
+                    plain_payload.as_bytes(),
+                    recipient,
+                    Some(&resolved_cfg.gpg_bin),
+                )?
             } else {
                 let pass = get_passphrase(password, true)?;
                 backup::encrypt_backup(plain_payload.as_bytes(), &pass)?
@@ -2289,7 +2299,7 @@ pub fn run_app(
                 let pass = get_passphrase(password, false)?;
                 ente::decrypt_ente_backup(&content, &pass)?
             } else if backup::is_gpg_backup(&content) {
-                let decrypted = backup::decrypt_backup_gpg(&content)?;
+                let decrypted = backup::decrypt_backup_gpg(&content, Some(&resolved_cfg.gpg_bin))?;
                 String::from_utf8(decrypted).context("Decrypted GPG backup is not valid UTF-8")?
             } else {
                 content
@@ -2522,7 +2532,13 @@ fn main() -> anyhow::Result<()> {
                 .or_else(|| std::env::var("TFA_SSH_KEY").ok().map(PathBuf::from))
                 .or_else(|| std::env::var("TFA_AGE_SSH_KEY").ok().map(PathBuf::from))
                 .or_else(|| loaded_cfg.as_ref().and_then(|c| c.ssh_key.clone()));
-            Box::new(AgeStore::new(AgeStore::default_path()?, age_key, ssh_key))
+            let recipients = resolved_cfg.age_recipients.clone();
+            Box::new(AgeStore::with_recipients(
+                AgeStore::default_path()?,
+                age_key,
+                ssh_key,
+                recipients,
+            ))
         }
     };
 
@@ -6055,7 +6071,7 @@ light: true
                 assert!(old_name.is_none());
                 assert!(new_name.is_none());
                 assert!(batch);
-                assert_eq!(separator, "-");
+                assert_eq!(separator.as_deref(), None);
                 assert!(!dry_run);
             }
             _ => panic!("Expected Rename command"),
@@ -6072,7 +6088,7 @@ light: true
                 ..
             }) => {
                 assert!(batch);
-                assert_eq!(separator, "_");
+                assert_eq!(separator.as_deref(), Some("_"));
                 assert!(dry_run);
             }
             _ => panic!("Expected Rename command"),
@@ -6085,7 +6101,7 @@ light: true
                 batch, separator, ..
             }) => {
                 assert!(batch);
-                assert_eq!(separator, ".");
+                assert_eq!(separator.as_deref(), Some("."));
             }
             _ => panic!("Expected Rename command"),
         }
@@ -6097,7 +6113,7 @@ light: true
                 batch, separator, ..
             }) => {
                 assert!(batch);
-                assert_eq!(separator, "_");
+                assert_eq!(separator.as_deref(), Some("_"));
             }
             _ => panic!("Expected Rename command"),
         }
@@ -6211,6 +6227,29 @@ light: true
         assert!(out_str.contains("Summary: 2 renamed, 2 skipped."));
 
         assert_eq!(store.get_secret("slack_bot").unwrap(), "EXISTING_SECRET");
+    }
+
+    #[test]
+    fn test_run_app_batch_rename_with_config_separator() {
+        let _guard = TEST_ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+        store
+            .set_secret("AWS Production", "JBSWY3DPEHPK3PXP")
+            .unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let cfg_path = dir.path().join("config.toml");
+        std::fs::write(&cfg_path, "rename_separator = \"_\"\n").unwrap();
+
+        let mut out = Vec::new();
+        let cli =
+            Cli::try_parse_from(["tfa", "-C", cfg_path.to_str().unwrap(), "rename", "-b"]).unwrap();
+
+        assert!(run_app(cli, &store, &cb, &mut out).is_ok());
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains("Account 'AWS Production' renamed to 'aws_production'."));
+        assert!(store.get_secret("aws_production").is_ok());
     }
 
     #[test]

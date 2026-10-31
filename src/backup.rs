@@ -19,7 +19,7 @@ pub(crate) fn is_gpg_available_for_test() -> bool {
         // which is not functional on Windows CI environments (Git for Windows only ships gpg.exe without agent daemon).
         return false;
     }
-    let prog = gpg_program();
+    let prog = gpg_program(None);
     let Ok(output) = Command::new(&prog).arg("--version").output() else {
         return false;
     };
@@ -127,7 +127,13 @@ pub fn decrypt_backup(json_str: &str, passphrase: &str) -> Result<Vec<u8>> {
     Ok(decrypted)
 }
 
-fn gpg_program() -> String {
+fn gpg_program(custom_bin: Option<&str>) -> String {
+    if let Some(bin) = custom_bin {
+        let trimmed = bin.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
     std::env::var("TFA_GPG_BIN")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -140,7 +146,11 @@ pub fn is_gpg_backup(input: &str) -> bool {
         && trimmed.ends_with("-----END PGP MESSAGE-----")
 }
 
-pub fn encrypt_backup_gpg(data: &[u8], recipient: &str) -> Result<String> {
+pub fn encrypt_backup_gpg(
+    data: &[u8],
+    recipient: &str,
+    custom_gpg_bin: Option<&str>,
+) -> Result<String> {
     let recipient = recipient.trim();
     if recipient.is_empty() {
         bail!("GPG key fingerprint cannot be empty");
@@ -149,7 +159,8 @@ pub fn encrypt_backup_gpg(data: &[u8], recipient: &str) -> Result<String> {
         bail!("Invalid GPG key fingerprint '{recipient}'");
     }
 
-    let mut child = Command::new(gpg_program())
+    let prog = gpg_program(custom_gpg_bin);
+    let mut child = Command::new(&prog)
         .args([
             "--batch",
             "--yes",
@@ -168,7 +179,7 @@ pub fn encrypt_backup_gpg(data: &[u8], recipient: &str) -> Result<String> {
             if e.kind() == std::io::ErrorKind::NotFound {
                 anyhow!(
                     "Failed to execute gpg for encryption: '{}' not found in PATH",
-                    gpg_program()
+                    prog
                 )
             } else {
                 anyhow!("Failed to execute gpg for encryption: {e}")
@@ -198,12 +209,13 @@ pub fn encrypt_backup_gpg(data: &[u8], recipient: &str) -> Result<String> {
     String::from_utf8(output.stdout).context("GPG encrypted output is not valid UTF-8")
 }
 
-pub fn decrypt_backup_gpg(armored: &str) -> Result<Vec<u8>> {
+pub fn decrypt_backup_gpg(armored: &str, custom_gpg_bin: Option<&str>) -> Result<Vec<u8>> {
     if !is_gpg_backup(armored) {
         bail!("Invalid GPG backup format: missing PGP message header or footer");
     }
 
-    let mut cmd = Command::new(gpg_program());
+    let prog = gpg_program(custom_gpg_bin);
+    let mut cmd = Command::new(&prog);
     if !std::io::stdin().is_terminal()
         || (cfg!(test) && std::env::var("TFA_TEST_INTERACTIVE").is_err())
     {
@@ -220,7 +232,7 @@ pub fn decrypt_backup_gpg(armored: &str) -> Result<Vec<u8>> {
             if e.kind() == std::io::ErrorKind::NotFound {
                 anyhow!(
                     "Failed to execute gpg for decryption: '{}' not found in PATH",
-                    gpg_program()
+                    prog
                 )
             } else {
                 anyhow!("Failed to execute gpg for decryption: {e}")
@@ -396,14 +408,14 @@ mod tests {
 
     #[test]
     fn test_encrypt_gpg_empty_or_invalid_recipient_fails() {
-        let err_empty = encrypt_backup_gpg(b"data", "   ");
+        let err_empty = encrypt_backup_gpg(b"data", "   ", None);
         assert!(err_empty.is_err());
         assert!(err_empty
             .unwrap_err()
             .to_string()
             .contains("cannot be empty"));
 
-        let err_flag = encrypt_backup_gpg(b"data", "--armor");
+        let err_flag = encrypt_backup_gpg(b"data", "--armor", None);
         assert!(err_flag.is_err());
         assert!(err_flag
             .unwrap_err()
@@ -428,7 +440,7 @@ mod tests {
         std::env::set_var("GNUPGHOME", gpg_dir.path());
 
         // 1. Missing key fingerprint should fail with clear "not found" error
-        let missing_err = encrypt_backup_gpg(b"secret", "NONEXISTENT_FINGERPRINT_9999");
+        let missing_err = encrypt_backup_gpg(b"secret", "NONEXISTENT_FINGERPRINT_9999", None);
         assert!(missing_err.is_err());
         let msg = missing_err.unwrap_err().to_string();
         assert!(
@@ -437,7 +449,7 @@ mod tests {
         );
 
         // 2. Generate a temporary GPG key in isolated GNUPGHOME
-        let status = Command::new(gpg_program())
+        let status = Command::new(gpg_program(None))
             .args([
                 "--batch",
                 "--passphrase",
@@ -452,7 +464,7 @@ mod tests {
             .unwrap();
         assert!(status.success());
 
-        let list_out = Command::new(gpg_program())
+        let list_out = Command::new(gpg_program(None))
             .args(["--list-keys", "--with-colons"])
             .output()
             .unwrap();
@@ -466,14 +478,14 @@ mod tests {
 
         // 3. Encrypt using full key fingerprint and decrypt roundtrip
         let payload = r#"{"github":"JBSWY3DPEHPK3PXP"}"#;
-        let armored = encrypt_backup_gpg(payload.as_bytes(), &fpr).unwrap();
+        let armored = encrypt_backup_gpg(payload.as_bytes(), &fpr, None).unwrap();
         assert!(is_gpg_backup(&armored));
 
-        let decrypted = decrypt_backup_gpg(&armored).unwrap();
+        let decrypted = decrypt_backup_gpg(&armored, None).unwrap();
         assert_eq!(String::from_utf8(decrypted).unwrap(), payload);
 
         // 4. Decrypt invalid format fails
-        assert!(decrypt_backup_gpg("not a pgp message").is_err());
+        assert!(decrypt_backup_gpg("not a pgp message", None).is_err());
 
         // 5. Decrypt with missing secret key in another empty keyring fails clearly
         let empty_gpg_dir = tempfile::tempdir().unwrap();
@@ -484,7 +496,7 @@ mod tests {
                 .unwrap();
         }
         std::env::set_var("GNUPGHOME", empty_gpg_dir.path());
-        let no_sec_err = decrypt_backup_gpg(&armored);
+        let no_sec_err = decrypt_backup_gpg(&armored, None);
         assert!(no_sec_err.is_err());
         assert!(no_sec_err
             .unwrap_err()
@@ -508,5 +520,16 @@ mod tests {
             ])
             .status();
         std::env::remove_var("GNUPGHOME");
+    }
+
+    #[test]
+    fn test_gpg_program_precedence() {
+        assert_eq!(gpg_program(None), "gpg");
+        assert_eq!(gpg_program(Some("gpg2")), "gpg2");
+
+        std::env::set_var("TFA_GPG_BIN", "custom-gpg");
+        assert_eq!(gpg_program(None), "custom-gpg");
+        assert_eq!(gpg_program(Some("override-gpg")), "override-gpg");
+        std::env::remove_var("TFA_GPG_BIN");
     }
 }

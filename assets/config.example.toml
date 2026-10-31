@@ -38,6 +38,15 @@
 # CLI: --gpg <fingerprint> | Env: TFA_GPG_FINGERPRINT, TFA_GPG_RECIPIENT
 # gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
 
+# Optional list of recipient public keys (age x25519 or SSH public keys) for encrypting credentials.age.
+# Supported formats: array of strings or comma-separated string.
+# Env: TFA_AGE_RECIPIENTS
+# age_recipients = ["age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"]
+
+# Optional custom path or binary name for GPG (default: "gpg").
+# Env: TFA_GPG_BIN
+# gpg_bin = "gpg"
+
 # -----------------------------------------------------------------------------
 # Clipboard Integration
 # -----------------------------------------------------------------------------
@@ -98,6 +107,10 @@
 # Terminal light theme for QR code rendering (invert colors for light backgrounds).
 # CLI: --light | Env: TFA_LIGHT
 # light = false
+
+# Default replacement character or string for spaces when batch renaming accounts.
+# CLI: -s, --separator <sep> | Env: TFA_RENAME_SEPARATOR
+# rename_separator = "-"
 
 # -----------------------------------------------------------------------------
 # Master Password Protection

@@ -83,6 +83,37 @@ pub struct ConfigFile {
         alias = "gpg_key_fingerprint"
     )]
     pub gpg_fingerprint: Option<String>,
+    #[serde(alias = "separator")]
+    pub rename_separator: Option<String>,
+    #[serde(alias = "recipients")]
+    pub age_recipients: Option<AgeRecipientsConfig>,
+    #[serde(alias = "gpg_path")]
+    pub gpg_bin: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AgeRecipientsConfig {
+    Single(String),
+    List(Vec<String>),
+}
+
+impl AgeRecipientsConfig {
+    pub fn to_recipients(&self) -> Vec<String> {
+        match self {
+            Self::Single(s) => s
+                .split([',', '\n'])
+                .map(|token| token.trim().to_string())
+                .filter(|token| !token.is_empty())
+                .collect(),
+            Self::List(list) => list
+                .iter()
+                .flat_map(|s| s.split([',', '\n']))
+                .map(|token| token.trim().to_string())
+                .filter(|token| !token.is_empty())
+                .collect(),
+        }
+    }
 }
 
 impl ConfigFile {
@@ -239,6 +270,14 @@ impl ConfigFile {
         Self::DEFAULT_PASSWORD_TIMEOUT
     }
 
+    /// Effective list of age encryption recipients configured in file.
+    pub fn effective_age_recipients(&self) -> Option<Vec<String>> {
+        self.age_recipients
+            .as_ref()
+            .map(|r| r.to_recipients())
+            .filter(|v| !v.is_empty())
+    }
+
     /// Set password protection status and optional timeout in the configuration file and persist it.
     pub fn set_password_config_in_file(
         path: Option<&Path>,
@@ -337,6 +376,9 @@ pub struct ResolvedConfig {
     pub password_timeout: u64,
     pub clipboard_timeout: Option<u64>,
     pub gpg_fingerprint: Option<String>,
+    pub rename_separator: String,
+    pub age_recipients: Option<Vec<String>>,
+    pub gpg_bin: String,
 }
 
 impl Default for ResolvedConfig {
@@ -356,6 +398,9 @@ impl Default for ResolvedConfig {
             password_timeout: ConfigFile::DEFAULT_PASSWORD_TIMEOUT,
             clipboard_timeout: None,
             gpg_fingerprint: None,
+            rename_separator: "-".to_string(),
+            age_recipients: None,
+            gpg_bin: "gpg".to_string(),
         }
     }
 }
@@ -624,6 +669,58 @@ pub fn resolve_configuration(
         "list".to_string()
     };
 
+    // Rename separator precedence: Env > Config File > Default ("-")
+    let rename_separator = if let Ok(s_env) = std::env::var("TFA_RENAME_SEPARATOR") {
+        if !s_env.is_empty() {
+            s_env
+        } else {
+            "-".to_string()
+        }
+    } else if let Some(s_cfg) = config_file
+        .as_ref()
+        .and_then(|c| c.rename_separator.as_ref())
+    {
+        if !s_cfg.is_empty() {
+            s_cfg.clone()
+        } else {
+            "-".to_string()
+        }
+    } else {
+        "-".to_string()
+    };
+
+    // Age recipients precedence: TFA_AGE_RECIPIENTS > Config File
+    let age_recipients = if let Ok(recs_env) = std::env::var("TFA_AGE_RECIPIENTS") {
+        let recs: Vec<String> = recs_env
+            .split([',', '\n'])
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .collect();
+        if !recs.is_empty() {
+            Some(recs)
+        } else {
+            None
+        }
+    } else {
+        config_file
+            .as_ref()
+            .and_then(|c| c.effective_age_recipients())
+    };
+
+    // GPG binary precedence: TFA_GPG_BIN > Config File > Default ("gpg")
+    let gpg_bin = std::env::var("TFA_GPG_BIN")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            config_file
+                .as_ref()
+                .and_then(|c| c.gpg_bin.as_ref())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        })
+        .unwrap_or_else(|| "gpg".to_string());
+
     Ok((
         ResolvedConfig {
             storage,
@@ -640,6 +737,9 @@ pub fn resolve_configuration(
             password_timeout,
             clipboard_timeout,
             gpg_fingerprint,
+            rename_separator,
+            age_recipients,
+            gpg_bin,
         },
         config_file,
     ))
@@ -681,6 +781,9 @@ auto_copy = true
 light = true
 ssh_key = "/home/user/.ssh/id_ed25519"
 gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
+rename_separator = "_"
+age_recipients = ["age1recA", "age1recB"]
+gpg_bin = "gpg2"
 "#;
         let cfg = ConfigFile::parse(content, ConfigFormat::Toml).unwrap();
         assert_eq!(cfg.storage, Some(StorageBackend::File));
@@ -697,6 +800,22 @@ gpg_fingerprint = "0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3"
             cfg.gpg_fingerprint.as_deref(),
             Some("0C0F36434657A3EDA0556C61B1D0FD0AD678DCC3")
         );
+        assert_eq!(cfg.rename_separator.as_deref(), Some("_"));
+        assert_eq!(
+            cfg.effective_age_recipients(),
+            Some(vec!["age1recA".to_string(), "age1recB".to_string()])
+        );
+        assert_eq!(cfg.gpg_bin.as_deref(), Some("gpg2"));
+
+        let content_alias =
+            "separator = \".\"\nrecipients = \"age1single\"\ngpg_path = \"/bin/gpg\"\n";
+        let cfg_alias = ConfigFile::parse(content_alias, ConfigFormat::Toml).unwrap();
+        assert_eq!(cfg_alias.rename_separator.as_deref(), Some("."));
+        assert_eq!(
+            cfg_alias.effective_age_recipients(),
+            Some(vec!["age1single".to_string()])
+        );
+        assert_eq!(cfg_alias.gpg_bin.as_deref(), Some("/bin/gpg"));
     }
 
     #[test]
@@ -708,6 +827,10 @@ step: 30
 algorithm: steam
 auto_copy: false
 light: false
+rename_separator: "_"
+age_recipients:
+  - age1yaml
+gpg_bin: gpg
 "#;
         let cfg = ConfigFile::parse(content, ConfigFormat::Yaml).unwrap();
         assert_eq!(cfg.storage, Some(StorageBackend::Keyring));
@@ -716,6 +839,12 @@ light: false
         assert_eq!(cfg.algorithm.as_deref(), Some("steam"));
         assert_eq!(cfg.auto_copy, Some(false));
         assert_eq!(cfg.light, Some(false));
+        assert_eq!(cfg.rename_separator.as_deref(), Some("_"));
+        assert_eq!(
+            cfg.effective_age_recipients(),
+            Some(vec!["age1yaml".to_string()])
+        );
+        assert_eq!(cfg.gpg_bin.as_deref(), Some("gpg"));
     }
 
     #[test]
@@ -726,15 +855,24 @@ light: false
     "period": 45,
     "algorithm": "sha512",
     "auto_copy": true,
-    "light": false
+    "light": false,
+    "rename_separator": "_",
+    "age_recipients": ["age1json"],
+    "gpg_bin": "gpg"
 }"#;
         let cfg = ConfigFile::parse(content, ConfigFormat::Json).unwrap();
         assert_eq!(cfg.storage, Some(StorageBackend::Auto));
         assert_eq!(cfg.digits, Some(7));
         assert_eq!(cfg.period, Some(45));
         assert_eq!(cfg.algorithm.as_deref(), Some("sha512"));
+        assert_eq!(cfg.rename_separator.as_deref(), Some("_"));
         assert_eq!(cfg.auto_copy, Some(true));
         assert_eq!(cfg.light, Some(false));
+        assert_eq!(
+            cfg.effective_age_recipients(),
+            Some(vec!["age1json".to_string()])
+        );
+        assert_eq!(cfg.gpg_bin.as_deref(), Some("gpg"));
     }
 
     #[test]
@@ -977,6 +1115,7 @@ auto_copy = false
         assert_eq!(def.clipboard, ClipboardProvider::System);
         assert_eq!(def.namespace, "default");
         assert_eq!(def.password_timeout, ConfigFile::DEFAULT_PASSWORD_TIMEOUT);
+        assert_eq!(def.rename_separator, "-");
 
         assert_eq!(
             parse_algorithm_str("sha1").unwrap(),
@@ -1061,6 +1200,63 @@ auto_copy = false
         std::env::set_var("TFA_CONFIG", dir.path().to_str().unwrap());
         assert!(resolve_configuration(None, None, None, None, None).is_err());
         std::env::remove_var("TFA_CONFIG");
+        // 9. Rename separator precedence: Env > Config File > Default ("-")
+        let (res_default, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_default.rename_separator, "-");
+
+        let dir_sep = tempfile::tempdir().unwrap();
+        let cfg_sep_path = dir_sep.path().join("config.toml");
+        fs::write(&cfg_sep_path, "rename_separator = \"_\"\n").unwrap();
+        let (res_cfg, _) =
+            resolve_configuration(Some(&cfg_sep_path), None, None, None, None).unwrap();
+        assert_eq!(res_cfg.rename_separator, "_");
+
+        std::env::set_var("TFA_RENAME_SEPARATOR", ".");
+        let (res_env, _) =
+            resolve_configuration(Some(&cfg_sep_path), None, None, None, None).unwrap();
+        assert_eq!(res_env.rename_separator, ".");
+        std::env::remove_var("TFA_RENAME_SEPARATOR");
+
+        // 10. age_recipients precedence: Env > Config File
+        let dir_rec = tempfile::tempdir().unwrap();
+        let cfg_rec_path = dir_rec.path().join("config.toml");
+        fs::write(
+            &cfg_rec_path,
+            "age_recipients = [\"age1keyA\", \"age1keyB\"]\n",
+        )
+        .unwrap();
+        let (res_cfg_rec, _) =
+            resolve_configuration(Some(&cfg_rec_path), None, None, None, None).unwrap();
+        assert_eq!(
+            res_cfg_rec.age_recipients.as_deref(),
+            Some(&["age1keyA".to_string(), "age1keyB".to_string()][..])
+        );
+
+        std::env::set_var("TFA_AGE_RECIPIENTS", "age1override1, age1override2");
+        let (res_env_rec, _) =
+            resolve_configuration(Some(&cfg_rec_path), None, None, None, None).unwrap();
+        assert_eq!(
+            res_env_rec.age_recipients.as_deref(),
+            Some(&["age1override1".to_string(), "age1override2".to_string()][..])
+        );
+        std::env::remove_var("TFA_AGE_RECIPIENTS");
+
+        // 11. gpg_bin precedence: Env > Config File > Default ("gpg")
+        let (res_def_gpg, _) = resolve_configuration(None, None, None, None, None).unwrap();
+        assert_eq!(res_def_gpg.gpg_bin, "gpg");
+
+        let dir_gpg = tempfile::tempdir().unwrap();
+        let cfg_gpg_path = dir_gpg.path().join("config.toml");
+        fs::write(&cfg_gpg_path, "gpg_bin = \"/usr/local/bin/gpg2\"\n").unwrap();
+        let (res_cfg_gpg, _) =
+            resolve_configuration(Some(&cfg_gpg_path), None, None, None, None).unwrap();
+        assert_eq!(res_cfg_gpg.gpg_bin, "/usr/local/bin/gpg2");
+
+        std::env::set_var("TFA_GPG_BIN", "gpg-custom");
+        let (res_env_gpg, _) =
+            resolve_configuration(Some(&cfg_gpg_path), None, None, None, None).unwrap();
+        assert_eq!(res_env_gpg.gpg_bin, "gpg-custom");
+        std::env::remove_var("TFA_GPG_BIN");
     }
 
     #[test]
@@ -1233,6 +1429,9 @@ auto_copy = false
         assert!(parsed_uncommented.age_key.is_some());
         assert!(parsed_uncommented.ssh_key.is_some());
         assert!(parsed_uncommented.gpg_fingerprint.is_some());
+        assert!(parsed_uncommented.effective_age_recipients().is_some());
+        assert_eq!(parsed_uncommented.gpg_bin.as_deref(), Some("gpg"));
+        assert_eq!(parsed_uncommented.rename_separator.as_deref(), Some("-"));
 
         // 3. Verify nested table alternative syntax parses cleanly into ConfigFile
         let in_nested_section = content

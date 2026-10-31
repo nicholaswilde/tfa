@@ -398,14 +398,25 @@ pub struct AgeStore {
     path: PathBuf,
     key_file: Option<PathBuf>,
     ssh_key_file: Option<PathBuf>,
+    recipients: Option<Vec<String>>,
 }
 
 impl AgeStore {
     pub fn new(path: PathBuf, key_file: Option<PathBuf>, ssh_key_file: Option<PathBuf>) -> Self {
+        Self::with_recipients(path, key_file, ssh_key_file, None)
+    }
+
+    pub fn with_recipients(
+        path: PathBuf,
+        key_file: Option<PathBuf>,
+        ssh_key_file: Option<PathBuf>,
+        recipients: Option<Vec<String>>,
+    ) -> Self {
         Self {
             path,
             key_file: key_file.map(|p| expand_path(&p)),
             ssh_key_file: ssh_key_file.map(|p| expand_path(&p)),
+            recipients,
         }
     }
 
@@ -601,22 +612,28 @@ impl AgeStore {
     pub fn resolve_recipients(&self) -> Result<Vec<Box<dyn Recipient + Send>>> {
         let mut recipients: Vec<Box<dyn Recipient + Send>> = Vec::new();
 
-        // 1. Explicit recipient string or SSH pubkey in TFA_AGE_RECIPIENTS
-        if let Ok(recs) = std::env::var("TFA_AGE_RECIPIENTS") {
-            for token in recs.split([',', '\n']) {
-                let token = token.trim();
-                if token.is_empty() {
-                    continue;
-                }
-                if let Ok(x_rec) = age::x25519::Recipient::from_str(token) {
-                    recipients.push(Box::new(x_rec));
-                } else if let Ok(ssh_rec) = age::ssh::Recipient::from_str(token) {
-                    recipients.push(Box::new(ssh_rec));
-                }
+        // 1. Explicit recipient string or SSH pubkey in TFA_AGE_RECIPIENTS or self.recipients
+        let env_recs = std::env::var("TFA_AGE_RECIPIENTS").ok();
+        let raw_tokens: Vec<String> = if let Some(ref recs) = env_recs {
+            recs.split([',', '\n'])
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .collect()
+        } else if let Some(ref recs) = self.recipients {
+            recs.clone()
+        } else {
+            Vec::new()
+        };
+
+        for token in &raw_tokens {
+            if let Ok(x_rec) = age::x25519::Recipient::from_str(token) {
+                recipients.push(Box::new(x_rec));
+            } else if let Ok(ssh_rec) = age::ssh::Recipient::from_str(token) {
+                recipients.push(Box::new(ssh_rec));
             }
-            if !recipients.is_empty() {
-                return Ok(recipients);
-            }
+        }
+        if !recipients.is_empty() {
+            return Ok(recipients);
         }
 
         // 2. Derive recipient from explicit age key_file if specified
@@ -1030,6 +1047,26 @@ mod tests {
 
         // 6. Delete nonexistent fails
         assert!(store.delete_account("nonexistent").is_err());
+    }
+
+    #[test]
+    fn test_age_store_with_configured_recipients() {
+        let dir = tempdir().unwrap();
+        let store_path = dir.path().join("credentials.age");
+        let key_path = dir.path().join("keys.txt");
+
+        let identity = age::x25519::Identity::generate();
+        let pubkey = identity.to_public().to_string();
+        let secret_str = identity.to_string();
+        use age::secrecy::ExposeSecret;
+        let file_content = format!("{}\n", secret_str.expose_secret());
+        std::fs::write(&key_path, file_content).unwrap();
+
+        let store =
+            AgeStore::with_recipients(store_path.clone(), Some(key_path), None, Some(vec![pubkey]));
+
+        store.set_secret("recipient_acct", "SECRET123").unwrap();
+        assert_eq!(store.get_secret("recipient_acct").unwrap(), "SECRET123");
     }
 
     #[test]
