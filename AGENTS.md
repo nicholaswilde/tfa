@@ -84,6 +84,19 @@ task build        # Build all multi-arch targets via cross
 ## 6. RTK Command Guidelines
 Follow global `~/.gemini/config/rules/rtk-rules.md`, `ripgrep-rules.md`, and `github-cli-rules.md`.
 
+<!-- context-mode-begin -->
+## 7. Context-Mode Routing Guidelines
+- **Derive, Do Not Dump**: Do NOT use `ctx_execute_file` or `ctx_execute` to dump whole file or full config. Print only specific value, matches, count, or known line range needed.
+- **Tool Call Surface**: When using MCP wrappers, call `call_mcp_tool` with `ServerName: "context-mode_context-mode"` (or `"context-mode"`) and `ToolName: "ctx_execute"`, `"ctx_execute_file"`, `"ctx_batch_execute"`, `"ctx_fetch_and_index"`, `"ctx_search"`, or `"ctx_index"`.
+- **Mandatory Routing**:
+  - For analyze/count/filter/compare/search/parse/transform tasks, write code with `ctx_execute` and print only final answer.
+  - For analyzing/exploring inside file, use `ctx_execute_file`. Use native `read_file` only when editing requires exact bytes or small known range.
+  - Use `ctx_batch_execute` for multi-command repository reconnaissance.
+  - Use `ctx_execute` for shell commands whose output may exceed short fixed answer.
+  - Use `ctx_fetch_and_index` for web content, then `ctx_search` to query it.
+  - Return only derived answers, concise summaries, selected snippets, or file paths.
+<!-- context-mode-end -->
+
 ## What To Do Next
 - When asked "what to do next", **check remote repository issues first** via `gh`:
   ```bash
