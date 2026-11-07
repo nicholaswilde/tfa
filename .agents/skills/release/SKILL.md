@@ -1,6 +1,6 @@
 ---
 name: release
-description: Automates the versioning, tagging, and deployment process for the project using scripts/release.sh.
+description: Automates versioning, tagging, and deployment using scripts/release.sh. Trigger: /release, "release", "cut release", "tag release".
 ---
 
 # /release [patch|minor|major|<version>]
