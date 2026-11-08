@@ -105,6 +105,7 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `move` (`mv`) | Relocate an account to a different namespace | `tfa move <account> --to <target_ns>` |
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
 | `audit` | Scan stored accounts and credentials file for security vulnerabilities | `tfa audit [--json]` |
+| `doctor` (`doc`) | Validate system prerequisites, storage permissions, and diagnostic health | `tfa doctor [--json]` |
 | `namespace` (`ns`) | Multi-tenant namespace management (`current`, `default`, `list`/`ls`, `create`, `rename`/`ren`/`mv`, `delete`/`del`/`rm`, `set-default`/`use`/`switch`) | `tfa ns` |
 | `completions` | Output dynamic or static shell completion script (`bash`, `zsh`, `fish`, `powershell`, `elvish`) | `tfa completions zsh [--static]` |
 | `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
@@ -450,6 +451,30 @@ Summary:
 
 # Output structured audit findings as JSON for CI/scripts:
 $ tfa audit --json
+```
+
+---
+
+## :stethoscope: System Diagnostics (`tfa doctor`)
+
+Validate system prerequisites, troubleshoot runtime issues, and check environment health:
+
+- **Keyring Connectivity:** Verify OS keychain/keyring (D-Bus / Secret Service on Linux, Keychain on macOS, Credential Manager on Windows) responsiveness.
+- **Storage & Permissions:** Verify strict `0600` permissions on credentials/config files and `0700` on directories.
+- **Clock Drift Detection:** Query NTP pool (`pool.ntp.org:123`) to measure local system time offset against true network time.
+- **Clipboard Availability:** Detect system clipboard (`arboard`) and terminal OSC 52 fallback.
+- **Age Prerequisites:** Validate age identity keys and environment configuration for `age` storage backend and backups.
+- **Terminal Capabilities:** Check UTF-8 unicode block rendering for ANSI QR codes and color support.
+
+```bash
+# Run human-readable system diagnostic check:
+tfa doctor
+
+# Output structured diagnostics report as JSON:
+tfa doctor --json
+
+# Query custom NTP server:
+tfa doctor --ntp-server time.cloudflare.com
 ```
 
 ---
