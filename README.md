@@ -46,6 +46,15 @@ brew tap nicholaswilde/homebrew-tap
 brew install tfa
 ```
 
+### Scoop (Windows)
+
+Install `tfa` via [Scoop](https://scoop.sh/) using the [nicholaswilde/scoop-bucket](https://github.com/nicholaswilde/scoop-bucket):
+
+```powershell
+scoop bucket add nicholaswilde https://github.com/nicholaswilde/scoop-bucket
+scoop install nicholaswilde/tfa
+```
+
 ### Prerequisites
 
 - [Rust toolchain](https://rustup.rs/) (1.88+)
