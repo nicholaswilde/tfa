@@ -13,6 +13,7 @@ mod backup;
 mod clipboard;
 mod completions;
 mod config;
+mod doctor;
 mod ente;
 mod export;
 mod import;
@@ -519,6 +520,16 @@ pub enum Commands {
         /// Output audit report in JSON format
         #[arg(long)]
         json: bool,
+    },
+    /// Validate system prerequisites, storage permissions, and diagnostic health
+    #[command(alias = "doc")]
+    Doctor {
+        /// Output doctor report in JSON format
+        #[arg(long)]
+        json: bool,
+        /// Custom NTP server for clock drift check
+        #[arg(long)]
+        ntp_server: Option<String>,
     },
 }
 
@@ -2447,6 +2458,36 @@ pub fn run_app(
             } else {
                 let text = audit::format_audit_report(&report);
                 write!(out_writer, "{text}")?;
+            }
+        }
+        Some(Commands::Doctor { json, ntp_server }) => {
+            let active_backend = cli.storage.map(|b| match b {
+                StorageBackend::Auto => "auto",
+                StorageBackend::Keyring => "keyring",
+                StorageBackend::File => "file",
+                StorageBackend::Age => "age",
+            });
+            let default_file_path = FileStore::default_path().ok();
+            let default_age_path = AgeStore::default_path().ok();
+            let config_paths = config::default_config_paths();
+            let report = doctor::run_doctor(
+                active_backend,
+                default_file_path.as_deref(),
+                default_age_path.as_deref(),
+                &config_paths,
+                ntp_server.as_deref(),
+            );
+            if json {
+                let json_str = serde_json::to_string_pretty(&report)?;
+                writeln!(out_writer, "{json_str}")?;
+            } else {
+                let colorize =
+                    std::io::stdout().is_terminal() && std::env::var("NO_COLOR").is_err();
+                let text = doctor::format_doctor_report(&report, colorize);
+                write!(out_writer, "{text}")?;
+            }
+            if !report.healthy {
+                anyhow::bail!("Doctor check failed with {} error(s)", report.errors);
             }
         }
         None => unreachable!("Default command handled above"),
@@ -6633,6 +6674,71 @@ light: true
         assert_eq!(report.summary.weak_secrets, 1);
         assert_eq!(report.summary.duplicate_secrets, 2);
         assert_eq!(report.summary.legacy_algorithms, 2); // weak_one and shared1 both use SHA-1
+    }
+
+    #[test]
+    fn test_cli_parse_doctor() {
+        let cli = Cli::try_parse_from(["tfa", "doctor"]).unwrap();
+        match cli.command {
+            Some(Commands::Doctor { json, ntp_server }) => {
+                assert!(!json);
+                assert!(ntp_server.is_none());
+            }
+            _ => panic!("Expected Doctor command"),
+        }
+
+        let cli_alias = Cli::try_parse_from(["tfa", "doc"]).unwrap();
+        match cli_alias.command {
+            Some(Commands::Doctor { json, ntp_server }) => {
+                assert!(!json);
+                assert!(ntp_server.is_none());
+            }
+            _ => panic!("Expected Doctor command for doc alias"),
+        }
+
+        let cli_json = Cli::try_parse_from(["tfa", "doctor", "--json"]).unwrap();
+        match cli_json.command {
+            Some(Commands::Doctor { json, ntp_server }) => {
+                assert!(json);
+                assert!(ntp_server.is_none());
+            }
+            _ => panic!("Expected Doctor command with --json"),
+        }
+
+        let cli_ntp =
+            Cli::try_parse_from(["tfa", "doctor", "--ntp-server", "time.cloudflare.com"]).unwrap();
+        match cli_ntp.command {
+            Some(Commands::Doctor { json, ntp_server }) => {
+                assert!(!json);
+                assert_eq!(ntp_server.as_deref(), Some("time.cloudflare.com"));
+            }
+            _ => panic!("Expected Doctor command with --ntp-server"),
+        }
+    }
+
+    #[test]
+    fn test_run_app_doctor_execution() {
+        let store = MemoryStore::new();
+        let cb = MockClipboard::default();
+
+        std::env::set_var("TFA_DOCTOR_SKIP_NTP", "1");
+
+        // Human-readable output
+        let cli = Cli::try_parse_from(["tfa", "doctor"]).unwrap();
+        let mut out = Vec::new();
+        let _ = run_app(cli, &store, &cb, &mut out);
+        let out_str = String::from_utf8(out).unwrap();
+        assert!(out_str.contains("Doctor summary:"));
+
+        // JSON output
+        let cli_json = Cli::try_parse_from(["tfa", "doctor", "--json"]).unwrap();
+        let mut out_json = Vec::new();
+        let _ = run_app(cli_json, &store, &cb, &mut out_json);
+        let json_str = String::from_utf8(out_json).unwrap();
+        let report: doctor::DoctorReport = serde_json::from_str(&json_str).unwrap();
+        assert!(report.total_checks > 0);
+
+        std::env::remove_var("TFA_DOCTOR_SKIP_NTP");
     }
 
     #[test]
