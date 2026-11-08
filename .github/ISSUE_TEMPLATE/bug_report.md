@@ -8,33 +8,33 @@ type: Bug
 
 ---
 
-## Summary
+## :bug: Summary
 
 A clear and concise description of the bug.
 
-## Steps to Reproduce
+## :repeat: Steps to Reproduce
 
 1. Run command '...'
 2. Pass arguments '...'
 3. See error
 
-## Expected Behavior
+## :dart: Expected Behavior
 
 A clear and concise description of what you expected to happen.
 
-## Actual Behavior
+## :warning: Actual Behavior
 
 ```text
 Actual output or error message here
 ```
 
-## Environment
+## :computer: Environment
 
 - OS: [e.g. Linux (Ubuntu 24.04), macOS 15, Windows 11]
 - Architecture: [e.g. x86_64, aarch64, armv7]
 - `tfa` Version: [e.g. `tfa --version`]
 - Storage Backend: [e.g. `keyring`, `file`, `age`, `auto`]
 
-## Additional Context
+## :memo: Additional Context
 
 Add any other context, reproduction configs, or logs here.
