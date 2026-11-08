@@ -1,25 +1,28 @@
 ---
 name: Feature request
 about: Suggest an idea for this project
-title: 'feat: '
+title: '[feat]: '
 labels: enhancement
 assignees: nicholaswilde
 type: Feature
 
 ---
 
-## Description
+## Summary
 
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+A clear and concise summary of the proposed feature and problem it solves.
 
 ## Motivation
 
-A clear and concise description of what you want to happen.
+Why this feature is needed and the use cases it addresses.
 
 ## Scope
 
-A clear and concise description of any alternative solutions or features you've considered.
+- [ ] **Core Functionality:** Primary capability or subcommand to add.
+- [ ] **CLI / Config Interface:** Flags, options, or configuration schema changes.
+- [ ] **Tests:** Unit and integration tests covering the new behavior.
+- [ ] **Documentation:** Updates to README.md and man page assets if applicable.
 
-## Additional context
+## Additional Context
 
-Add any other context or screenshots about the feature request here.
+Add any other context, screenshots, or design rationale here.
