@@ -184,6 +184,88 @@ pub fn select_account_interactive_on(
     }
 }
 
+pub fn resolve_account(
+    store: &dyn AccountStore,
+    query: Option<&str>,
+    prompt: &str,
+) -> anyhow::Result<String> {
+    resolve_account_on(store, query, prompt, &console::Term::stderr())
+}
+
+pub fn resolve_account_on(
+    store: &dyn AccountStore,
+    query: Option<&str>,
+    prompt: &str,
+    term: &console::Term,
+) -> anyhow::Result<String> {
+    let Some(q) = query.map(|s| s.trim()).filter(|s| !s.is_empty()) else {
+        return select_account_interactive_on(store, prompt, term);
+    };
+
+    let accounts = store.list_accounts()?;
+    if accounts.is_empty() {
+        store.get_secret(q)?;
+        anyhow::bail!("Account '{q}' not found");
+    }
+
+    // 1. Exact match (case-sensitive)
+    if let Some(exact) = accounts.iter().find(|acc| *acc == q) {
+        return Ok(exact.clone());
+    }
+
+    // 2. Exact match (case-insensitive)
+    if let Some(exact_ci) = accounts.iter().find(|acc| acc.eq_ignore_ascii_case(q)) {
+        return Ok(exact_ci.clone());
+    }
+
+    // 3. Fall back to case-insensitive prefix/substring matching
+    let q_lower = q.to_lowercase();
+    let mut candidates: Vec<String> = accounts
+        .into_iter()
+        .filter(|acc| acc.to_lowercase().contains(&q_lower))
+        .collect();
+
+    if candidates.is_empty() {
+        store.get_secret(q)?;
+        anyhow::bail!("Account '{q}' not found");
+    }
+
+    if candidates.len() == 1 {
+        return Ok(candidates.remove(0));
+    }
+
+    candidates.sort();
+
+    let is_non_interactive = {
+        #[cfg(test)]
+        let test_non_interactive = std::env::var("TFA_TEST_INTERACTIVE").is_err();
+        #[cfg(not(test))]
+        let test_non_interactive = false;
+
+        test_non_interactive || !io::stdin().is_terminal() || !term.features().is_attended()
+    };
+
+    if is_non_interactive {
+        anyhow::bail!(
+            "Multiple accounts match '{q}'. Matching candidates: {}",
+            candidates.join(", ")
+        );
+    }
+
+    let prompt_text = format!("Multiple accounts match '{q}'. {prompt}");
+    let selection = dialoguer::FuzzySelect::new()
+        .with_prompt(&prompt_text)
+        .items(&candidates)
+        .default(0)
+        .interact_on_opt(term)
+        .map_err(|e| anyhow::anyhow!("Interactive selection failed: {e}"))?;
+
+    match selection {
+        Some(index) => Ok(candidates[index].clone()),
+        None => anyhow::bail!("Selection cancelled"),
+    }
+}
+
 /// Resolve instant secret from argument, stdin ("-"), pipe, environment variable, or interactive prompt.
 pub fn resolve_instant_secret_with_reader<R: BufRead>(
     secret_arg: Option<String>,
@@ -849,10 +931,11 @@ pub fn run_app(
                 return Ok(());
             }
 
-            let acct = match account {
-                Some(a) => a,
-                None => select_account_interactive(store, "Select account to generate token")?,
-            };
+            let acct = resolve_account(
+                store,
+                account.as_deref(),
+                "Select account to generate token",
+            )?;
             let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
             if watch {
                 let secret = store.get_secret(&acct)?;
@@ -1024,17 +1107,17 @@ pub fn run_app(
                     watch::watch_all(store, out_writer, resolved_filter, test_ticks)?;
                 }
             } else {
-                let acct = match account {
-                    Some(a) => a,
-                    None => select_account_interactive(store, "Select account to watch")?,
-                };
+                let acct = resolve_account(store, account.as_deref(), "Select account to watch")?;
                 let secret = store.get_secret(&acct)?;
                 let engine = TfaTotp::from_input(&acct, &secret)?;
                 if engine.is_hotp() {
                     anyhow::bail!("Watch mode is not supported for counter-based (HOTP) accounts");
                 }
                 let should_copy = copy.unwrap_or(resolved_cfg.auto_copy);
-                watch::watch_account(&acct, store, clipboard, should_copy, out_writer, None)?;
+                let test_ticks = std::env::var("TFA_TEST_MAX_TICKS")
+                    .ok()
+                    .and_then(|s| s.parse().ok());
+                watch::watch_account(&acct, store, clipboard, should_copy, out_writer, test_ticks)?;
             }
         }
         Some(Commands::Add {
@@ -1119,6 +1202,7 @@ pub fn run_app(
             prefix,
             clear_prefix,
         }) => {
+            let account = resolve_account(store, Some(&account), "Select account to edit")?;
             let existing_secret = store.get_secret(&account)?;
             let mut engine = TfaTotp::build(
                 &account,
@@ -1175,10 +1259,11 @@ pub fn run_app(
                 let qr_blocks = qr::render_migration_terminal_qrs(&uris, !is_light)?;
                 write!(out_writer, "{qr_blocks}")?;
             } else {
-                let acct = match account {
-                    Some(a) => a,
-                    None => select_account_interactive(store, "Select account to display QR code")?,
-                };
+                let acct = resolve_account(
+                    store,
+                    account.as_deref(),
+                    "Select account to display QR code",
+                )?;
                 let secret = store.get_secret(&acct)?;
                 let engine = TfaTotp::from_input(&acct, &secret)?;
                 let url = engine.to_url()?;
@@ -1285,10 +1370,7 @@ pub fn run_app(
             }
         }
         Some(Commands::Delete { account }) => {
-            let acct = match account {
-                Some(a) => a,
-                None => select_account_interactive(store, "Select account to delete")?,
-            };
+            let acct = resolve_account(store, account.as_deref(), "Select account to delete")?;
             store.delete_account(&acct)?;
             writeln!(out_writer, "Account '{acct}' deleted.")?;
         }
@@ -1444,6 +1526,7 @@ pub fn run_app(
             json,
             token,
         }) => {
+            let account = resolve_account(store, Some(&account), "Select account to show")?;
             let secret = store.get_secret(&account)?;
             if raw {
                 writeln!(out_writer, "{secret}")?;
@@ -2690,6 +2773,168 @@ mod tests {
 
         let del_cli = Cli::try_parse_from(["tfa", "delete"]).unwrap();
         assert!(run_app(del_cli, &store, &cb, &mut out).is_err());
+    }
+
+    #[test]
+    fn test_resolve_account_unit_cases() {
+        let store = MemoryStore::new();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("gitlab", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("Google", "JBSWY3DPEHPK3PXP").unwrap();
+
+        // 1. Exact match (case-sensitive)
+        assert_eq!(
+            resolve_account(&store, Some("github"), "Select account").unwrap(),
+            "github"
+        );
+        assert_eq!(
+            resolve_account(&store, Some("Google"), "Select account").unwrap(),
+            "Google"
+        );
+
+        // 2. Exact match (case-insensitive)
+        assert_eq!(
+            resolve_account(&store, Some("GITHUB"), "Select account").unwrap(),
+            "github"
+        );
+        assert_eq!(
+            resolve_account(&store, Some("google"), "Select account").unwrap(),
+            "Google"
+        );
+
+        // 3. Single-substring match
+        // Substring
+        assert_eq!(
+            resolve_account(&store, Some("hub"), "Select account").unwrap(),
+            "github"
+        );
+        assert_eq!(
+            resolve_account(&store, Some("lab"), "Select account").unwrap(),
+            "gitlab"
+        );
+        assert_eq!(
+            resolve_account(&store, Some("oog"), "Select account").unwrap(),
+            "Google"
+        );
+        // Case-insensitive substring
+        assert_eq!(
+            resolve_account(&store, Some("HUB"), "Select account").unwrap(),
+            "github"
+        );
+
+        // 4. Ambiguous match (non-interactive in tests)
+        let err_ambiguous = resolve_account(&store, Some("git"), "Select account").unwrap_err();
+        let err_amb_str = err_ambiguous.to_string();
+        assert!(err_amb_str.contains("Multiple accounts match 'git'"));
+        assert!(err_amb_str.contains("Matching candidates: github, gitlab"));
+
+        // 5. No match
+        let err_no_match = resolve_account(&store, Some("aws"), "Select account").unwrap_err();
+        assert!(err_no_match.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_cli_account_resolution_commands() {
+        let store = MemoryStore::new();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+        store.set_secret("gitlab", "JBSWY3DPEHPK3PXP").unwrap();
+        let cb = MockClipboard::default();
+
+        // 1. generate: single substring
+        let mut out = Vec::new();
+        let cli_gen = Cli::try_parse_from(["tfa", "generate", "hub", "--quiet"]).unwrap();
+        assert!(run_app(cli_gen, &store, &cb, &mut out).is_ok());
+        let token = String::from_utf8(out).unwrap().trim().to_string();
+        assert_eq!(token.len(), 6);
+
+        // generate: ambiguous
+        let cli_gen_amb = Cli::try_parse_from(["tfa", "generate", "git"]).unwrap();
+        let err_gen_amb = run_app(cli_gen_amb, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_gen_amb
+            .to_string()
+            .contains("Multiple accounts match 'git'"));
+
+        // generate: no-match
+        let cli_gen_no = Cli::try_parse_from(["tfa", "generate", "aws"]).unwrap();
+        assert!(run_app(cli_gen_no, &store, &cb, &mut Vec::new()).is_err());
+
+        // 2. show: single substring
+        let mut out_show = Vec::new();
+        let cli_show = Cli::try_parse_from(["tfa", "show", "hub", "--raw"]).unwrap();
+        assert!(run_app(cli_show, &store, &cb, &mut out_show).is_ok());
+        assert_eq!(
+            String::from_utf8(out_show).unwrap().trim(),
+            "JBSWY3DPEHPK3PXP"
+        );
+
+        // show: ambiguous
+        let cli_show_amb = Cli::try_parse_from(["tfa", "show", "git"]).unwrap();
+        let err_show_amb = run_app(cli_show_amb, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_show_amb
+            .to_string()
+            .contains("Multiple accounts match 'git'"));
+
+        // show: no-match
+        let cli_show_no = Cli::try_parse_from(["tfa", "show", "aws"]).unwrap();
+        assert!(run_app(cli_show_no, &store, &cb, &mut Vec::new()).is_err());
+
+        // 3. qr: single substring
+        let mut out_qr = Vec::new();
+        let cli_qr = Cli::try_parse_from(["tfa", "qr", "hub"]).unwrap();
+        assert!(run_app(cli_qr, &store, &cb, &mut out_qr).is_ok());
+        assert!(!out_qr.is_empty());
+
+        // qr: ambiguous
+        let cli_qr_amb = Cli::try_parse_from(["tfa", "qr", "git"]).unwrap();
+        let err_qr_amb = run_app(cli_qr_amb, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_qr_amb
+            .to_string()
+            .contains("Multiple accounts match 'git'"));
+
+        // 4. edit: single substring
+        let mut out_edit = Vec::new();
+        let cli_edit = Cli::try_parse_from(["tfa", "edit", "hub", "--digits", "8"]).unwrap();
+        assert!(run_app(cli_edit, &store, &cb, &mut out_edit).is_ok());
+        assert!(String::from_utf8(out_edit)
+            .unwrap()
+            .contains("Account 'github' updated."));
+
+        // edit: ambiguous
+        let cli_edit_amb = Cli::try_parse_from(["tfa", "edit", "git", "--digits", "8"]).unwrap();
+        let err_edit_amb = run_app(cli_edit_amb, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_edit_amb
+            .to_string()
+            .contains("Multiple accounts match 'git'"));
+
+        // 5. watch: single substring with test ticks
+        std::env::set_var("TFA_TEST_MAX_TICKS", "1");
+        let mut out_watch = Vec::new();
+        let cli_watch = Cli::try_parse_from(["tfa", "watch", "hub"]).unwrap();
+        let _ = run_app(cli_watch, &store, &cb, &mut out_watch);
+
+        // watch: ambiguous
+        let cli_watch_amb = Cli::try_parse_from(["tfa", "watch", "git"]).unwrap();
+        let err_watch_amb = run_app(cli_watch_amb, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_watch_amb
+            .to_string()
+            .contains("Multiple accounts match 'git'"));
+        std::env::remove_var("TFA_TEST_MAX_TICKS");
+
+        // 6. delete: ambiguous
+        let cli_del_amb = Cli::try_parse_from(["tfa", "delete", "git"]).unwrap();
+        let err_del_amb = run_app(cli_del_amb, &store, &cb, &mut Vec::new()).unwrap_err();
+        assert!(err_del_amb
+            .to_string()
+            .contains("Multiple accounts match 'git'"));
+
+        // delete: single substring
+        let mut out_del = Vec::new();
+        let cli_del = Cli::try_parse_from(["tfa", "delete", "lab"]).unwrap();
+        assert!(run_app(cli_del, &store, &cb, &mut out_del).is_ok());
+        assert!(String::from_utf8(out_del)
+            .unwrap()
+            .contains("Account 'gitlab' deleted."));
+        assert!(store.get_secret("gitlab").is_err());
     }
 
     #[test]
