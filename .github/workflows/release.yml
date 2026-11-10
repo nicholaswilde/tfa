@@ -206,3 +206,62 @@ jobs:
           ${{ env.ASSET }}
           ${{ env.ASSET_SUM }}
         draft: true
+
+  publish-deb:
+    name: publish-deb
+    needs: ['create-release']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Install cargo-deb
+        shell: bash
+        run: |
+          CARGO_DEB_VER="3.8.0"
+          curl -LO "https://github.com/kornelski/cargo-deb/releases/download/v${CARGO_DEB_VER}/cargo-deb_${CARGO_DEB_VER}-1_amd64.deb"
+          sudo dpkg -i "cargo-deb_${CARGO_DEB_VER}-1_amd64.deb"
+          rm -f "cargo-deb_${CARGO_DEB_VER}-1_amd64.deb"
+
+      - name: Build release binary & Debian package
+        shell: bash
+        run: |
+          cargo build --release
+          cargo deb --no-build
+
+      - name: Upload .deb to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
+        with:
+          files: target/debian/*.deb
+          draft: true
+
+      - name: Push .deb to nicholaswilde/apt
+        if: github.ref_type == 'tag'
+        env:
+          APT_REPO_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clone apt repo using PAT
+          git clone "https://x-access-token:${APT_REPO_TOKEN}@github.com/nicholaswilde/apt.git" apt-repo
+
+          # Copy generated Debian package into pool/main
+          cp target/debian/*.deb apt-repo/pool/main/
+
+          # Commit and push changes
+          cd apt-repo
+          git add pool/main/*.deb
+          if ! git diff --staged --quiet; then
+            git commit -m "feat(pkg): add tfa ${{ needs.create-release.outputs.version }} deb"
+            git push origin main
+          fi
+

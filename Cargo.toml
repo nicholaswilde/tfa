@@ -83,3 +83,43 @@ strip = true      # Strip symbols (smaller binary)
 inherits = "dev"
 incremental = false # Disable incremental compilation for CI (often slower/buggy in CI cache)
 debug = 0           # No debug info needed for basic CI checks (speeds up build)
+
+[package.metadata.deb]
+maintainer = "Nicholas Wilde <ncwilde43@gmail.com>"
+copyright = "2026 Nicholas Wilde"
+license-file = ["LICENSE", "4"]
+extended-description = "A CLI two-factor authentication (2FA / TOTP) application."
+section = "utils"
+priority = "optional"
+assets = [
+  [
+    "target/release/tfa",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "assets/tfa.1",
+    "usr/share/man/man1/",
+    "644",
+  ],
+  [
+    "completions/tfa.bash",
+    "usr/share/bash-completion/completions/tfa",
+    "644",
+  ],
+  [
+    "completions/_tfa",
+    "usr/share/zsh/vendor-completions/_tfa",
+    "644",
+  ],
+  [
+    "completions/tfa.fish",
+    "usr/share/fish/vendor_completions.d/tfa.fish",
+    "644",
+  ],
+  [
+    "README.md",
+    "usr/share/doc/tfa/README.md",
+    "644",
+  ],
+]
