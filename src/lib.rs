@@ -31,6 +31,10 @@ pub use cli::{
 pub use clipboard::{Clipboard, ClipboardProvider, DispatchingClipboard};
 pub use config::ConfigFile;
 pub use export::ExportFormat;
+pub use import::{
+    are_secrets_equivalent, canonical_account_label, extract_account_from_otpauth,
+    parse_import_payload, ImportCollisionTracker, ImportItem, ResolvedImportAction,
+};
 pub use migrate::MigrateBackend;
 pub use namespace::NamespaceStore;
 pub use storage::{AccountStore, AgeStore, AutoStore, FileStore, KeyringStore};
@@ -1700,7 +1704,7 @@ pub fn run_app(
             file_or_payload,
             dry_run,
             overwrite,
-            skip: _,
+            skip,
             password,
         }) => {
             let path = Path::new(&file_or_payload);
@@ -1762,63 +1766,95 @@ pub fn run_app(
             let mut imported = 0;
             let mut updated = 0;
             let mut skipped = 0;
+            let mut tracker = import::ImportCollisionTracker::default();
 
             for item in items {
-                let exists = store.get_secret(&item.account).is_ok();
-                if exists {
-                    if overwrite {
+                let action = tracker.resolve_item(store, &item, overwrite, skip);
+                match action {
+                    import::ResolvedImportAction::ImportNew { account } => {
                         if !dry_run {
-                            let url = match TfaTotp::from_input(&item.account, &item.secret) {
+                            let url = match TfaTotp::from_input(&account, &item.secret) {
                                 Ok(engine) => {
                                     engine.to_url().unwrap_or_else(|_| item.secret.clone())
                                 }
                                 Err(_) => item.secret.clone(),
                             };
-                            store.set_secret(&item.account, &url)?;
+                            store.set_secret(&account, &url)?;
                         }
-                        updated += 1;
+                        imported += 1;
+                        if dry_run {
+                            writeln!(out_writer, "[dry-run] Would import account '{account}'")?;
+                        } else {
+                            writeln!(out_writer, "Imported account '{account}'")?;
+                        }
+                    }
+                    import::ResolvedImportAction::ImportSuffixed { account, original } => {
+                        if !dry_run {
+                            let url = match TfaTotp::from_input(&account, &item.secret) {
+                                Ok(engine) => {
+                                    engine.to_url().unwrap_or_else(|_| item.secret.clone())
+                                }
+                                Err(_) => item.secret.clone(),
+                            };
+                            store.set_secret(&account, &url)?;
+                        }
+                        imported += 1;
                         if dry_run {
                             writeln!(
                                 out_writer,
-                                "[dry-run] Would update account '{}'",
-                                item.account
+                                "[dry-run] Would import account '{account}' (auto-suffixed collision for '{original}')"
                             )?;
                         } else {
-                            writeln!(out_writer, "Updated account '{}'", item.account)?;
+                            writeln!(
+                                out_writer,
+                                "Imported account '{account}' (auto-suffixed collision for '{original}')"
+                            )?;
                         }
-                    } else {
+                    }
+                    import::ResolvedImportAction::UpdateExisting { account } => {
+                        if !dry_run {
+                            let url = match TfaTotp::from_input(&account, &item.secret) {
+                                Ok(engine) => {
+                                    engine.to_url().unwrap_or_else(|_| item.secret.clone())
+                                }
+                                Err(_) => item.secret.clone(),
+                            };
+                            store.set_secret(&account, &url)?;
+                        }
+                        updated += 1;
+                        if dry_run {
+                            writeln!(out_writer, "[dry-run] Would update account '{account}'")?;
+                        } else {
+                            writeln!(out_writer, "Updated account '{account}'")?;
+                        }
+                    }
+                    import::ResolvedImportAction::SkipDuplicate { account } => {
                         skipped += 1;
                         if dry_run {
                             writeln!(
                                 out_writer,
-                                "[dry-run] Would skip existing account '{}'",
-                                item.account
+                                "[dry-run] Would skip existing account '{account}' (identical secret)"
                             )?;
                         } else {
                             writeln!(
                                 out_writer,
-                                "Skipping existing account '{}' (use --overwrite to replace)",
-                                item.account
+                                "Skipping existing account '{account}' (identical secret)"
                             )?;
                         }
                     }
-                } else {
-                    if !dry_run {
-                        let url = match TfaTotp::from_input(&item.account, &item.secret) {
-                            Ok(engine) => engine.to_url().unwrap_or_else(|_| item.secret.clone()),
-                            Err(_) => item.secret.clone(),
-                        };
-                        store.set_secret(&item.account, &url)?;
-                    }
-                    imported += 1;
-                    if dry_run {
-                        writeln!(
-                            out_writer,
-                            "[dry-run] Would import account '{}'",
-                            item.account
-                        )?;
-                    } else {
-                        writeln!(out_writer, "Imported account '{}'", item.account)?;
+                    import::ResolvedImportAction::SkipExisting { account } => {
+                        skipped += 1;
+                        if dry_run {
+                            writeln!(
+                                out_writer,
+                                "[dry-run] Would skip existing account '{account}'"
+                            )?;
+                        } else {
+                            writeln!(
+                                out_writer,
+                                "Skipping existing account '{account}' (use --overwrite to replace)"
+                            )?;
+                        }
                     }
                 }
             }
@@ -3830,9 +3866,9 @@ mod tests {
         .unwrap();
         assert!(run_app(dry_cli, &store, &cb, &mut dry_out).is_ok());
         let dry_str = String::from_utf8(dry_out).unwrap();
-        assert!(dry_str.contains("[dry-run] Would import account 'alice@example.com'"));
+        assert!(dry_str.contains("[dry-run] Would import account 'EnteApp:alice@example.com'"));
         assert!(dry_str.contains("[dry-run] Summary: 2 to import, 0 to update, 0 to skip."));
-        assert!(store.get_secret("alice@example.com").is_err());
+        assert!(store.get_secret("EnteApp:alice@example.com").is_err());
 
         // 2. Actual import
         let mut import_out = Vec::new();
@@ -3846,8 +3882,8 @@ mod tests {
         .unwrap();
         assert!(run_app(import_cli, &store, &cb, &mut import_out).is_ok());
         let import_str = String::from_utf8(import_out).unwrap();
-        assert!(import_str.contains("Imported account 'alice@example.com'"));
-        assert!(import_str.contains("Imported account 'bob'"));
+        assert!(import_str.contains("Imported account 'EnteApp:alice@example.com'"));
+        assert!(import_str.contains("Imported account 'GitLab:bob'"));
         assert!(import_str.contains("Summary: 2 imported, 0 updated, 0 skipped."));
 
         let accounts = store.list_accounts().unwrap();
@@ -3956,7 +3992,7 @@ mod tests {
         assert!(store
             .list_accounts()
             .unwrap()
-            .contains(&"user@gitlab.com".to_string()));
+            .contains(&"GitLab:user@gitlab.com".to_string()));
     }
 
     #[test]

@@ -166,8 +166,8 @@ pub mod tests {
 
         let items = crate::import::parse_import_payload(&decrypted).unwrap();
         assert_eq!(items.len(), 2);
-        assert_eq!(items[0].account, "alice@example.com");
-        assert_eq!(items[1].account, "bob@proton.me");
+        assert_eq!(items[0].account, "GitHub:alice@example.com");
+        assert_eq!(items[1].account, "Proton:bob@proton.me");
         for item in &items {
             let engine = crate::totp::TfaTotp::from_input(&item.account, &item.secret).unwrap();
             let code = engine.generate_current();

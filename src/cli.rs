@@ -444,7 +444,7 @@ pub enum Commands {
         /// Overwrite existing accounts if conflicts occur
         #[arg(long, conflicts_with = "skip")]
         overwrite: bool,
-        /// Skip existing accounts if conflicts occur (default)
+        /// Skip existing accounts if conflicts occur (default resolves collisions via auto-suffixing)
         #[arg(long, conflicts_with = "overwrite")]
         skip: bool,
         /// Master passphrase for encrypted backup (prompted securely if omitted)

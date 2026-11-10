@@ -180,12 +180,14 @@ pub fn parse_2fas_service_entry(val: &Value) -> Option<ImportItem> {
         .map(|s| s.trim())
         .filter(|s| !s.is_empty());
 
-    let account_name = match (service_name, otp_account) {
-        (name, Some(acc)) if !name.is_empty() && name != acc => format!("{name}:{acc}"),
-        (name, _) if !name.is_empty() => name.to_string(),
-        (_, Some(acc)) => acc.to_string(),
-        _ => "imported_account".to_string(),
-    };
+    let account_name = crate::import::canonical_account_label(
+        if service_name.is_empty() {
+            None
+        } else {
+            Some(service_name)
+        },
+        otp_account,
+    );
 
     if let Some(link) = otp_link {
         if link.starts_with("otpauth://") {

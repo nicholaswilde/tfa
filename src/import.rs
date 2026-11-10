@@ -1,10 +1,38 @@
 use anyhow::{bail, Result};
 use serde_json::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ImportItem {
     pub account: String,
     pub secret: String,
+}
+
+/// Construct a canonical `Issuer:account` label when both fields are present and distinct.
+pub fn canonical_account_label(issuer: Option<&str>, account: Option<&str>) -> String {
+    let iss = issuer
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("tfa"));
+    let acc = account.map(str::trim).filter(|s| !s.is_empty());
+
+    match (iss, acc) {
+        (Some(i), Some(a)) => {
+            // Check if already in Issuer:account format with the same issuer
+            if let Some((existing_i, _)) = a.split_once(':') {
+                if existing_i.trim().eq_ignore_ascii_case(i) {
+                    return a.to_string();
+                }
+            }
+            if a.eq_ignore_ascii_case(i) {
+                i.to_string()
+            } else {
+                format!("{i}:{a}")
+            }
+        }
+        (Some(i), None) => i.to_string(),
+        (None, Some(a)) => a.to_string(),
+        (None, None) => "imported_account".to_string(),
+    }
 }
 
 /// Parse import payload from string (migration URL, OTPAuth URLs, or JSON export)
@@ -81,11 +109,18 @@ fn parse_google_migration(uri: &str) -> Result<Vec<ImportItem>> {
     let items = accounts
         .into_iter()
         .map(|acc| {
-            let account_name = if acc.name.is_empty() {
-                acc.issuer
-            } else {
-                acc.name
-            };
+            let account_name = canonical_account_label(
+                if acc.issuer.is_empty() {
+                    None
+                } else {
+                    Some(&acc.issuer)
+                },
+                if acc.name.is_empty() {
+                    None
+                } else {
+                    Some(&acc.name)
+                },
+            );
             ImportItem {
                 account: account_name,
                 secret: acc.secret,
@@ -188,16 +223,12 @@ fn parse_value_export(v: Value) -> Result<Vec<ImportItem>> {
                                 .map(str::trim)
                                 .filter(|s| !s.is_empty());
                             let extracted = extract_account_from_otpauth(uri);
-                            let account = match name {
-                                Some(n)
-                                    if extracted != "imported_account"
-                                        && n != extracted
-                                        && !extracted.starts_with(n) =>
-                                {
-                                    format!("{n}:{extracted}")
-                                }
-                                Some(n) => n.to_string(),
-                                None => extracted,
+                            let account = if extracted != "imported_account" {
+                                canonical_account_label(name, Some(&extracted))
+                            } else if let Some(n) = name {
+                                n.to_string()
+                            } else {
+                                extracted
                             };
                             items.push(ImportItem {
                                 account,
@@ -290,11 +321,10 @@ fn build_item_from_obj(obj: &serde_json::Map<String, Value>) -> Option<ImportIte
         .map(str::trim)
         .filter(|s| !s.is_empty());
 
-    let account_name = match (issuer, raw_name) {
-        (Some(iss), Some(acc)) if iss != acc && !acc.starts_with(iss) => format!("{iss}:{acc}"),
-        (_, Some(acc)) => acc.to_string(),
-        (Some(iss), None) => iss.to_string(),
-        (None, None) => return None,
+    let account_name = if issuer.is_none() && raw_name.is_none() {
+        return None;
+    } else {
+        canonical_account_label(issuer, raw_name)
     };
 
     let has_otp_meta = issuer.is_some()
@@ -516,22 +546,188 @@ fn percent_decode(s: &str) -> String {
 pub fn extract_account_from_otpauth(url_str: &str) -> String {
     if let Ok(url) = url::Url::parse(url_str) {
         let path = percent_decode(url.path().trim_start_matches('/'));
-        if let Some(acc) = path.split(':').next_back() {
-            let trimmed = acc.trim();
-            if !trimmed.is_empty() {
-                return trimmed.to_string();
+        let mut query_issuer = None;
+        for (k, v) in url.query_pairs() {
+            if k.eq_ignore_ascii_case("issuer") {
+                let trimmed = v.trim();
+                if !trimmed.is_empty() {
+                    query_issuer = Some(trimmed.to_string());
+                }
             }
         }
-        if !path.is_empty() {
-            return path;
+
+        if let Some((path_issuer, path_acc)) = path.split_once(':') {
+            let pi = path_issuer.trim();
+            let pa = path_acc.trim();
+            let chosen_issuer = query_issuer
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .unwrap_or(pi);
+            let account_part = if !pa.is_empty() { Some(pa) } else { None };
+            let result = canonical_account_label(
+                if !chosen_issuer.is_empty() {
+                    Some(chosen_issuer)
+                } else {
+                    None
+                },
+                account_part,
+            );
+            if result != "imported_account" {
+                return result;
+            }
+        }
+
+        let trimmed_path = path.trim();
+        let account_part = if !trimmed_path.is_empty() {
+            Some(trimmed_path)
+        } else {
+            None
+        };
+        let result = canonical_account_label(query_issuer.as_deref(), account_part);
+        if result != "imported_account" {
+            return result;
         }
     }
     "imported_account".to_string()
 }
 
+/// Compare two secrets for equivalence, resolving TOTP/HOTP URLs and raw keys.
+pub fn are_secrets_equivalent(s1: &str, s2: &str) -> bool {
+    let t1 = s1.trim();
+    let t2 = s2.trim();
+    if t1 == t2 {
+        return true;
+    }
+
+    match (
+        crate::totp::TfaTotp::from_input("tmp", t1),
+        crate::totp::TfaTotp::from_input("tmp", t2),
+    ) {
+        (Ok(e1), Ok(e2)) => {
+            e1.secret_bytes() == e2.secret_bytes()
+                && e1.digits() == e2.digits()
+                && e1.step() == e2.step()
+                && e1.algorithm() == e2.algorithm()
+                && e1.is_hotp() == e2.is_hotp()
+                && e1.counter() == e2.counter()
+                && e1.prefix() == e2.prefix()
+        }
+        _ => false,
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ResolvedImportAction {
+    /// New account to import
+    ImportNew { account: String },
+    /// Colliding account with differing secret, auto-suffixed (<account>-2, <account>-3)
+    ImportSuffixed { account: String, original: String },
+    /// Existing account to update (--overwrite)
+    UpdateExisting { account: String },
+    /// Existing account with identical secret (true duplicate)
+    SkipDuplicate { account: String },
+    /// Colliding account with differing secret skipped (--skip)
+    SkipExisting { account: String },
+}
+
+/// Tracker for batch import collision resolution and deduplication.
+#[derive(Default)]
+pub struct ImportCollisionTracker {
+    assigned: HashMap<String, String>,
+}
+
+impl ImportCollisionTracker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Resolve action for an incoming import item against the store and current batch history.
+    pub fn resolve_item(
+        &mut self,
+        store: &dyn crate::storage::AccountStore,
+        item: &ImportItem,
+        overwrite: bool,
+        skip: bool,
+    ) -> ResolvedImportAction {
+        let base_name = &item.account;
+
+        // Check if base_name already exists in this batch or in store
+        let existing_secret = self
+            .assigned
+            .get(base_name)
+            .cloned()
+            .or_else(|| store.get_secret(base_name).ok());
+
+        match existing_secret {
+            None => {
+                // Not found anywhere: brand new account
+                self.assigned.insert(base_name.clone(), item.secret.clone());
+                ResolvedImportAction::ImportNew {
+                    account: base_name.clone(),
+                }
+            }
+            Some(ref existing_sec) => {
+                // Base name already exists.
+                // 1. If overwrite is explicitly set, update the existing account
+                if overwrite {
+                    self.assigned.insert(base_name.clone(), item.secret.clone());
+                    return ResolvedImportAction::UpdateExisting {
+                        account: base_name.clone(),
+                    };
+                }
+
+                // 2. Secret deduplication: check if identical secret
+                if are_secrets_equivalent(existing_sec, &item.secret) {
+                    return ResolvedImportAction::SkipDuplicate {
+                        account: base_name.clone(),
+                    };
+                }
+
+                // 3. Secret differs. Check skip flag.
+                if skip {
+                    ResolvedImportAction::SkipExisting {
+                        account: base_name.clone(),
+                    }
+                } else {
+                    // 3. Default: Collision Auto-Suffixing (<account>-2, <account>-3, ...)
+                    // First check if any existing suffixed version already holds this identical secret
+                    let mut n = 2;
+                    loop {
+                        let candidate = format!("{base_name}-{n}");
+                        let cand_sec = self
+                            .assigned
+                            .get(&candidate)
+                            .cloned()
+                            .or_else(|| store.get_secret(&candidate).ok());
+
+                        match cand_sec {
+                            Some(ref s) if are_secrets_equivalent(s, &item.secret) => {
+                                return ResolvedImportAction::SkipDuplicate {
+                                    account: base_name.clone(),
+                                };
+                            }
+                            Some(_) => {
+                                n += 1;
+                            }
+                            None => {
+                                self.assigned.insert(candidate.clone(), item.secret.clone());
+                                return ResolvedImportAction::ImportSuffixed {
+                                    account: candidate,
+                                    original: base_name.clone(),
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::AccountStore;
 
     #[test]
     fn test_import_google_authenticator_migration() {
@@ -586,8 +782,8 @@ mod tests {
         let lines = "otpauth://totp/GitHub:alice?secret=JBSWY3DPEHPK3PXP&issuer=GitHub\notpauth://totp/AWS:bob?secret=JBSWY3DPEHPK3PXP&issuer=AWS\n";
         let items = parse_import_payload(lines).unwrap();
         assert_eq!(items.len(), 2);
-        assert_eq!(items[0].account, "alice");
-        assert_eq!(items[1].account, "bob");
+        assert_eq!(items[0].account, "GitHub:alice");
+        assert_eq!(items[1].account, "AWS:bob");
     }
 
     #[test]
@@ -654,7 +850,19 @@ mod tests {
         );
         assert_eq!(
             extract_account_from_otpauth("otpauth://totp/issuer:user"),
-            "user"
+            "issuer:user"
+        );
+        assert_eq!(
+            extract_account_from_otpauth("otpauth://totp/user?issuer=GitHub"),
+            "GitHub:user"
+        );
+        assert_eq!(
+            extract_account_from_otpauth("otpauth://totp/GitHub:user?issuer=GitHub"),
+            "GitHub:user"
+        );
+        assert_eq!(
+            extract_account_from_otpauth("otpauth://totp/GitHub:GitHub?issuer=GitHub"),
+            "GitHub"
         );
         assert_eq!(
             extract_account_from_otpauth("otpauth://totp/"),
@@ -698,8 +906,8 @@ otpauth://totp/Proton%20Mail:bob%40proton.me?secret=jbswy3dpehpk3pxp====&issuer=
 ";
         let items = parse_import_payload(ente_txt).unwrap();
         assert_eq!(items.len(), 2);
-        assert_eq!(items[0].account, "alice@example.com");
-        assert_eq!(items[1].account, "bob@proton.me");
+        assert_eq!(items[0].account, "GitHub:alice@example.com");
+        assert_eq!(items[1].account, "Proton Mail:bob@proton.me");
 
         for item in &items {
             let engine = crate::totp::TfaTotp::from_input(&item.account, &item.secret).unwrap();
@@ -717,10 +925,10 @@ otpauth://totp/Steam:gamer2?secret=JBSWY3DPEHPK3PXP&issuer=Steam&encoder=steam
 ";
         let items = parse_import_payload(stratum_txt).unwrap();
         assert_eq!(items.len(), 4);
-        assert_eq!(items[0].account, "dev@example.com");
-        assert_eq!(items[1].account, "admin");
-        assert_eq!(items[2].account, "gamer");
-        assert_eq!(items[3].account, "gamer2");
+        assert_eq!(items[0].account, "GitLab:dev@example.com");
+        assert_eq!(items[1].account, "YubiKey:admin");
+        assert_eq!(items[2].account, "Steam:gamer");
+        assert_eq!(items[3].account, "Steam:gamer2");
 
         let eng0 = crate::totp::TfaTotp::from_input(&items[0].account, &items[0].secret).unwrap();
         assert_eq!(eng0.digits(), 8);
@@ -903,7 +1111,7 @@ otpauth://totp/Steam:gamer2?secret=JBSWY3DPEHPK3PXP&issuer=Steam&encoder=steam
         let items = parse_import_payload(proton_json).unwrap();
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].account, "Proton:alice@proton.me");
-        assert_eq!(items[1].account, "bob@gitlab.com");
+        assert_eq!(items[1].account, "GitLab:bob@gitlab.com");
 
         let eng0 = crate::totp::TfaTotp::from_input(&items[0].account, &items[0].secret).unwrap();
         assert_eq!(eng0.digits(), 6);
@@ -993,5 +1201,128 @@ DigitalOcean,https://cloud.digitalocean.com,devops@example.com,pw3,GEZDGNBVGY3TQ
         assert_eq!(eng1.digits(), 8);
         assert_eq!(eng1.step(), 60);
         assert_eq!(eng1.algorithm(), totp_rs::Algorithm::SHA256);
+    }
+
+    #[test]
+    fn test_canonical_account_label_cases() {
+        assert_eq!(
+            canonical_account_label(Some("GitHub"), Some("alice@example.com")),
+            "GitHub:alice@example.com"
+        );
+        assert_eq!(
+            canonical_account_label(Some("GitHub"), Some("GitHub:alice@example.com")),
+            "GitHub:alice@example.com"
+        );
+        assert_eq!(
+            canonical_account_label(Some("github"), Some("GitHub:alice@example.com")),
+            "GitHub:alice@example.com"
+        );
+        assert_eq!(
+            canonical_account_label(Some("Google"), Some("Google")),
+            "Google"
+        );
+        assert_eq!(
+            canonical_account_label(Some("Google"), Some("google")),
+            "Google"
+        );
+        assert_eq!(canonical_account_label(Some("tfa"), Some("alice")), "alice");
+        assert_eq!(canonical_account_label(None, Some("alice")), "alice");
+        assert_eq!(canonical_account_label(Some("Amazon"), None), "Amazon");
+        assert_eq!(canonical_account_label(None, None), "imported_account");
+    }
+
+    #[test]
+    fn test_are_secrets_equivalent_cases() {
+        let sec1 = "JBSWY3DPEHPK3PXP";
+        let sec2 = "GEZDGNBVGY3TQOJQ";
+        let url_default = "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP";
+        let url_diff_digits = "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&digits=8";
+        let url_diff_period = "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=60";
+        let url_diff_algo = "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA256";
+
+        assert!(are_secrets_equivalent(sec1, sec1));
+        assert!(are_secrets_equivalent(sec1, url_default));
+        assert!(are_secrets_equivalent(url_default, sec1));
+        assert!(!are_secrets_equivalent(sec1, sec2));
+        assert!(!are_secrets_equivalent(sec1, url_diff_digits));
+        assert!(!are_secrets_equivalent(sec1, url_diff_period));
+        assert!(!are_secrets_equivalent(sec1, url_diff_algo));
+    }
+
+    #[test]
+    fn test_import_collision_tracker_batch_and_auto_suffixing() {
+        let store = crate::storage::MemoryStore::new();
+        store.set_secret("github", "JBSWY3DPEHPK3PXP").unwrap();
+
+        let mut tracker = ImportCollisionTracker::new();
+
+        // 1. Existing with identical secret -> SkipDuplicate
+        let item1 = ImportItem {
+            account: "github".to_string(),
+            secret: "JBSWY3DPEHPK3PXP".to_string(),
+        };
+        let act1 = tracker.resolve_item(&store, &item1, false, false);
+        assert_eq!(
+            act1,
+            ResolvedImportAction::SkipDuplicate {
+                account: "github".to_string()
+            }
+        );
+
+        // 2. Existing with differing secret, default mode -> auto-suffix to github-2
+        let item2 = ImportItem {
+            account: "github".to_string(),
+            secret: "GEZDGNBVGY3TQOJQ".to_string(),
+        };
+        let act2 = tracker.resolve_item(&store, &item2, false, false);
+        assert_eq!(
+            act2,
+            ResolvedImportAction::ImportSuffixed {
+                account: "github-2".to_string(),
+                original: "github".to_string()
+            }
+        );
+
+        // 3. Batch repeat of secret for github-2 -> SkipDuplicate
+        let act3 = tracker.resolve_item(&store, &item2, false, false);
+        assert_eq!(
+            act3,
+            ResolvedImportAction::SkipDuplicate {
+                account: "github".to_string()
+            }
+        );
+
+        // 4. Third distinct secret -> auto-suffix to github-3
+        let item3 = ImportItem {
+            account: "github".to_string(),
+            secret: "MZXW6YTBOI======".to_string(),
+        };
+        let act4 = tracker.resolve_item(&store, &item3, false, false);
+        assert_eq!(
+            act4,
+            ResolvedImportAction::ImportSuffixed {
+                account: "github-3".to_string(),
+                original: "github".to_string()
+            }
+        );
+
+        // 5. Overwrite flag
+        let act_ow = tracker.resolve_item(&store, &item2, true, false);
+        assert_eq!(
+            act_ow,
+            ResolvedImportAction::UpdateExisting {
+                account: "github".to_string()
+            }
+        );
+
+        // 6. Skip flag
+        let mut tracker2 = ImportCollisionTracker::new();
+        let act_skip = tracker2.resolve_item(&store, &item2, false, true);
+        assert_eq!(
+            act_skip,
+            ResolvedImportAction::SkipExisting {
+                account: "github".to_string()
+            }
+        );
     }
 }

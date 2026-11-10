@@ -354,17 +354,26 @@ impl TfaTotp {
         }
 
         let final_step = period.unwrap_or_else(|| base_totp.step());
+        let (inferred_iss, clean_acc) = if let Some((i, a)) = account.split_once(':') {
+            (Some(i), a)
+        } else {
+            (None, account)
+        };
         let final_issuer = if final_alg == Algorithm::Steam
             && (base_totp.issuer().is_none() || base_totp.issuer() == Some("tfa"))
         {
             "Steam"
+        } else if let Some(iss) = base_totp.issuer() {
+            iss
         } else {
-            base_totp.issuer().unwrap_or("tfa")
+            inferred_iss.unwrap_or("tfa")
         };
-        let final_account = if base_totp.account_name().is_empty() {
-            account
-        } else {
+        let final_account = if !clean_acc.is_empty() {
+            clean_acc
+        } else if !base_totp.account_name().is_empty() {
             base_totp.account_name()
+        } else {
+            "default"
         };
 
         let totp = Builder::new()

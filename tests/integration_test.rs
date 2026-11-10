@@ -152,3 +152,82 @@ fn test_integration_account_matching_and_resolution() {
     let cli_show_none = Cli::try_parse_from(["tfa", "show", "nonexistent"]).expect("parse");
     assert!(run_app(cli_show_none, &store, &clipboard, &mut Vec::new()).is_err());
 }
+
+#[test]
+fn test_integration_import_canonical_labeling_dedup_and_auto_suffixing() {
+    let temp_dir = tempfile::tempdir().expect("create temp dir");
+    let store_path = temp_dir.path().join("credentials.json");
+    let store = FileStore::new(store_path);
+    let clipboard = NoopClipboard;
+    let mut out = Vec::new();
+
+    // 1. Initial account setup: GitHub:alice@example.com with secret SEC1
+    let sec1 = "JBSWY3DPEHPK3PXP";
+    let cli_add = Cli::try_parse_from([
+        "tfa",
+        "--storage",
+        "file",
+        "add",
+        "GitHub:alice@example.com",
+        sec1,
+    ])
+    .expect("add initial account");
+    run_app(cli_add, &store, &clipboard, &mut out).expect("run add");
+
+    // 2. Import payload containing:
+    //    - Identical secret for GitHub:alice@example.com (true duplicate -> safely skipped)
+    //    - Distinct secret SEC2 for GitHub:alice@example.com (collision -> auto-suffix to -2)
+    //    - Distinct secret SEC3 for GitHub:alice@example.com (collision -> auto-suffix to -3)
+    //    - OTPAuth URI with issuer in query: otpauth://totp/bob@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitLab
+    //      (canonical label -> GitLab:bob@example.com)
+    let sec2 = "GEZDGNBVGY3TQOJQ";
+    let sec3 = "MZXW6YTBOI======";
+    let payload = format!(
+        "otpauth://totp/GitHub:alice@example.com?secret={sec1}&issuer=GitHub\n\
+         otpauth://totp/GitHub:alice@example.com?secret={sec2}&issuer=GitHub\n\
+         otpauth://totp/GitHub:alice@example.com?secret={sec3}&issuer=GitHub\n\
+         otpauth://totp/bob@example.com?secret={sec1}&issuer=GitLab\n"
+    );
+
+    out.clear();
+    let cli_import = Cli::try_parse_from(["tfa", "import", &payload]).expect("parse import");
+    run_app(cli_import, &store, &clipboard, &mut out).expect("run import");
+
+    let out_str = String::from_utf8(out.clone()).unwrap();
+    assert!(
+        out_str.contains("Skipping existing account 'GitHub:alice@example.com' (identical secret)")
+    );
+    assert!(out_str.contains("Imported account 'GitHub:alice@example.com-2' (auto-suffixed collision for 'GitHub:alice@example.com')"));
+    assert!(out_str.contains("Imported account 'GitHub:alice@example.com-3' (auto-suffixed collision for 'GitHub:alice@example.com')"));
+    assert!(out_str.contains("Imported account 'GitLab:bob@example.com'"));
+    assert!(out_str.contains("Summary: 3 imported, 0 updated, 1 skipped."));
+
+    // Verify accounts in store
+    let accounts = store.list_accounts().expect("list accounts");
+    assert!(accounts.contains(&"GitHub:alice@example.com".to_string()));
+    assert!(accounts.contains(&"GitHub:alice@example.com-2".to_string()));
+    assert!(accounts.contains(&"GitHub:alice@example.com-3".to_string()));
+    assert!(accounts.contains(&"GitLab:bob@example.com".to_string()));
+
+    // 3. Re-import with --skip flag
+    let payload_conflict =
+        format!("otpauth://totp/GitLab:bob@example.com?secret={sec2}&issuer=GitLab");
+    out.clear();
+    let cli_skip =
+        Cli::try_parse_from(["tfa", "import", &payload_conflict, "--skip"]).expect("parse skip");
+    run_app(cli_skip, &store, &clipboard, &mut out).expect("run import skip");
+    let skip_str = String::from_utf8(out.clone()).unwrap();
+    assert!(skip_str.contains(
+        "Skipping existing account 'GitLab:bob@example.com' (use --overwrite to replace)"
+    ));
+    assert!(skip_str.contains("Summary: 0 imported, 0 updated, 1 skipped."));
+
+    // 4. Re-import with --overwrite flag
+    out.clear();
+    let cli_overwrite = Cli::try_parse_from(["tfa", "import", &payload_conflict, "--overwrite"])
+        .expect("parse overwrite");
+    run_app(cli_overwrite, &store, &clipboard, &mut out).expect("run import overwrite");
+    let ow_str = String::from_utf8(out.clone()).unwrap();
+    assert!(ow_str.contains("Updated account 'GitLab:bob@example.com'"));
+    assert!(ow_str.contains("Summary: 0 imported, 1 updated, 0 skipped."));
+}

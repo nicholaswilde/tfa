@@ -207,17 +207,14 @@ pub fn parse_aegis_entries(entries: &[Value]) -> Vec<ImportItem> {
                     .map(str::trim)
                     .filter(|s| !s.is_empty());
 
-                let account = match issuer {
-                    Some(iss)
-                        if !raw_name.is_empty()
-                            && !raw_name.to_lowercase().starts_with(&iss.to_lowercase()) =>
-                    {
-                        format!("{iss}:{raw_name}")
-                    }
-                    _ if !raw_name.is_empty() => raw_name.to_string(),
-                    Some(iss) => iss.to_string(),
-                    _ => "imported_account".to_string(),
-                };
+                let account = crate::import::canonical_account_label(
+                    issuer,
+                    if raw_name.is_empty() {
+                        None
+                    } else {
+                        Some(raw_name)
+                    },
+                );
 
                 let digits = info.get("digits").and_then(|d| d.as_u64());
                 let period = info.get("period").and_then(|p| p.as_u64());
