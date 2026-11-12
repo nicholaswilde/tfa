@@ -272,7 +272,7 @@ jobs:
 
   update-homebrew-tap:
     name: update-homebrew-tap
-    needs: ['create-release']
+    needs: ['create-release', 'build-release']
     runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
     steps:
