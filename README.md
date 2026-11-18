@@ -106,6 +106,7 @@ When executed without a command (`tfa`), it runs the default command (`list`, or
 | `password` (`pwd`, `pw`) | Manage master password protection and session unlock caching (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password status` |
 | `audit` | Scan stored accounts and credentials file for security vulnerabilities | `tfa audit [--json]` |
 | `doctor` (`doc`) | Validate system prerequisites, storage permissions, and diagnostic health | `tfa doctor [--json]` |
+| `self-update` (`update`) | Check for and install the latest `tfa` release from GitHub | `tfa self-update [--check] [-y] [--version <ver>]` |
 | `namespace` (`ns`) | Multi-tenant namespace management (`current`, `default`, `list`/`ls`, `create`, `rename`/`ren`/`mv`, `delete`/`del`/`rm`, `set-default`/`use`/`switch`) | `tfa ns` |
 | `completions` | Output dynamic or static shell completion script (`bash`, `zsh`, `fish`, `powershell`, `elvish`) | `tfa completions zsh [--static]` |
 | `man` | Output UNIX roff man page | `tfa man > assets/tfa.1` |
@@ -475,6 +476,26 @@ tfa doctor --json
 
 # Query custom NTP server:
 tfa doctor --ntp-server time.cloudflare.com
+```
+
+---
+
+## :arrow_up: Self-Update (`tfa self-update`)
+
+Update `tfa` in-place directly from `nicholaswilde/tfa` GitHub releases (useful when installed via GitHub release archives rather than a package manager):
+
+```bash
+# Check if a newer release is available without installing:
+tfa self-update --check
+
+# Update interactively to the latest release:
+tfa self-update
+
+# Update without confirmation prompt:
+tfa self-update --yes
+
+# Install a specific release version or tag:
+tfa self-update --version 0.1.16 --yes
 ```
 
 ---

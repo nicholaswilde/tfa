@@ -21,6 +21,7 @@ pub mod qr;
 pub mod storage;
 pub mod totp;
 pub mod twofas;
+pub mod update;
 pub mod watch;
 
 pub use cli::{
@@ -794,6 +795,7 @@ pub fn run_app(
             Some(Commands::Completions { .. })
             | Some(Commands::Man)
             | Some(Commands::Instant { .. })
+            | Some(Commands::SelfUpdate { .. })
             | Some(Commands::Generate {
                 secret: Some(_), ..
             })
@@ -1937,6 +1939,20 @@ pub fn run_app(
             if !report.healthy {
                 anyhow::bail!("Doctor check failed with {} error(s)", report.errors);
             }
+        }
+        Some(Commands::SelfUpdate {
+            check,
+            yes,
+            version,
+        }) => {
+            update::run_self_update(
+                update::SelfUpdateOptions {
+                    check,
+                    yes,
+                    version,
+                },
+                out_writer,
+            )?;
         }
         None => unreachable!("Default command handled above"),
     }

@@ -507,6 +507,19 @@ pub enum Commands {
         #[arg(long)]
         ntp_server: Option<String>,
     },
+    /// Check for and install the latest tfa release from GitHub
+    #[command(alias = "update")]
+    SelfUpdate {
+        /// Check for available updates without installing
+        #[arg(long)]
+        check: bool,
+        /// Skip confirmation prompt before installing
+        #[arg(short = 'y', long)]
+        yes: bool,
+        /// Target a specific release version or tag (e.g. 0.1.16 or v0.1.16)
+        #[arg(long, value_name = "VERSION")]
+        version: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]

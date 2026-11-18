@@ -23,6 +23,7 @@
 - [src/qr.rs](src/qr.rs): Terminal ANSI/Unicode QR rendering, image decoding (`rqrr`), Google Authenticator migration payloads.
 - [src/clipboard.rs](src/clipboard.rs): System clipboard (`arboard`), OSC52 sequences, custom clip commands, auto-clear timeouts.
 - [src/audit.rs](src/audit.rs): Security scanner for weak secrets, duplicate seeds, legacy SHA-1, file permissions.
+- [src/update.rs](src/update.rs): GitHub release self-updater (`tfa self-update`).
 - [src/completions.rs](src/completions.rs): Dynamic + static shell completions for Bash, Zsh, Fish, PowerShell, Elvish.
 
 ## Backup, Migration & Third-Party Importers

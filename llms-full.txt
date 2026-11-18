@@ -72,6 +72,7 @@ tfa/
     ├── aegis.rs           # Aegis vault decryptor and parser
     ├── ente.rs            # Ente Auth decryptor and parser
     ├── twofas.rs          # 2FAS backup decryptor and parser
+    ├── update.rs          # GitHub release self-updater
     └── completions.rs     # Dynamic and static clap_complete generators
 ```
 
@@ -138,6 +139,7 @@ tfa [OPTIONS] [COMMAND]
 | `move` | `mv` | Move account to another namespace | `tfa move <account> --to <target_ns>` |
 | `password` | `pwd`, `pw` | Master password protection (`add`, `remove`, `lock`, `unlock`, `status`) | `tfa password add --timeout 600` |
 | `audit` | - | Scan accounts + storage files for security weaknesses | `tfa audit [--json]` |
+| `self-update` | `update` | Check for and install latest release from GitHub | `tfa self-update [--check] [-y] [--version <ver>]` |
 | `namespace` | `ns` | Manage namespaces (`current`, `default`, `list`, `create`, `rename`, `delete`, `set-default`) | `tfa ns set-default work` |
 | `completions` | - | Output shell completion scripts (`bash`, `zsh`, `fish`, `powershell`, `elvish`) | `tfa completions zsh [--static]` |
 | `man` | - | Output UNIX roff man page | `tfa man > assets/tfa.1` |
