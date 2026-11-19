@@ -593,7 +593,9 @@ Settings resolve in strict hierarchical precedence order (highest to lowest):
   ```
 
 - **`file`:** Directly reads and writes to `~/.local/share/tfa/credentials.json` without querying DBus or system keyring, silencing fallback notices in headless, SSH, or server environments.
+
 - **`keyring`:** Strictly requires the OS system keyring and returns a hard error if unavailable.
+
 - **`age`:** Identity-based encrypted file storage (`~/.local/share/tfa/credentials.age`) using [`age`](https://github.com/FiloSottile/age). Encrypts credentials with age public keys, SSH keys (`~/.ssh/id_ed25519.pub`, `~/.ssh/id_rsa.pub`), or a passphrase.
 
 #### Age Storage Key Resolution
