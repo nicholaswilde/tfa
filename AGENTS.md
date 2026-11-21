@@ -205,7 +205,7 @@ For feature parity, design, or CLI flags:
 - **Build Discipline (Ponytail):** Minimum code solving problem. Reuse stdlib; no speculative abstractions.
 - **Surgical Changes:** Modify only requested code. Keep edits focused and verifiable.
 - **Secret Hygiene:** Never write unencrypted secrets to disk, configs, or git history. Keep secrets in `keyring` or SOPS.
-- **Configuration Parity:** When modifying config fields in `src/config.rs`, update all config examples in `README.md` (flat/nested TOML, flat/nested YAML, JSON) and `assets/config.example.toml`.
+- **Configuration Parity:** When modifying config fields in `src/config.rs`, update all config examples in `docs/configuration.md` (flat/nested TOML, flat/nested YAML, JSON) and `assets/config.example.toml`.
 - **Code Quality:** Must pass `cargo fmt -- --check` and `cargo clippy -- -D warnings`.
 
 ---

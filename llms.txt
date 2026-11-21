@@ -6,7 +6,13 @@
 
 ## Documentation
 
-- [README.md](README.md): User docs, CLI examples, config formats, install guide.
+- [docs/README.md](docs/README.md): Project overview, TL;DR installation, and usage quickstart.
+- [docs/index.md](docs/index.md): Documentation site homepage.
+- [docs/about.md](docs/about.md): Overview, feature highlights, and security architecture.
+- [docs/installation.md](docs/installation.md): Installation options (Homebrew, APT, Scoop, GitHub Releases, Cargo), shell completions, and man page.
+- [docs/usage.md](docs/usage.md): CLI command reference, token generation, live watch, QR codes, and multi-namespace management.
+- [docs/configuration.md](docs/configuration.md): Hierarchical config precedence, storage backends, backend migration, TOML/YAML/JSON examples, and environment variables.
+- [docs/security.md](docs/security.md): Encrypted backups, third-party importers, master password caching, security audit, and `tfa doctor` diagnostics.
 - [AGENTS.md](AGENTS.md): Architecture, tech stack, conventions, quality gates.
 - [Man Page](assets/tfa.1): UNIX roff manual page for `tfa`.
 - [Full Context (llms-full.txt)](llms-full.txt): Single-file docs + specs for LLMs.
@@ -39,12 +45,17 @@
 ## Build & Automation
 
 - [Cargo.toml](Cargo.toml): Rust crate manifest, dependencies, release/CI build profiles.
-- [Taskfile.yml](Taskfile.yml): Task runner for build, cross-compile, test, lint, release.
+- [Taskfile.yml](Taskfile.yml): Task runner for build, cross-compile, test, lint, docs, release.
 - [build.rs](build.rs): Compile-time git version injection (`PROJECT_VERSION`).
+- [pyproject.toml](pyproject.toml): Python environment (`zensical` >=0.0.45) for building the static documentation site via `uv`.
+- [zensical.toml](zensical.toml): Zensical static documentation site configuration and navigation.
+- [.github/workflows/docs.yml](.github/workflows/docs.yml): GitHub Pages deployment workflow for Zensical site.
 - [scripts/release.sh](scripts/release.sh): Automated version bump, tag, release script.
 - [scripts/release_summary.py](scripts/release_summary.py): Git log release notes generator.
 
 ## Optional
 
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md): Development workflow, quality gates, and DCO guidelines.
+- [docs/CODE_OF_CONDUCT.md](docs/CODE_OF_CONDUCT.md): Contributor Covenant code of conduct.
 - [Shell Completions](completions/): Pre-generated completion scripts for Bash, Zsh, Fish, PowerShell, Elvish.
 - [LICENSE](LICENSE): Apache License 2.0.

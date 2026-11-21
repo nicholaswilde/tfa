@@ -167,7 +167,7 @@ jobs:
         fi
 
         # Copy docs
-        cp {README.md,LICENSE} "$staging/"
+        cp docs/README.md LICENSE "$staging/"
 
         # Copy example configuration
         if [ -f "assets/config.example.toml" ]; then

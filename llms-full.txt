@@ -46,9 +46,21 @@ tfa/
 ├── Cargo.toml             # Crate manifest, dependencies, release/ci profiles
 ├── Taskfile.yml           # Task runner automation
 ├── build.rs               # Git version injection (PROJECT_VERSION)
-├── README.md              # User guide and configuration documentation
+├── pyproject.toml         # Python environment (zensical) managed via uv
+├── zensical.toml          # Zensical static documentation site configuration
 ├── AGENTS.md              # Agent development conventions and architecture
+├── docs/                  # Zensical documentation site and GitHub README
+│   ├── README.md          # Concise GitHub landing page README
+│   ├── index.md           # Documentation site homepage
+│   ├── about.md           # Project overview, features, and security architecture
+│   ├── installation.md    # Installation, self-update, completions, and man page
+│   ├── usage.md           # CLI commands, generation, watch, QR, and namespaces
+│   ├── configuration.md   # Config files, storage backends, migration, env vars
+│   ├── security.md        # Backups, importers, master password, audit, doctor
+│   ├── CONTRIBUTING.md    # Contribution guide, quality gates, and DCO
+│   └── CODE_OF_CONDUCT.md # Contributor Covenant code of conduct
 ├── assets/
+│   ├── config.example.toml # Fully commented example configuration template
 │   └── tfa.1              # Generated UNIX roff man page
 ├── completions/           # Pre-generated shell completion scripts
 ├── scripts/
@@ -327,6 +339,8 @@ task completions  # Regenerate completions/ scripts
 task man          # Regenerate assets/tfa.1
 task build:local  # cargo build --release
 task build        # Multi-arch Linux builds via cross (amd64, arm64, armv7, armv6)
+task serve        # Serve local Zensical documentation site via uv
+task docs:build   # Build static Zensical documentation site via uv
 ```
 
 ---

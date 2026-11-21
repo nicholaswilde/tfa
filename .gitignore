@@ -56,6 +56,13 @@ Thumbs.db
 *.zip
 *.sha256
 
+# Documentation site & Python / uv
+/site
+.cache/
+.venv/
+__pycache__/
+*.pyc
+
 # Agentic Stack & MCP Caches
 .codegraph/
 .serena/

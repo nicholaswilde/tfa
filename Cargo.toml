@@ -129,7 +129,7 @@ assets = [
     "644",
   ],
   [
-    "README.md",
+    "docs/README.md",
     "usr/share/doc/tfa/README.md",
     "644",
   ],
